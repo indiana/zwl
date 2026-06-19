@@ -8,7 +8,9 @@ sealed class MainUiState {
     object EmptyDatabaseRequired : MainUiState()
     data class Success(
         val locationStatus: LocationStatus,
-        val fireRiskLevel: Int, // 0-3, -1 oznacza brak danych (offline)
-        val azimuth: Float
+        val fireRiskLevel: Int,
+        val azimuth: Float,
+        val latitude: Double,
+        val longitude: Double
     ) : MainUiState()
 }

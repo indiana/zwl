@@ -36,6 +36,8 @@ class MainViewModel(
 
     private var currentFireRisk = -1
     private var lastFireRiskLocation: Location? = null
+    var zones: List<ZoneEntity> = emptyList()
+        private set
 
     init {
         loadZonesAndInitializeEngine()
@@ -62,6 +64,7 @@ class MainViewModel(
                 val zones = withContext(Dispatchers.IO) {
                     zoneDao.getAllZones()
                 }
+                this@MainViewModel.zones = zones
                 spatialEngine.initialize(zones)
                 isEngineInitialized = true
                 if (hasLocationPermission) {
@@ -114,7 +117,9 @@ class MainViewModel(
         _uiState.value = MainUiState.Success(
             locationStatus = status,
             fireRiskLevel = currentFireRisk,
-            azimuth = azimuth
+            azimuth = azimuth,
+            latitude = location.latitude,
+            longitude = location.longitude
         )
     }
 

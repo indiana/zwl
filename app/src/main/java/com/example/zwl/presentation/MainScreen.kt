@@ -119,25 +119,11 @@ fun MainScreen(viewModel: MainViewModel) {
             
             ZwlTheme(isInZone = isInZone) {
                 if (isMapView) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black)
-                    ) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            Text(
-                                "Mapsforge Map View Placeholder",
-                                color = Color.White,
-                                modifier = Modifier.padding(16.dp)
-                            )
-                            Button(
-                                onClick = { isMapView = false },
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                Text("Wróć do statusu")
-                            }
-                        }
-                    }
+                    com.example.zwl.presentation.map.MapViewContainer(
+                        viewModel = viewModel,
+                        zones = viewModel.zones,
+                        onCloseMap = { isMapView = false }
+                    )
                 } else {
                     when (val status = state.locationStatus) {
                         is LocationStatus.InZone -> {
