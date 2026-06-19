@@ -111,14 +111,15 @@ fun OutsideZoneContent(
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "NAJBLIŻSZA STREFA",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Gray
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -127,7 +128,8 @@ fun OutsideZoneContent(
                     text = nearestDistrict,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color.White,
+                    textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -136,7 +138,8 @@ fun OutsideZoneContent(
                     text = formatDistance(distanceMeters),
                     fontSize = 16.sp,
                     color = Color(0xFFFFF176),
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -144,7 +147,8 @@ fun OutsideZoneContent(
                 Text(
                     text = "Kierunek: ${getCardinalDirection(bearingDegrees)}",
                     fontSize = 14.sp,
-                    color = Color.LightGray
+                    color = Color.LightGray,
+                    textAlign = TextAlign.Center
                 )
             }
         }

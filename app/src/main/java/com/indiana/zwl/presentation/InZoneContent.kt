@@ -68,7 +68,8 @@ fun InZoneContent(
                 text = forestDistrict,
                 fontSize = 18.sp,
                 color = Color(0xFFA5D6A7),
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
             )
         }
 
@@ -80,13 +81,14 @@ fun InZoneContent(
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "Zagrożenie pożarowe w lasach",
                     fontSize = 14.sp,
-                    color = Color.Gray
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
                 )
                 
                 val riskText = when (fireRiskLevel) {
@@ -110,6 +112,7 @@ fun InZoneContent(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = riskColor,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                 )
 
@@ -120,7 +123,8 @@ fun InZoneContent(
                 Text(
                     text = "Używanie kuchenek gazowych",
                     fontSize = 14.sp,
-                    color = Color.Gray
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))

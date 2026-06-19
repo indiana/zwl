@@ -58,10 +58,35 @@ fun MainScreen(viewModel: MainViewModel) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF0F1B10)),
+                    .background(Color(0xFF0F1B10))
+                    .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = Color(0xFF2E7D32))
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = Color(0xFF81C784),
+                        strokeWidth = 4.dp,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "Zanocuj w Lesie",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF81C784),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Inicjalizacja silnika przestrzennego i lokalizacji...",
+                        fontSize = 14.sp,
+                        color = Color(0xFFA5D6A7),
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
 

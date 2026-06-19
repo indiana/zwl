@@ -62,37 +62,38 @@ fun MapViewContainer(
 
     LaunchedEffect(hasCenteredOnStartup, mapViewInstance, tileCacheInstance) {
         if (hasCenteredOnStartup && mapViewInstance != null && tileCacheInstance != null && !isDownloadingArea) {
-            // Wait for map layout to complete and boundingBox to be populated
-            var bbox = mapViewInstance!!.boundingBox
-            while (bbox == null || bbox.latitudeSpan == 0.0 || bbox.longitudeSpan == 0.0) {
-                kotlinx.coroutines.delay(100)
-                bbox = mapViewInstance!!.boundingBox
-            }
-            downloadArea(
-                context = context,
-                mapView = mapViewInstance!!,
-                tileCache = tileCacheInstance!!,
-                onStart = {
-                    isDownloadingArea = true
-                    downloadProgress = 0f
-                    downloadText = "Automatyczne pobieranie..."
-                },
-                onProgress = { progress, text ->
-                    downloadProgress = progress
-                    downloadText = text
-                },
-                onFinished = { success, total ->
-                    isDownloadingArea = false
-                    Toast.makeText(
-                        context,
-                        "Pobrano automatycznie $success z $total kafelków do cache offline!",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                },
-                onMessage = { msg ->
-                    isDownloadingArea = false
+            try {
+                // Wait for map layout to complete and boundingBox to be populated
+                var bbox = mapViewInstance!!.boundingBox
+                while (bbox == null || bbox.latitudeSpan == 0.0 || bbox.longitudeSpan == 0.0) {
+                    kotlinx.coroutines.delay(100)
+                    bbox = mapViewInstance!!.boundingBox
                 }
-            )
+                downloadArea(
+                    context = context,
+                    mapView = mapViewInstance!!,
+                    tileCache = tileCacheInstance!!,
+                    onStart = {
+                        isDownloadingArea = true
+                        downloadProgress = 0f
+                        downloadText = "Automatyczne pobieranie..."
+                    },
+                    onProgress = { progress, text ->
+                        downloadProgress = progress
+                        downloadText = text
+                    },
+                    onFinished = { success, total ->
+                        Toast.makeText(
+                            context,
+                            "Pobrano automatycznie $success z $total kafelków do cache offline!",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    onMessage = { msg -> }
+                )
+            } finally {
+                isDownloadingArea = false
+            }
         }
     }
 
