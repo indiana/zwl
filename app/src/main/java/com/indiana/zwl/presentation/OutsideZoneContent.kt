@@ -7,8 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -27,11 +26,21 @@ fun OutsideZoneContent(
     azimuth: Float,
     onSwitchToMap: () -> Unit
 ) {
-    val needleRotation = (bearingDegrees - azimuth + 360f) % 360f
+    var accumulatedAzimuth by remember { mutableStateOf(azimuth) }
+    LaunchedEffect(azimuth) {
+        val diff = (azimuth - accumulatedAzimuth) % 360f
+        val shortestDiff = ((diff + 540f) % 360f) - 180f
+        accumulatedAzimuth += shortestDiff
+    }
 
-    val animatedRotation by animateFloatAsState(
-        targetValue = needleRotation,
-        label = "NeedleRotation"
+    val animatedAzimuth by animateFloatAsState(
+        targetValue = accumulatedAzimuth,
+        label = "AnimatedAzimuth"
+    )
+
+    val animatedBearing by animateFloatAsState(
+        targetValue = bearingDegrees,
+        label = "AnimatedBearing"
     )
 
     Column(
@@ -76,6 +85,7 @@ fun OutsideZoneContent(
             Box(
                 modifier = Modifier
                     .size(220.dp)
+                    .rotate(-animatedAzimuth)
                     .border(2.dp, Color.DarkGray, RoundedCornerShape(110.dp)),
                 contentAlignment = Alignment.Center
             ) {
@@ -89,7 +99,7 @@ fun OutsideZoneContent(
                 Canvas(
                     modifier = Modifier
                         .size(80.dp)
-                        .rotate(animatedRotation)
+                        .rotate(animatedBearing)
                 ) {
                     val path = Path().apply {
                         moveTo(size.width / 2, 0f)
