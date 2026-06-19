@@ -53,8 +53,11 @@ class MainViewModel(
         if (!granted) {
             _uiState.value = MainUiState.PermissionsRequired
             stopTracking()
-        } else if (isEngineInitialized) {
-            startTracking()
+        } else {
+            _uiState.value = MainUiState.Loading
+            if (isEngineInitialized) {
+                startTracking()
+            }
         }
     }
 
