@@ -128,8 +128,8 @@ fun MapViewContainer(
 
                         try {
                             val mapDataStore = MapFile(cacheFile)
-                            this.mapZoomControls.setZoomLevelMin(mapDataStore.startPositionAndZoomLimit.zoomLimitMin)
-                            this.mapZoomControls.setZoomLevelMax(mapDataStore.startPositionAndZoomLimit.zoomLimitMax)
+                            this.mapZoomControls.setZoomLevelMin(8)
+                            this.mapZoomControls.setZoomLevelMax(20)
 
                             val tileRendererLayer = TileRendererLayer(
                                 tileCache,
@@ -141,15 +141,13 @@ fun MapViewContainer(
 
                             this.layerManager.layers.add(tileRendererLayer)
 
-                            val startPos = mapDataStore.startPositionAndZoomLimit.startPosition
-                            this.setCenter(startPos ?: LatLong(52.23, 21.01))
+                            this.setCenter(LatLong(52.23, 21.01))
                             this.setZoomLevel(12)
 
                             drawZonePolygons(ctx, this, zones)
 
-                            // Initialize user location marker
-                            val userLocBitmap = createUserLocationBitmap(ctx)
-                            val marker = Marker(LatLong(52.23, 21.01), userLocBitmap, 0, 0)
+                            val userLocDrawable = createUserLocationDrawable(ctx)
+                            val marker = Marker(LatLong(52.23, 21.01), userLocDrawable, 0, 0)
                             this.layerManager.layers.add(marker)
                             userMarker = marker
 
@@ -168,7 +166,6 @@ fun MapViewContainer(
                             marker.latLong = userPos
                             marker.requestRedraw()
                         }
-                        // Center map to user position dynamically on updates
                         mapView.setCenter(userPos)
                     }
                 }
@@ -213,14 +210,14 @@ private fun drawZonePolygons(context: Context, mapView: MapView, zones: List<Zon
     val wktReader = WKTReader()
 
     val fillPaint = graphicFactory.createPaint().apply {
-        color = graphicFactory.createColor(0x4D, 0x2E, 0x7D, 0x32) // 30% alpha green
+        color = graphicFactory.createColor(0x4D, 0x2E, 0x7D, 0x32)
         setStyle(Style.FILL)
     }
 
     val strokePaint = graphicFactory.createPaint().apply {
-        color = graphicFactory.createColor(0xFF, 0x1B, 0x5E, 0x20) // dark green
+        color = graphicFactory.createColor(0xFF, 0x1B, 0x5E, 0x20)
         setStyle(Style.STROKE)
-        strokeWidth = AndroidUtil.dpToPixel(context, 2f)
+        strokeWidth = 2f * context.resources.displayMetrics.density
     }
 
     for (zone in zones) {
@@ -247,24 +244,24 @@ private fun drawZonePolygons(context: Context, mapView: MapView, zones: List<Zon
     }
 }
 
-private fun createUserLocationBitmap(context: Context): org.mapsforge.core.graphics.Bitmap {
-    val size = AndroidUtil.dpToPixel(context, 16f).toInt()
+private fun createUserLocationDrawable(context: Context): android.graphics.drawable.Drawable {
+    val size = (16f * context.resources.displayMetrics.density).toInt()
     val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(bitmap)
     val paint = android.graphics.Paint().apply {
         isAntiAlias = true
-        color = android.graphics.Color.parseColor("#007AFF") // Apple blue
+        color = android.graphics.Color.parseColor("#007AFF")
         style = android.graphics.Paint.Style.FILL
     }
     val borderPaint = android.graphics.Paint().apply {
         isAntiAlias = true
         color = android.graphics.Color.WHITE
         style = android.graphics.Paint.Style.STROKE
-        strokeWidth = AndroidUtil.dpToPixel(context, 2f)
+        strokeWidth = 2f * context.resources.displayMetrics.density
     }
     val radius = size / 2f
     canvas.drawCircle(radius, radius, radius - borderPaint.strokeWidth, paint)
     canvas.drawCircle(radius, radius, radius - borderPaint.strokeWidth, borderPaint)
 
-    return AndroidGraphicFactory.convertToBitmap(bitmap)
+    return android.graphics.drawable.BitmapDrawable(context.resources, bitmap)
 }

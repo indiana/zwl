@@ -19,7 +19,7 @@ class SpatialEngine {
 
     private val geometryFactory = GeometryFactory(PrecisionModel(), 4326)
     private val wktReader = WKTReader(geometryFactory)
-    private val strTree = STRtree()
+    private var strTree = STRtree()
     private val parsedZones = ArrayList<ParsedZone>()
 
     data class ParsedZone(
@@ -29,7 +29,7 @@ class SpatialEngine {
 
     @Synchronized
     fun initialize(zones: List<ZoneEntity>) {
-        strTree.clear()
+        strTree = STRtree()
         parsedZones.clear()
 
         for (zone in zones) {
