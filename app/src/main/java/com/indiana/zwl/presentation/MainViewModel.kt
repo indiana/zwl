@@ -81,8 +81,16 @@ class MainViewModel(
                     isEngineInitialized = false
                 }
             } else {
-                val zones = withContext(Dispatchers.IO) {
+                var zones = withContext(Dispatchers.IO) {
                     zoneDao.getAllZones()
+                }
+                if (zones.any { it.forestDistrict.contains("Nieznane", ignoreCase = true) }) {
+                    val success = performInitialSync()
+                    if (success) {
+                        zones = withContext(Dispatchers.IO) {
+                            zoneDao.getAllZones()
+                        }
+                    }
                 }
                 this@MainViewModel.zones = zones
                 spatialEngine.initialize(zones)

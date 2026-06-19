@@ -31,8 +31,9 @@ import org.mapsforge.map.android.view.MapView
 import org.mapsforge.map.layer.cache.TileCache
 import org.mapsforge.map.layer.download.DownloadJob
 import org.mapsforge.map.layer.download.TileDownloadLayer
-import org.mapsforge.map.layer.download.tilesource.OpenStreetMapMapnik
+import org.mapsforge.map.layer.download.tilesource.OnlineTileSource
 import org.mapsforge.map.layer.overlay.Marker
+import java.net.URL
 import org.mapsforge.map.layer.overlay.Polygon
 import kotlin.math.ln
 import kotlin.math.tan
@@ -50,14 +51,44 @@ fun MapViewContainer(
 
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
+    var hasCenteredOnStartup by remember { mutableStateOf(false) }
 
     // Download state
     var isDownloadingArea by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
     var downloadText by remember { mutableStateOf("") }
-    var showDownloadDialog by remember { mutableStateOf(false) }
 
     var userMarker by remember { mutableStateOf<Marker?>(null) }
+
+    LaunchedEffect(hasCenteredOnStartup, mapViewInstance, tileCacheInstance) {
+        if (hasCenteredOnStartup && mapViewInstance != null && tileCacheInstance != null && !isDownloadingArea) {
+            downloadArea(
+                context = context,
+                mapView = mapViewInstance!!,
+                tileCache = tileCacheInstance!!,
+                onStart = {
+                    isDownloadingArea = true
+                    downloadProgress = 0f
+                    downloadText = "Rozpoczynanie pobierania..."
+                },
+                onProgress = { progress, text ->
+                    downloadProgress = progress
+                    downloadText = text
+                },
+                onFinished = { success, total ->
+                    isDownloadingArea = false
+                    Toast.makeText(
+                        context,
+                        "Pobrano automatycznie $success z $total kafelków do cache offline!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
+                onMessage = { msg ->
+                    isDownloadingArea = false
+                }
+            )
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
@@ -79,8 +110,7 @@ fun MapViewContainer(
                     this.mapZoomControls.setZoomLevelMin(8)
                     this.mapZoomControls.setZoomLevelMax(20)
 
-                    val tileSource = OpenStreetMapMapnik.INSTANCE
-                    tileSource.setUserAgent("ZanocujWLesieLokator/1.0 (Android)")
+                    val tileSource = createOnlineTileSource()
 
                     val downloadLayer = TileDownloadLayer(
                         tileCache,
@@ -91,7 +121,7 @@ fun MapViewContainer(
                     this.layerManager.layers.add(downloadLayer)
 
                     this.setCenter(LatLong(52.23, 21.01))
-                    this.setZoomLevel(12)
+                    this.setZoomLevel(15)
 
                     drawZonePolygons(ctx, this, zones)
 
@@ -113,7 +143,11 @@ fun MapViewContainer(
                         marker.latLong = userPos
                         marker.requestRedraw()
                     }
-                    mapView.setCenter(userPos)
+                    if (!hasCenteredOnStartup) {
+                        mapView.setCenter(userPos)
+                        mapView.setZoomLevel(15)
+                        hasCenteredOnStartup = true
+                    }
                 }
             }
         )
@@ -137,7 +171,6 @@ fun MapViewContainer(
                                 tileCache = tc,
                                 onStart = {
                                     isDownloadingArea = true
-                                    showDownloadDialog = true
                                     downloadProgress = 0f
                                     downloadText = "Rozpoczynanie pobierania..."
                                 },
@@ -146,7 +179,7 @@ fun MapViewContainer(
                                     downloadText = text
                                 },
                                 onFinished = { success, total ->
-                                    showDownloadDialog = false
+                                    isDownloadingArea = false
                                     Toast.makeText(
                                         context,
                                         "Pobrano pomyślnie $success z $total kafelków do cache offline!",
@@ -154,7 +187,7 @@ fun MapViewContainer(
                                     ).show()
                                 },
                                 onMessage = { msg ->
-                                    showDownloadDialog = false
+                                    isDownloadingArea = false
                                     Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                                 }
                             )
@@ -189,21 +222,36 @@ fun MapViewContainer(
             }
         }
 
-        // Progress Dialog for downloading tiles
-        if (showDownloadDialog) {
-            AlertDialog(
-                onDismissRequest = {},
-                confirmButton = {},
-                dismissButton = {
-                    TextButton(onClick = { showDownloadDialog = false }) {
-                        Text("Ukryj w tle")
-                    }
-                },
-                title = { Text("Pobieranie mapy offline") },
-                text = {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(downloadText, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(16.dp))
+        // Silent background download card in the top-left
+        if (isDownloadingArea) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.TopStart
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.width(220.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Pobieranie mapy offline...",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = downloadText,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
                         LinearProgressIndicator(
                             progress = downloadProgress,
                             modifier = Modifier.fillMaxWidth(),
@@ -211,7 +259,7 @@ fun MapViewContainer(
                         )
                     }
                 }
-            )
+            }
         }
     }
 }
@@ -275,7 +323,7 @@ private suspend fun downloadArea(
 
     onStart(total)
 
-    val tileSource = OpenStreetMapMapnik.INSTANCE
+    val tileSource = createOnlineTileSource()
     val client = okhttp3.OkHttpClient.Builder()
         .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
@@ -390,4 +438,16 @@ private fun createUserLocationBitmap(context: Context): org.mapsforge.core.graph
 
     val drawable = android.graphics.drawable.BitmapDrawable(context.resources, androidBitmap)
     return AndroidGraphicFactory.convertToBitmap(drawable)
+}
+
+private fun createOnlineTileSource(): OnlineTileSource {
+    val hostNames = arrayOf("a.tile.openstreetmap.org", "b.tile.openstreetmap.org", "c.tile.openstreetmap.org")
+    val tileSource = object : OnlineTileSource(hostNames, 19) {
+        override fun getTileUrl(tile: Tile): URL {
+            val host = hostNames[((tile.tileX xor tile.tileY) and Int.MAX_VALUE) % hostNames.size]
+            return URL("https://$host/${tile.zoomLevel}/${tile.tileX}/${tile.tileY}.png")
+        }
+    }
+    tileSource.setUserAgent("ZanocujWLesieLokator/1.0 (Android)")
+    return tileSource
 }
