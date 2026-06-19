@@ -26,8 +26,15 @@ class MainActivity : ComponentActivity() {
         val locationRepository = LocationRepositoryImpl(applicationContext)
         val compassRepository = CompassRepositoryImpl(applicationContext)
 
+        val okHttpClient = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
         val retrofit = Retrofit.Builder()
             .baseUrl("https://mapserver.bdl.lasy.gov.pl/")
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         val fireApi = retrofit.create(BdlFireApi::class.java)

@@ -20,8 +20,15 @@ class SyncWorker(
         val database = ZwlDatabase.getDatabase(applicationContext)
         val zoneDao = database.zoneDao()
 
+        val okHttpClient = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
         val retrofit = Retrofit.Builder()
             .baseUrl("https://mapserver.bdl.lasy.gov.pl/")
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         val arcgisApi = retrofit.create(BdlArcgisApi::class.java)

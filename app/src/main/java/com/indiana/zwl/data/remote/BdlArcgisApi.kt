@@ -9,6 +9,7 @@ interface BdlArcgisApi {
     suspend fun getZanocujWLesieZones(
         @Query("where") where: String = "1=1",
         @Query("outFields") outFields: String = "*",
+        @Query("maxAllowableOffset") maxAllowableOffset: Double = 0.00001,
         @Query("f") format: String = "geojson"
     ): GeoJsonCollection
 }
