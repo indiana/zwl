@@ -62,6 +62,12 @@ fun MapViewContainer(
 
     LaunchedEffect(hasCenteredOnStartup, mapViewInstance, tileCacheInstance) {
         if (hasCenteredOnStartup && mapViewInstance != null && tileCacheInstance != null && !isDownloadingArea) {
+            // Wait for map layout to complete and boundingBox to be populated
+            var bbox = mapViewInstance!!.boundingBox
+            while (bbox == null || bbox.latitudeSpan == 0.0 || bbox.longitudeSpan == 0.0) {
+                kotlinx.coroutines.delay(100)
+                bbox = mapViewInstance!!.boundingBox
+            }
             downloadArea(
                 context = context,
                 mapView = mapViewInstance!!,
@@ -69,7 +75,7 @@ fun MapViewContainer(
                 onStart = {
                     isDownloadingArea = true
                     downloadProgress = 0f
-                    downloadText = "Rozpoczynanie pobierania..."
+                    downloadText = "Automatyczne pobieranie..."
                 },
                 onProgress = { progress, text ->
                     downloadProgress = progress
@@ -119,6 +125,7 @@ fun MapViewContainer(
                         AndroidGraphicFactory.INSTANCE
                     )
                     this.layerManager.layers.add(downloadLayer)
+                    downloadLayer.onResume()
 
                     this.setCenter(LatLong(52.23, 21.01))
                     this.setZoomLevel(15)
@@ -149,6 +156,9 @@ fun MapViewContainer(
                         hasCenteredOnStartup = true
                     }
                 }
+            },
+            onRelease = { mapView ->
+                mapView.destroyAll()
             }
         )
 
@@ -290,6 +300,7 @@ private suspend fun downloadArea(
         return
     }
 
+    val tileSize = mapView.model.displayModel.tileSize
     val zoomLevels = 10..16
     val tiles = mutableListOf<Tile>()
     for (z in zoomLevels) {
@@ -305,7 +316,7 @@ private suspend fun downloadArea(
 
         for (x in minX..maxX) {
             for (y in startY..endY) {
-                tiles.add(Tile(x, y, z.toByte(), 256))
+                tiles.add(Tile(x, y, z.toByte(), tileSize))
             }
         }
     }
@@ -356,7 +367,7 @@ private suspend fun downloadArea(
                         val inputStream = java.io.ByteArrayInputStream(bytes)
                         val bitmap = AndroidGraphicFactory.INSTANCE.createTileBitmap(
                             inputStream,
-                            256,
+                            tileSize,
                             false
                         )
                         tileCache.put(job, bitmap)
