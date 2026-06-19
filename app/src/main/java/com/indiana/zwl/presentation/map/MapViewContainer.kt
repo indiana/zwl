@@ -1,9 +1,7 @@
 package com.indiana.zwl.presentation.map
 
 import android.content.Context
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,16 +24,19 @@ import kotlinx.coroutines.withContext
 import org.locationtech.jts.io.WKTReader
 import org.mapsforge.core.graphics.Style
 import org.mapsforge.core.model.LatLong
+import org.mapsforge.core.model.Tile
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
+import org.mapsforge.map.layer.cache.TileCache
+import org.mapsforge.map.layer.download.DownloadJob
+import org.mapsforge.map.layer.download.TileDownloadLayer
+import org.mapsforge.map.layer.download.tilesource.OpenStreetMapMapnik
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polygon
-import org.mapsforge.map.layer.renderer.TileRendererLayer
-import org.mapsforge.map.reader.MapFile
-import org.mapsforge.map.rendertheme.InternalRenderTheme
-import java.io.File
-import java.io.FileOutputStream
+import kotlin.math.ln
+import kotlin.math.tan
+import kotlin.math.cos
 
 @Composable
 fun MapViewContainer(
@@ -45,166 +46,289 @@ fun MapViewContainer(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val uiState by viewModel.uiState.collectAsState()
 
-    var mapFileExists by remember { mutableStateOf(false) }
-    var isLoadingMap by remember { mutableStateOf(false) }
-    val cacheFile = File(context.cacheDir, "offline.map")
+    var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
+    var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
 
-    LaunchedEffect(Unit) {
-        mapFileExists = cacheFile.exists() && cacheFile.length() > 0
-    }
+    // Download state
+    var isDownloadingArea by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0f) }
+    var downloadText by remember { mutableStateOf("") }
+    var showDownloadDialog by remember { mutableStateOf(false) }
 
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            isLoadingMap = true
-            coroutineScope.launch {
-                val success = copyUriToCache(context, uri, cacheFile)
-                isLoadingMap = false
-                mapFileExists = success
-            }
-        }
-    }
+    var userMarker by remember { mutableStateOf<Marker?>(null) }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        if (!mapFileExists) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Brak Pliku Mapy Offline",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Aplikacja działa w trybie offline i wymaga wektorowego pliku mapy w formacie Mapsforge (.map).\n\nPobierz mapę (np. dla Polski ze strony OpenAndroMaps lub Mapsforge) i wybierz ją poniżej.",
-                    fontSize = 14.sp,
-                    color = Color.LightGray,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    lineHeight = 22.sp
-                )
-                Spacer(modifier = Modifier.height(32.dp))
-                if (isLoadingMap) {
-                    CircularProgressIndicator(color = Color(0xFF2E7D32))
-                } else {
-                    Button(
-                        onClick = { filePickerLauncher.launch("*/*") },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Wybierz plik mapy (.map)", color = Color.White)
-                    }
+        AndroidView(
+            factory = { ctx ->
+                MapView(ctx).apply {
+                    isClickable = true
+                    getMapScaleBar().isVisible = true
+                    setBuiltInZoomControls(true)
+
+                    val tileCache = AndroidUtil.createTileCache(
+                        ctx,
+                        "mapcache",
+                        this.model.displayModel.tileSize,
+                        1f,
+                        this.model.frameBufferModel.overdrawFactor
+                    )
+                    tileCacheInstance = tileCache
+
+                    this.mapZoomControls.setZoomLevelMin(8)
+                    this.mapZoomControls.setZoomLevelMax(20)
+
+                    val tileSource = OpenStreetMapMapnik.INSTANCE
+                    tileSource.setUserAgent("ZanocujWLesieLokator/1.0 (Android)")
+
+                    val downloadLayer = TileDownloadLayer(
+                        tileCache,
+                        this.model.mapViewPosition,
+                        tileSource,
+                        AndroidGraphicFactory.INSTANCE
+                    )
+                    this.layerManager.layers.add(downloadLayer)
+
+                    this.setCenter(LatLong(52.23, 21.01))
+                    this.setZoomLevel(12)
+
+                    drawZonePolygons(ctx, this, zones)
+
+                    // Initialize user location marker
+                    val userLocBitmap = createUserLocationBitmap(ctx)
+                    val marker = Marker(LatLong(52.23, 21.01), userLocBitmap, 0, 0)
+                    this.layerManager.layers.add(marker)
+                    userMarker = marker
+
+                    mapViewInstance = this
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                TextButton(onClick = onCloseMap) {
-                    Text("Wróć do ekranu głównego", color = Color(0xFF81C784))
+            },
+            modifier = Modifier.fillMaxSize(),
+            update = { mapView ->
+                val state = uiState
+                if (state is MainUiState.Success) {
+                    val userPos = LatLong(state.latitude, state.longitude)
+                    userMarker?.let { marker ->
+                        marker.latLong = userPos
+                        marker.requestRedraw()
+                    }
+                    mapView.setCenter(userPos)
                 }
             }
-        } else {
-            var userMarker by remember { mutableStateOf<Marker?>(null) }
-            val uiState by viewModel.uiState.collectAsState()
+        )
 
-            AndroidView(
-                factory = { ctx ->
-                    MapView(ctx).apply {
-                        isClickable = true
-                        getMapScaleBar().isVisible = true
-                        setBuiltInZoomControls(true)
-
-                        val tileCache = AndroidUtil.createTileCache(
-                            ctx,
-                            "mapcache",
-                            this.model.displayModel.tileSize,
-                            1f,
-                            this.model.frameBufferModel.overdrawFactor
-                        )
-
-                        try {
-                            val mapDataStore = MapFile(cacheFile)
-                            this.mapZoomControls.setZoomLevelMin(8)
-                            this.mapZoomControls.setZoomLevelMax(20)
-
-                            val tileRendererLayer = TileRendererLayer(
-                                tileCache,
-                                mapDataStore,
-                                this.model.mapViewPosition,
-                                AndroidGraphicFactory.INSTANCE
+        // Floating download button (top-right)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.TopEnd
+        ) {
+            Button(
+                onClick = {
+                    val mv = mapViewInstance
+                    val tc = tileCacheInstance
+                    if (mv != null && tc != null) {
+                        coroutineScope.launch {
+                            downloadArea(
+                                context = context,
+                                mapView = mv,
+                                tileCache = tc,
+                                onStart = {
+                                    isDownloadingArea = true
+                                    showDownloadDialog = true
+                                    downloadProgress = 0f
+                                    downloadText = "Rozpoczynanie pobierania..."
+                                },
+                                onProgress = { progress, text ->
+                                    downloadProgress = progress
+                                    downloadText = text
+                                },
+                                onFinished = { success, total ->
+                                    showDownloadDialog = false
+                                    Toast.makeText(
+                                        context,
+                                        "Pobrano pomyślnie $success z $total kafelków do cache offline!",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                },
+                                onMessage = { msg ->
+                                    showDownloadDialog = false
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                }
                             )
-                            tileRendererLayer.setXmlRenderTheme(InternalRenderTheme.DEFAULT)
-
-                            this.layerManager.layers.add(tileRendererLayer)
-
-                            this.setCenter(LatLong(52.23, 21.01))
-                            this.setZoomLevel(12)
-
-                            drawZonePolygons(ctx, this, zones)
-
-                            // Initialize user location marker
-                            val userLocBitmap = createUserLocationBitmap(ctx)
-                            val marker = Marker(LatLong(52.23, 21.01), userLocBitmap, 0, 0)
-                            this.layerManager.layers.add(marker)
-                            userMarker = marker
-
-                        } catch (e: Exception) {
-                            cacheFile.delete()
-                            mapFileExists = false
                         }
+                    } else {
+                        Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
                     }
                 },
-                modifier = Modifier.fillMaxSize(),
-                update = { mapView ->
-                    val state = uiState
-                    if (state is MainUiState.Success) {
-                        val userPos = LatLong(state.latitude, state.longitude)
-                        userMarker?.let { marker ->
-                            marker.latLong = userPos
-                            marker.requestRedraw()
-                        }
-                        mapView.setCenter(userPos)
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                shape = RoundedCornerShape(12.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+            ) {
+                Text("Pobierz obszar offline", fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
+
+        // Return button (bottom center)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Button(
+                onClick = onCloseMap,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20)),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.height(48.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+            ) {
+                Text("Wróć do statusu", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // Progress Dialog for downloading tiles
+        if (showDownloadDialog) {
+            AlertDialog(
+                onDismissRequest = {},
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { showDownloadDialog = false }) {
+                        Text("Ukryj w tle")
+                    }
+                },
+                title = { Text("Pobieranie mapy offline") },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(downloadText, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        LinearProgressIndicator(
+                            progress = downloadProgress,
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFF2E7D32)
+                        )
                     }
                 }
             )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                Button(
-                    onClick = onCloseMap,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20)),
-                    shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier.height(48.dp)
-                ) {
-                    Text("Wróć do statusu", fontWeight = FontWeight.Bold)
-                }
-            }
         }
     }
 }
 
-private suspend fun copyUriToCache(context: Context, uri: Uri, destFile: File): Boolean =
-    withContext(Dispatchers.IO) {
-        try {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(destFile).use { output ->
-                    input.copyTo(output)
-                }
+private fun getTileX(lon: Double, zoom: Int): Int {
+    return ((lon + 180.0) / 360.0 * (1 shl zoom)).toInt()
+}
+
+private fun getTileY(lat: Double, zoom: Int): Int {
+    val latRad = lat * Math.PI / 180.0
+    val latRadBounded = maxOf(-1.484, minOf(1.484, latRad))
+    val y = (1.0 - ln(tan(latRadBounded) + 1.0 / cos(latRadBounded)) / Math.PI) / 2.0 * (1 shl zoom)
+    return y.toInt()
+}
+
+private suspend fun downloadArea(
+    context: Context,
+    mapView: MapView,
+    tileCache: TileCache,
+    onStart: (total: Int) -> Unit,
+    onProgress: (progress: Float, text: String) -> Unit,
+    onFinished: (successCount: Int, total: Int) -> Unit,
+    onMessage: (msg: String) -> Unit
+) {
+    val bbox = mapView.boundingBox
+    if (bbox == null) {
+        onMessage("Błąd: Nie można określić widocznego obszaru mapy.")
+        return
+    }
+
+    val zoomLevels = 10..16
+    val tiles = mutableListOf<Tile>()
+    for (z in zoomLevels) {
+        val startX = getTileX(bbox.minLongitude, z)
+        val endX = getTileX(bbox.maxLongitude, z)
+        val y1 = getTileY(bbox.maxLatitude, z)
+        val y2 = getTileY(bbox.minLatitude, z)
+        val startY = minOf(y1, y2)
+        val endY = maxOf(y1, y2)
+
+        val minX = minOf(startX, endX)
+        val maxX = maxOf(startX, endX)
+
+        for (x in minX..maxX) {
+            for (y in startY..endY) {
+                tiles.add(Tile(x, y, z.toByte(), 256))
             }
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
         }
     }
+
+    val total = tiles.size
+    if (total == 0) {
+        onMessage("Obszar nie zawiera żadnych kafelków.")
+        return
+    }
+
+    if (total > 500) {
+        onMessage("Obszar jest zbyt duży! Przybliż mapę, aby pobrać mniejszy wycinek (maksymalnie 500 kafelków, aktualnie: $total).")
+        return
+    }
+
+    onStart(total)
+
+    val tileSource = OpenStreetMapMapnik.INSTANCE
+    val client = okhttp3.OkHttpClient.Builder()
+        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+
+    withContext(Dispatchers.IO) {
+        var successCount = 0
+        for ((index, tile) in tiles.withIndex()) {
+            val job = DownloadJob(tile, tileSource)
+
+            if (tileCache.containsKey(job)) {
+                successCount++
+                withContext(Dispatchers.Main) {
+                    onProgress((index + 1).toFloat() / total, "Pomiń istniejący: ${index + 1} z $total...")
+                }
+                continue
+            }
+
+            val url = tileSource.getTileUrl(tile)
+            val request = okhttp3.Request.Builder()
+                .url(url)
+                .header("User-Agent", "ZanocujWLesieLokator/1.0 (Android)")
+                .build()
+
+            try {
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val bytes = response.body?.bytes()
+                    if (bytes != null) {
+                        val inputStream = java.io.ByteArrayInputStream(bytes)
+                        val bitmap = AndroidGraphicFactory.INSTANCE.createTileBitmap(
+                            inputStream,
+                            256,
+                            false
+                        )
+                        tileCache.put(job, bitmap)
+                        successCount++
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            withContext(Dispatchers.Main) {
+                onProgress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total...")
+            }
+        }
+
+        withContext(Dispatchers.Main) {
+            onFinished(successCount, total)
+        }
+    }
+}
 
 private fun drawZonePolygons(context: Context, mapView: MapView, zones: List<ZoneEntity>) {
     val graphicFactory = AndroidGraphicFactory.INSTANCE
