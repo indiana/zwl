@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.zwl"
+    namespace = "com.indiana.zwl"
     compileSdk = 34
 
     defaultConfig {
