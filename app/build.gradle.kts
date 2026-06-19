@@ -9,7 +9,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.zwl"
+        applicationId = "com.indiana.zwllokator"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
