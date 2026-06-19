@@ -21,7 +21,7 @@ class SyncWorker(
         val zoneDao = database.zoneDao()
 
         val retrofit = Retrofit.Builder()
-            .baseUrl("https://wfs.bdl.lasy.gov.pl/")
+            .baseUrl("https://mapserver.bdl.lasy.gov.pl/")
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         val arcgisApi = retrofit.create(BdlArcgisApi::class.java)

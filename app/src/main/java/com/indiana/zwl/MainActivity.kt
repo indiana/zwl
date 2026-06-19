@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
         val compassRepository = CompassRepositoryImpl(applicationContext)
 
         val retrofit = Retrofit.Builder()
-            .baseUrl("https://wfs.bdl.lasy.gov.pl/")
+            .baseUrl("https://mapserver.bdl.lasy.gov.pl/")
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         val fireApi = retrofit.create(BdlFireApi::class.java)

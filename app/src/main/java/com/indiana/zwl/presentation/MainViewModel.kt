@@ -176,10 +176,13 @@ class MainViewModel(
 
     private suspend fun fetchFireHazard(location: Location) {
         try {
-            val response = fireApi.getFireHazard(location.latitude, location.longitude)
-            currentFireRisk = response.riskLevel
+            val geometry = "${location.longitude},${location.latitude}"
+            val response = fireApi.getFireHazard(geometry = geometry)
+            val code = response.features.firstOrNull()?.properties?.kod ?: -1
+            currentFireRisk = code
             lastFireRiskLocation = location
         } catch (e: Exception) {
+            e.printStackTrace()
             currentFireRisk = -1
         }
     }
