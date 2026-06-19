@@ -236,7 +236,7 @@ private suspend fun downloadArea(
     onFinished: (successCount: Int, total: Int) -> Unit,
     onMessage: (msg: String) -> Unit
 ) {
-    val bbox = mapView.model.mapViewPosition.boundingBox
+    val bbox = mapView.boundingBox
     if (bbox == null) {
         onMessage("Błąd: Nie można określić widocznego obszaru mapy.")
         return
@@ -286,7 +286,7 @@ private suspend fun downloadArea(
         for ((index, tile) in tiles.withIndex()) {
             val job = DownloadJob(tile, tileSource)
 
-            if (tileCache.contains(job)) {
+            if (tileCache.containsKey(job)) {
                 successCount++
                 withContext(Dispatchers.Main) {
                     onProgress((index + 1).toFloat() / total, "Pomiń istniejący: ${index + 1} z $total...")
