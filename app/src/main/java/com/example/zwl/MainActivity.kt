@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import com.example.zwl.data.local.ZwlDatabase
+import com.example.zwl.data.remote.BdlArcgisApi
 import com.example.zwl.data.remote.BdlFireApi
 import com.example.zwl.data.repository.CompassRepositoryImpl
 import com.example.zwl.data.repository.LocationRepositoryImpl
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         val fireApi = retrofit.create(BdlFireApi::class.java)
+        val arcgisApi = retrofit.create(BdlArcgisApi::class.java)
 
         val spatialEngine = SpatialEngine()
 
@@ -38,6 +40,7 @@ class MainActivity : ComponentActivity() {
             locationRepository = locationRepository,
             compassRepository = compassRepository,
             fireApi = fireApi,
+            arcgisApi = arcgisApi,
             spatialEngine = spatialEngine
         )
         val viewModel: MainViewModel by viewModels { viewModelFactory }

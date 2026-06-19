@@ -5,11 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.zwl.data.local.ZoneDao
+import com.example.zwl.data.local.ZoneEntity
+import com.example.zwl.data.remote.BdlArcgisApi
 import com.example.zwl.data.remote.BdlFireApi
 import com.example.zwl.domain.CompassRepository
 import com.example.zwl.domain.LocationRepository
 import com.example.zwl.domain.SpatialEngine
 import com.example.zwl.domain.model.LocationStatus
+import com.example.zwl.domain.util.GeoJsonConverter
+import org.locationtech.jts.io.WKTWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +28,7 @@ class MainViewModel(
     private val locationRepository: LocationRepository,
     private val compassRepository: CompassRepository,
     private val fireApi: BdlFireApi,
+    private val arcgisApi: BdlArcgisApi,
     private val spatialEngine: SpatialEngine
 ) : ViewModel() {
 
@@ -58,8 +63,23 @@ class MainViewModel(
             _uiState.value = MainUiState.Loading
             val count = zoneDao.getZonesCount()
             if (count == 0) {
-                _uiState.value = MainUiState.EmptyDatabaseRequired
-                isEngineInitialized = false
+                val success = performInitialSync()
+                if (success) {
+                    val zones = withContext(Dispatchers.IO) {
+                        zoneDao.getAllZones()
+                    }
+                    this@MainViewModel.zones = zones
+                    spatialEngine.initialize(zones)
+                    isEngineInitialized = true
+                    if (hasLocationPermission) {
+                        startTracking()
+                    } else {
+                        _uiState.value = MainUiState.PermissionsRequired
+                    }
+                } else {
+                    _uiState.value = MainUiState.EmptyDatabaseRequired
+                    isEngineInitialized = false
+                }
             } else {
                 val zones = withContext(Dispatchers.IO) {
                     zoneDao.getAllZones()
@@ -73,6 +93,37 @@ class MainViewModel(
                     _uiState.value = MainUiState.PermissionsRequired
                 }
             }
+        }
+    }
+
+    private suspend fun performInitialSync(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val response = arcgisApi.getZanocujWLesieZones()
+            val wktWriter = WKTWriter()
+
+            val entities = response.features.mapNotNull { feature ->
+                val jtsGeom = GeoJsonConverter.toJtsGeometry(feature.geometry)
+                if (jtsGeom != null) {
+                    val wkt = wktWriter.write(jtsGeom)
+                    ZoneEntity(
+                        forestDistrict = feature.forestDistrict,
+                        geometryWkt = wkt
+                    )
+                } else {
+                    null
+                }
+            }
+
+            if (entities.isNotEmpty()) {
+                zoneDao.clearAll()
+                zoneDao.insertAll(entities)
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 
@@ -143,12 +194,13 @@ class MainViewModel(
         private val locationRepository: LocationRepository,
         private val compassRepository: CompassRepository,
         private val fireApi: BdlFireApi,
+        private val arcgisApi: BdlArcgisApi,
         private val spatialEngine: SpatialEngine
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
-                return MainViewModel(zoneDao, locationRepository, compassRepository, fireApi, spatialEngine) as T
+                return MainViewModel(zoneDao, locationRepository, compassRepository, fireApi, arcgisApi, spatialEngine) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
