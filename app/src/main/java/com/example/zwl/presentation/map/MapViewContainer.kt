@@ -146,8 +146,9 @@ fun MapViewContainer(
 
                             drawZonePolygons(ctx, this, zones)
 
-                            val userLocDrawable = createUserLocationDrawable(ctx)
-                            val marker = Marker(LatLong(52.23, 21.01), userLocDrawable, 0, 0)
+                            // Initialize user location marker
+                            val userLocBitmap = createUserLocationBitmap(ctx)
+                            val marker = Marker(LatLong(52.23, 21.01), userLocBitmap, 0, 0)
                             this.layerManager.layers.add(marker)
                             userMarker = marker
 
@@ -244,10 +245,10 @@ private fun drawZonePolygons(context: Context, mapView: MapView, zones: List<Zon
     }
 }
 
-private fun createUserLocationDrawable(context: Context): android.graphics.drawable.Drawable {
+private fun createUserLocationBitmap(context: Context): org.mapsforge.core.graphics.Bitmap {
     val size = (16f * context.resources.displayMetrics.density).toInt()
-    val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
-    val canvas = android.graphics.Canvas(bitmap)
+    val androidBitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(androidBitmap)
     val paint = android.graphics.Paint().apply {
         isAntiAlias = true
         color = android.graphics.Color.parseColor("#007AFF")
@@ -263,5 +264,6 @@ private fun createUserLocationDrawable(context: Context): android.graphics.drawa
     canvas.drawCircle(radius, radius, radius - borderPaint.strokeWidth, paint)
     canvas.drawCircle(radius, radius, radius - borderPaint.strokeWidth, borderPaint)
 
-    return android.graphics.drawable.BitmapDrawable(context.resources, bitmap)
+    val drawable = android.graphics.drawable.BitmapDrawable(context.resources, androidBitmap)
+    return AndroidGraphicFactory.convertToBitmap(drawable)
 }
