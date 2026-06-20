@@ -28,7 +28,14 @@ jobs:
         gradle-version: '8.7'
 
     - name: Build APKs and Bundle
-      run: gradle :app:assembleDebug :app:assembleRelease :app:bundleRelease --stacktrace > build_log.txt 2>&1 || (git config --global user.name "Bot"; git config --global user.email "bot@example.com"; git switch -c log-branch; git add build_log.txt; git commit -m "Upload log"; git push -f origin log-branch; exit 1)
+      run: gradle :app:assembleDebug :app:assembleRelease :app:bundleRelease --stacktrace > build_log.txt 2>&1 || (cat build_log.txt; exit 1)
+
+    - name: Upload Build Log
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log
+        path: build_log.txt
 
     - name: Sign Release Build
       env:
