@@ -205,9 +205,4 @@ class MainViewModel @Inject constructor(
         super.onCleared()
         stopTracking()
     }
-
-    override fun onCleared() {
-        super.onCleared()
-        stopTracking()
-    }
 }
