@@ -10,7 +10,21 @@ import com.indiana.zwl.data.sync.SyncWorker
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import java.util.concurrent.TimeUnit
 
-class ZwlApplication : Application() {
+import androidx.hilt.work.HiltWorkerFactory
+import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
+
+@HiltAndroidApp
+class ZwlApplication : Application(), androidx.work.Configuration.Provider {
+
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
+
+    override val workManagerConfiguration: androidx.work.Configuration
+        get() = androidx.work.Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
+
     override fun onCreate() {
         super.onCreate()
         AndroidGraphicFactory.createInstance(this)

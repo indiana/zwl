@@ -11,28 +11,20 @@ import org.locationtech.jts.io.WKTWriter
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
-class SyncWorker(
-    appContext: Context,
-    workerParams: WorkerParameters
+import androidx.hilt.work.HiltWorker
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
+import com.indiana.zwl.data.local.ZoneDao
+
+@HiltWorker
+class SyncWorker @AssistedInject constructor(
+    @Assisted appContext: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val zoneDao: ZoneDao,
+    private val arcgisApi: BdlArcgisApi
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        val database = ZwlDatabase.getDatabase(applicationContext)
-        val zoneDao = database.zoneDao()
-
-        val okHttpClient = okhttp3.OkHttpClient.Builder()
-            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .build()
-
-        val retrofit = Retrofit.Builder()
-            .baseUrl("https://mapserver.bdl.lasy.gov.pl/")
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-        val arcgisApi = retrofit.create(BdlArcgisApi::class.java)
-
         return try {
             val response = arcgisApi.getZanocujWLesieZones()
             val wktWriter = WKTWriter()

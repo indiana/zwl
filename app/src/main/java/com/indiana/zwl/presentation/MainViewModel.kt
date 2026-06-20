@@ -14,6 +14,7 @@ import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.util.GeoJsonConverter
 import org.locationtech.jts.io.WKTWriter
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,8 +23,10 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
-class MainViewModel(
+@HiltViewModel
+class MainViewModel @Inject constructor(
     private val zoneDao: ZoneDao,
     private val locationRepository: LocationRepository,
     private val compassRepository: CompassRepository,
@@ -203,20 +206,8 @@ class MainViewModel(
         stopTracking()
     }
 
-    class Factory(
-        private val zoneDao: ZoneDao,
-        private val locationRepository: LocationRepository,
-        private val compassRepository: CompassRepository,
-        private val fireApi: BdlFireApi,
-        private val arcgisApi: BdlArcgisApi,
-        private val spatialEngine: SpatialEngine
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
-                return MainViewModel(zoneDao, locationRepository, compassRepository, fireApi, arcgisApi, spatialEngine) as T
-            }
-            throw IllegalArgumentException("Unknown ViewModel class")
-        }
+    override fun onCleared() {
+        super.onCleared()
+        stopTracking()
     }
 }
