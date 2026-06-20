@@ -3,6 +3,7 @@ package com.indiana.zwl.di
 import android.content.Context
 import com.indiana.zwl.data.repository.CompassRepositoryImpl
 import com.indiana.zwl.data.repository.LocationRepositoryImpl
+import com.indiana.zwl.data.repository.MotionDetector
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
@@ -19,8 +20,17 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideLocationRepository(@ApplicationContext context: Context): LocationRepository {
-        return LocationRepositoryImpl(context)
+    fun provideMotionDetector(@ApplicationContext context: Context): MotionDetector {
+        return MotionDetector(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideLocationRepository(
+        @ApplicationContext context: Context,
+        motionDetector: MotionDetector
+    ): LocationRepository {
+        return LocationRepositoryImpl(context, motionDetector)
     }
 
     @Provides

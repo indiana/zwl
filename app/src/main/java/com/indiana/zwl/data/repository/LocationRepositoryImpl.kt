@@ -2,10 +2,6 @@ package com.indiana.zwl.data.repository
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.location.Location
 import android.os.Looper
 import android.util.Log
@@ -16,16 +12,29 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlin.math.sqrt
+import kotlinx.coroutines.launch
 
-class LocationRepositoryImpl(private val context: Context) : LocationRepository, SensorEventListener {
+class LocationRepositoryImpl(
+    context: Context,
+    private val motionDetector: MotionDetector
+) : LocationRepository {
+
+    companion object {
+        const val ACTIVE_INTERVAL = 5000L
+        const val ACTIVE_MIN_INTERVAL = 2000L
+        const val STATIONARY_INTERVAL = 30000L
+        const val STATIONARY_MIN_INTERVAL = 30000L
+        const val STATIONARY_TIMEOUT_MS = 120000L
+    }
 
     private val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
-    private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private val accelerometer: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
     private val _locationFlow = MutableSharedFlow<Location>(replay = 1)
     override val locationFlow: SharedFlow<Location> = _locationFlow
@@ -33,9 +42,8 @@ class LocationRepositoryImpl(private val context: Context) : LocationRepository,
     private var currentMode = LocationMode.ACTIVE
     private var lastMotionTime = System.currentTimeMillis()
 
-    private val accelBuffer = FloatArray(100)
-    private var bufferIndex = 0
-    private var isBufferFull = false
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var motionJob: Job? = null
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(locationResult: LocationResult) {
@@ -52,17 +60,31 @@ class LocationRepositoryImpl(private val context: Context) : LocationRepository,
     @SuppressLint("MissingPermission")
     override fun startLocationUpdates() {
         startLocationUpdatesWithMode(LocationMode.ACTIVE)
-        accelerometer?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
-        }
         lastMotionTime = System.currentTimeMillis()
+
+        motionJob?.cancel()
+        motionJob = repositoryScope.launch {
+            motionDetector.isMovingFlow.collect { isMoving ->
+                if (isMoving) {
+                    lastMotionTime = System.currentTimeMillis()
+                    if (currentMode == LocationMode.STATIONARY) {
+                        Log.d("LocationRepository", "Ruch wykryty! Przełączanie w tryb AKTYWNY.")
+                        startLocationUpdatesWithMode(LocationMode.ACTIVE)
+                    }
+                } else {
+                    val stationaryDuration = System.currentTimeMillis() - lastMotionTime
+                    if (stationaryDuration > STATIONARY_TIMEOUT_MS && currentMode == LocationMode.ACTIVE) {
+                        Log.d("LocationRepository", "Bezruch przez >2 minuty. Przełączanie w tryb ENERGOOSZCZĘDNY.")
+                        startLocationUpdatesWithMode(LocationMode.STATIONARY)
+                    }
+                }
+            }
+        }
     }
 
     override fun stopLocationUpdates() {
         fusedLocationClient.removeLocationUpdates(locationCallback)
-        sensorManager.unregisterListener(this)
-        isBufferFull = false
-        bufferIndex = 0
+        motionJob?.cancel()
     }
 
     @SuppressLint("MissingPermission")
@@ -70,8 +92,8 @@ class LocationRepositoryImpl(private val context: Context) : LocationRepository,
         currentMode = mode
         fusedLocationClient.removeLocationUpdates(locationCallback)
 
-        val interval = if (mode == LocationMode.ACTIVE) 5000L else 30000L
-        val minInterval = if (mode == LocationMode.ACTIVE) 2000L else 30000L
+        val interval = if (mode == LocationMode.ACTIVE) ACTIVE_INTERVAL else STATIONARY_INTERVAL
+        val minInterval = if (mode == LocationMode.ACTIVE) ACTIVE_MIN_INTERVAL else STATIONARY_MIN_INTERVAL
         val priority = if (mode == LocationMode.ACTIVE) {
             Priority.PRIORITY_HIGH_ACCURACY
         } else {
@@ -91,54 +113,5 @@ class LocationRepositoryImpl(private val context: Context) : LocationRepository,
         } catch (e: SecurityException) {
             Log.e("LocationRepository", "Brak uprawnień do lokalizacji: ${e.message}")
         }
-    }
-
-    override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            val x = event.values[0]
-            val y = event.values[1]
-            val z = event.values[2]
-            val magnitude = sqrt(x * x + y * y + z * z)
-
-            accelBuffer[bufferIndex] = magnitude
-            bufferIndex++
-            if (bufferIndex >= accelBuffer.size) {
-                bufferIndex = 0
-                isBufferFull = true
-            }
-
-            if (isBufferFull) {
-                var sum = 0f
-                for (valMag in accelBuffer) {
-                    sum += valMag
-                }
-                val mean = sum / accelBuffer.size
-
-                var varianceSum = 0f
-                for (valMag in accelBuffer) {
-                    val diff = valMag - mean
-                    varianceSum += diff * diff
-                }
-                val variance = varianceSum / accelBuffer.size
-
-                if (variance > 0.1f) {
-                    lastMotionTime = System.currentTimeMillis()
-                    if (currentMode == LocationMode.STATIONARY) {
-                        Log.d("LocationRepository", "Ruch wykryty! Przełączanie w tryb AKTYWNY.")
-                        startLocationUpdatesWithMode(LocationMode.ACTIVE)
-                    }
-                } else {
-                    val stationaryDuration = System.currentTimeMillis() - lastMotionTime
-                    if (stationaryDuration > 120000L && currentMode == LocationMode.ACTIVE) {
-                        Log.d("LocationRepository", "Bezruch przez >2 minuty. Przełączanie w tryb ENERGOOSZCZĘDNY.")
-                        startLocationUpdatesWithMode(LocationMode.STATIONARY)
-                    }
-                }
-            }
-        }
-    }
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // Not used
     }
 }
