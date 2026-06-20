@@ -18,13 +18,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.presentation.theme.ZwlTheme
 
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
     var isMapView by remember { mutableStateOf(false) }
 
@@ -86,6 +87,44 @@ fun MainScreen(viewModel: MainViewModel) {
                         color = Color(0xFFA5D6A7),
                         textAlign = TextAlign.Center
                     )
+                }
+            }
+        }
+
+        is MainUiState.Error -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF261010))
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Wystąpił błąd",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFEF5350)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = state.message,
+                        fontSize = 15.sp,
+                        color = Color(0xFFFFCDD2),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+                    Spacer(modifier = Modifier.height(32.dp))
+                    Button(
+                        onClick = { viewModel.retryDatabaseLoad() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Spróbuj ponownie", color = Color.White)
+                    }
                 }
             }
         }

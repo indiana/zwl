@@ -6,14 +6,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.indiana.zwl.data.local.ZoneDao
 import com.indiana.zwl.data.local.ZoneEntity
-import com.indiana.zwl.data.remote.BdlArcgisApi
-import com.indiana.zwl.data.remote.BdlFireApi
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.LocationStatus
-import com.indiana.zwl.domain.util.GeoJsonConverter
-import org.locationtech.jts.io.WKTWriter
+import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
+import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,8 +28,8 @@ class MainViewModel @Inject constructor(
     private val zoneDao: ZoneDao,
     private val locationRepository: LocationRepository,
     private val compassRepository: CompassRepository,
-    private val fireApi: BdlFireApi,
-    private val arcgisApi: BdlArcgisApi,
+    private val syncZonesUseCase: SyncZonesUseCase,
+    private val getFireRiskUseCase: GetFireRiskUseCase,
     private val spatialEngine: SpatialEngine
 ) : ViewModel() {
 
@@ -67,77 +65,36 @@ class MainViewModel @Inject constructor(
     private fun loadZonesAndInitializeEngine() {
         viewModelScope.launch {
             _uiState.value = MainUiState.Loading
-            val count = zoneDao.getZonesCount()
-            if (count == 0) {
-                val success = performInitialSync()
-                if (success) {
-                    val zones = withContext(Dispatchers.IO) {
-                        zoneDao.getAllZones()
-                    }
-                    this@MainViewModel.zones = zones
-                    spatialEngine.initialize(zones)
-                    isEngineInitialized = true
-                    if (hasLocationPermission) {
-                        startTracking()
+            try {
+                val count = withContext(Dispatchers.IO) { zoneDao.getZonesCount() }
+                if (count == 0) {
+                    val syncResult = syncZonesUseCase()
+                    if (syncResult.isSuccess) {
+                        val zones = withContext(Dispatchers.IO) { zoneDao.getAllZones() }
+                        this@MainViewModel.zones = zones
+                        withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
+                        isEngineInitialized = true
+                        if (hasLocationPermission) startTracking() else _uiState.value = MainUiState.PermissionsRequired
                     } else {
-                        _uiState.value = MainUiState.PermissionsRequired
+                        _uiState.value = MainUiState.EmptyDatabaseRequired
+                        isEngineInitialized = false
                     }
                 } else {
-                    _uiState.value = MainUiState.EmptyDatabaseRequired
-                    isEngineInitialized = false
-                }
-            } else {
-                var zones = withContext(Dispatchers.IO) {
-                    zoneDao.getAllZones()
-                }
-                if (zones.any { it.forestDistrict.contains("Nieznane", ignoreCase = true) }) {
-                    val success = performInitialSync()
-                    if (success) {
-                        zones = withContext(Dispatchers.IO) {
-                            zoneDao.getAllZones()
+                    var zones = withContext(Dispatchers.IO) { zoneDao.getAllZones() }
+                    if (zones.any { it.forestDistrict.contains("Nieznane", ignoreCase = true) }) {
+                        val syncResult = syncZonesUseCase()
+                        if (syncResult.isSuccess) {
+                            zones = withContext(Dispatchers.IO) { zoneDao.getAllZones() }
                         }
                     }
+                    this@MainViewModel.zones = zones
+                    withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
+                    isEngineInitialized = true
+                    if (hasLocationPermission) startTracking() else _uiState.value = MainUiState.PermissionsRequired
                 }
-                this@MainViewModel.zones = zones
-                spatialEngine.initialize(zones)
-                isEngineInitialized = true
-                if (hasLocationPermission) {
-                    startTracking()
-                } else {
-                    _uiState.value = MainUiState.PermissionsRequired
-                }
+            } catch (e: Exception) {
+                _uiState.value = MainUiState.Error(e.message ?: "Wystąpił nieoczekiwany błąd podczas inicjalizacji danych.")
             }
-        }
-    }
-
-    private suspend fun performInitialSync(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val response = arcgisApi.getZanocujWLesieZones()
-            val wktWriter = WKTWriter()
-
-            val entities = response.features.mapNotNull { feature ->
-                val jtsGeom = GeoJsonConverter.toJtsGeometry(feature.geometry)
-                if (jtsGeom != null) {
-                    val wkt = wktWriter.write(jtsGeom)
-                    ZoneEntity(
-                        forestDistrict = feature.forestDistrict,
-                        geometryWkt = wkt
-                    )
-                } else {
-                    null
-                }
-            }
-
-            if (entities.isNotEmpty()) {
-                zoneDao.clearAll()
-                zoneDao.insertAll(entities)
-                true
-            } else {
-                false
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
         }
     }
 
@@ -189,14 +146,11 @@ class MainViewModel @Inject constructor(
     }
 
     private suspend fun fetchFireHazard(location: Location) {
-        try {
-            val geometry = "${location.longitude},${location.latitude}"
-            val response = fireApi.getFireHazard(geometry = geometry)
-            val code = response.features.firstOrNull()?.properties?.kod ?: -1
-            currentFireRisk = code
+        val result = getFireRiskUseCase(location)
+        if (result.isSuccess) {
+            currentFireRisk = result.getOrDefault(-1)
             lastFireRiskLocation = location
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } else {
             currentFireRisk = -1
         }
     }
