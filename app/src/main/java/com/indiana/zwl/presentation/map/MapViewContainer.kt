@@ -69,9 +69,9 @@ fun MapViewContainer(
                     kotlinx.coroutines.delay(100)
                     bbox = mapViewInstance!!.boundingBox
                 }
-                downloadArea(
-                    context = context,
-                    mapView = mapViewInstance!!,
+                OfflineMapDownloader.downloadArea(
+                    bbox = bbox,
+                    tileSize = mapViewInstance!!.model.displayModel.tileSize,
                     tileCache = tileCacheInstance!!,
                     onStart = {
                         isDownloadingArea = true
@@ -117,7 +117,7 @@ fun MapViewContainer(
                     this.mapZoomControls.setZoomLevelMin(8)
                     this.mapZoomControls.setZoomLevelMax(20)
 
-                    val tileSource = createOnlineTileSource()
+                    val tileSource = OfflineMapDownloader.createOnlineTileSource()
 
                     val downloadLayer = TileDownloadLayer(
                         tileCache,
@@ -176,32 +176,37 @@ fun MapViewContainer(
                     val tc = tileCacheInstance
                     if (mv != null && tc != null) {
                         coroutineScope.launch {
-                            downloadArea(
-                                context = context,
-                                mapView = mv,
-                                tileCache = tc,
-                                onStart = {
-                                    isDownloadingArea = true
-                                    downloadProgress = 0f
-                                    downloadText = "Rozpoczynanie pobierania..."
-                                },
-                                onProgress = { progress, text ->
-                                    downloadProgress = progress
-                                    downloadText = text
-                                },
-                                onFinished = { success, total ->
-                                    isDownloadingArea = false
-                                    Toast.makeText(
-                                        context,
-                                        "Pobrano pomyślnie $success z $total kafelków do cache offline!",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                },
-                                onMessage = { msg ->
-                                    isDownloadingArea = false
-                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                                }
-                            )
+                            val bbox = mv.boundingBox
+                            if (bbox != null) {
+                                OfflineMapDownloader.downloadArea(
+                                    bbox = bbox,
+                                    tileSize = mv.model.displayModel.tileSize,
+                                    tileCache = tc,
+                                    onStart = {
+                                        isDownloadingArea = true
+                                        downloadProgress = 0f
+                                        downloadText = "Rozpoczynanie pobierania..."
+                                    },
+                                    onProgress = { progress, text ->
+                                        downloadProgress = progress
+                                        downloadText = text
+                                    },
+                                    onFinished = { success, total ->
+                                        isDownloadingArea = false
+                                        Toast.makeText(
+                                            context,
+                                            "Pobrano pomyślnie $success z $total kafelków do cache offline!",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    },
+                                    onMessage = { msg ->
+                                        isDownloadingArea = false
+                                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            } else {
+                                Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     } else {
                         Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
@@ -275,120 +280,6 @@ fun MapViewContainer(
     }
 }
 
-private fun getTileX(lon: Double, zoom: Int): Int {
-    return ((lon + 180.0) / 360.0 * (1 shl zoom)).toInt()
-}
-
-private fun getTileY(lat: Double, zoom: Int): Int {
-    val latRad = lat * Math.PI / 180.0
-    val latRadBounded = maxOf(-1.484, minOf(1.484, latRad))
-    val y = (1.0 - ln(tan(latRadBounded) + 1.0 / cos(latRadBounded)) / Math.PI) / 2.0 * (1 shl zoom)
-    return y.toInt()
-}
-
-private suspend fun downloadArea(
-    context: Context,
-    mapView: MapView,
-    tileCache: TileCache,
-    onStart: (total: Int) -> Unit,
-    onProgress: (progress: Float, text: String) -> Unit,
-    onFinished: (successCount: Int, total: Int) -> Unit,
-    onMessage: (msg: String) -> Unit
-) {
-    val bbox = mapView.boundingBox
-    if (bbox == null) {
-        onMessage("Błąd: Nie można określić widocznego obszaru mapy.")
-        return
-    }
-
-    val tileSize = mapView.model.displayModel.tileSize
-    val zoomLevels = 10..16
-    val tiles = mutableListOf<Tile>()
-    for (z in zoomLevels) {
-        val startX = getTileX(bbox.minLongitude, z)
-        val endX = getTileX(bbox.maxLongitude, z)
-        val y1 = getTileY(bbox.maxLatitude, z)
-        val y2 = getTileY(bbox.minLatitude, z)
-        val startY = minOf(y1, y2)
-        val endY = maxOf(y1, y2)
-
-        val minX = minOf(startX, endX)
-        val maxX = maxOf(startX, endX)
-
-        for (x in minX..maxX) {
-            for (y in startY..endY) {
-                tiles.add(Tile(x, y, z.toByte(), tileSize))
-            }
-        }
-    }
-
-    val total = tiles.size
-    if (total == 0) {
-        onMessage("Obszar nie zawiera żadnych kafelków.")
-        return
-    }
-
-    if (total > 500) {
-        onMessage("Obszar jest zbyt duży! Przybliż mapę, aby pobrać mniejszy wycinek (maksymalnie 500 kafelków, aktualnie: $total).")
-        return
-    }
-
-    onStart(total)
-
-    val tileSource = createOnlineTileSource()
-    val client = okhttp3.OkHttpClient.Builder()
-        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-        .build()
-
-    withContext(Dispatchers.IO) {
-        var successCount = 0
-        for ((index, tile) in tiles.withIndex()) {
-            val job = DownloadJob(tile, tileSource)
-
-            if (tileCache.containsKey(job)) {
-                successCount++
-                withContext(Dispatchers.Main) {
-                    onProgress((index + 1).toFloat() / total, "Pomiń istniejący: ${index + 1} z $total...")
-                }
-                continue
-            }
-
-            val url = tileSource.getTileUrl(tile)
-            val request = okhttp3.Request.Builder()
-                .url(url)
-                .header("User-Agent", "ZanocujWLesieLokator/1.0 (Android)")
-                .build()
-
-            try {
-                val response = client.newCall(request).execute()
-                if (response.isSuccessful) {
-                    val bytes = response.body?.bytes()
-                    if (bytes != null) {
-                        val inputStream = java.io.ByteArrayInputStream(bytes)
-                        val bitmap = AndroidGraphicFactory.INSTANCE.createTileBitmap(
-                            inputStream,
-                            tileSize,
-                            false
-                        )
-                        tileCache.put(job, bitmap)
-                        successCount++
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-
-            withContext(Dispatchers.Main) {
-                onProgress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total...")
-            }
-        }
-
-        withContext(Dispatchers.Main) {
-            onFinished(successCount, total)
-        }
-    }
-}
 
 private fun drawZonePolygons(context: Context, mapView: MapView, zones: List<Zone>) {
     val graphicFactory = AndroidGraphicFactory.INSTANCE
@@ -452,14 +343,3 @@ private fun createUserLocationBitmap(context: Context): org.mapsforge.core.graph
     return AndroidGraphicFactory.convertToBitmap(drawable)
 }
 
-private fun createOnlineTileSource(): OnlineTileSource {
-    val hostNames = arrayOf("a.tile.openstreetmap.org", "b.tile.openstreetmap.org", "c.tile.openstreetmap.org")
-    val tileSource = object : OnlineTileSource(hostNames, 19) {
-        override fun getTileUrl(tile: Tile): URL {
-            val host = hostNames[((tile.tileX xor tile.tileY) and Int.MAX_VALUE) % hostNames.size]
-            return URL("https://$host/${tile.zoomLevel}/${tile.tileX}/${tile.tileY}.png")
-        }
-    }
-    tileSource.setUserAgent("ZanocujWLesieLokator/1.0 (Android)")
-    return tileSource
-}

@@ -4,16 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import com.indiana.zwl.data.local.ZwlDatabase
-import com.indiana.zwl.data.remote.BdlArcgisApi
-import com.indiana.zwl.data.remote.BdlFireApi
-import com.indiana.zwl.data.repository.CompassRepositoryImpl
-import com.indiana.zwl.data.repository.LocationRepositoryImpl
-import com.indiana.zwl.domain.SpatialEngine
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.indiana.zwl.presentation.MainScreen
 import com.indiana.zwl.presentation.MainViewModel
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
+import com.indiana.zwl.presentation.map.MapViewContainer
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -25,7 +21,22 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            MainScreen(viewModel = viewModel)
+            val navController = rememberNavController()
+            NavHost(navController = navController, startDestination = "main") {
+                composable("main") {
+                    MainScreen(
+                        viewModel = viewModel,
+                        onNavigateToMap = { navController.navigate("map") }
+                    )
+                }
+                composable("map") {
+                    MapViewContainer(
+                        viewModel = viewModel,
+                        zones = viewModel.zones,
+                        onCloseMap = { navController.popBackStack() }
+                    )
+                }
+            }
         }
     }
 }

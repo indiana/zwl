@@ -23,11 +23,12 @@ import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.presentation.theme.ZwlTheme
 
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(
+    viewModel: MainViewModel,
+    onNavigateToMap: () -> Unit
+) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    
-    var isMapView by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -182,41 +183,33 @@ fun MainScreen(viewModel: MainViewModel) {
             val isInZone = state.locationStatus is LocationStatus.InZone
             
             ZwlTheme(isInZone = isInZone) {
-                if (isMapView) {
-                    com.indiana.zwl.presentation.map.MapViewContainer(
-                        viewModel = viewModel,
-                        zones = viewModel.zones,
-                        onCloseMap = { isMapView = false }
-                    )
-                } else {
-                    when (val status = state.locationStatus) {
-                        is LocationStatus.InZone -> {
-                            InZoneContent(
-                                forestDistrict = status.forestDistrict,
-                                fireRiskLevel = state.fireRiskLevel,
-                                onSwitchToMap = { isMapView = true }
-                            )
-                        }
+                when (val status = state.locationStatus) {
+                    is LocationStatus.InZone -> {
+                        InZoneContent(
+                            forestDistrict = status.forestDistrict,
+                            fireRiskLevel = state.fireRiskLevel,
+                            onSwitchToMap = onNavigateToMap
+                        )
+                    }
 
-                        is LocationStatus.OutsideZone -> {
-                            OutsideZoneContent(
-                                nearestDistrict = status.nearestDistrict,
-                                distanceMeters = status.distanceMeters,
-                                bearingDegrees = status.bearingDegrees,
-                                azimuth = state.azimuth,
-                                onSwitchToMap = { isMapView = true }
-                            )
-                        }
+                    is LocationStatus.OutsideZone -> {
+                        OutsideZoneContent(
+                            nearestDistrict = status.nearestDistrict,
+                            distanceMeters = status.distanceMeters,
+                            bearingDegrees = status.bearingDegrees,
+                            azimuth = state.azimuth,
+                            onSwitchToMap = onNavigateToMap
+                        )
+                    }
 
-                        is LocationStatus.EmptyData -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.background),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Inicjalizacja silnika przestrzennego...", color = Color.White)
-                            }
+                    is LocationStatus.EmptyData -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Inicjalizacja silnika przestrzennego...", color = Color.White)
                         }
                     }
                 }
