@@ -1,7 +1,7 @@
 package com.indiana.zwl.domain
 
-import com.indiana.zwl.data.local.ZoneEntity
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.domain.model.Zone
 import org.locationtech.jts.geom.Coordinate
 import org.locationtech.jts.geom.Envelope
 import org.locationtech.jts.geom.Geometry
@@ -28,7 +28,7 @@ class SpatialEngine {
     )
 
     @Synchronized
-    fun initialize(zones: List<ZoneEntity>) {
+    fun initialize(zones: List<Zone>) {
         strTree = STRtree()
         parsedZones.clear()
 

@@ -5,12 +5,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.indiana.zwl.data.local.ZoneDao
-import com.indiana.zwl.data.local.ZoneEntity
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
+import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +31,7 @@ class MainViewModel @Inject constructor(
     private val compassRepository: CompassRepository,
     private val syncZonesUseCase: SyncZonesUseCase,
     private val getFireRiskUseCase: GetFireRiskUseCase,
+    private val getZonesUseCase: GetZonesUseCase,
     private val spatialEngine: SpatialEngine
 ) : ViewModel() {
 
@@ -42,7 +44,7 @@ class MainViewModel @Inject constructor(
 
     private var currentFireRisk = -1
     private var lastFireRiskLocation: Location? = null
-    var zones: List<ZoneEntity> = emptyList()
+    var zones: List<Zone> = emptyList()
         private set
 
     init {
@@ -70,7 +72,7 @@ class MainViewModel @Inject constructor(
                 if (count == 0) {
                     val syncResult = syncZonesUseCase()
                     if (syncResult.isSuccess) {
-                        val zones = withContext(Dispatchers.IO) { zoneDao.getAllZones() }
+                        val zones = getZonesUseCase()
                         this@MainViewModel.zones = zones
                         withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
                         isEngineInitialized = true
@@ -80,11 +82,11 @@ class MainViewModel @Inject constructor(
                         isEngineInitialized = false
                     }
                 } else {
-                    var zones = withContext(Dispatchers.IO) { zoneDao.getAllZones() }
+                    var zones = getZonesUseCase()
                     if (zones.any { it.forestDistrict.contains("Nieznane", ignoreCase = true) }) {
                         val syncResult = syncZonesUseCase()
                         if (syncResult.isSuccess) {
-                            zones = withContext(Dispatchers.IO) { zoneDao.getAllZones() }
+                            zones = getZonesUseCase()
                         }
                     }
                     this@MainViewModel.zones = zones

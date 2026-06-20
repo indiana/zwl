@@ -15,7 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.indiana.zwl.data.local.ZoneEntity
+import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.presentation.MainUiState
 import com.indiana.zwl.presentation.MainViewModel
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +42,7 @@ import kotlin.math.cos
 @Composable
 fun MapViewContainer(
     viewModel: MainViewModel,
-    zones: List<ZoneEntity>,
+    zones: List<Zone>,
     onCloseMap: () -> Unit
 ) {
     val context = LocalContext.current
@@ -390,7 +390,7 @@ private suspend fun downloadArea(
     }
 }
 
-private fun drawZonePolygons(context: Context, mapView: MapView, zones: List<ZoneEntity>) {
+private fun drawZonePolygons(context: Context, mapView: MapView, zones: List<Zone>) {
     val graphicFactory = AndroidGraphicFactory.INSTANCE
     val wktReader = WKTReader()
 
