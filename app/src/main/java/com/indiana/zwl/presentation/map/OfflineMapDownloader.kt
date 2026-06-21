@@ -1,6 +1,8 @@
 package com.indiana.zwl.presentation.map
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import org.mapsforge.core.model.BoundingBox
 import org.mapsforge.core.model.Tile
@@ -8,10 +10,18 @@ import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.layer.cache.TileCache
 import org.mapsforge.map.layer.download.DownloadJob
 import org.mapsforge.map.layer.download.tilesource.OnlineTileSource
+import java.io.IOException
 import java.net.URL
 import kotlin.math.ln
 import kotlin.math.tan
 import kotlin.math.cos
+
+sealed class DownloadStatus {
+    data class Start(val total: Int) : DownloadStatus()
+    data class Progress(val progress: Float, val text: String) : DownloadStatus()
+    data class Finished(val successCount: Int, val total: Int) : DownloadStatus()
+    data class Message(val msg: String) : DownloadStatus()
+}
 
 object OfflineMapDownloader {
 
@@ -38,15 +48,11 @@ object OfflineMapDownloader {
         return tileSource
     }
 
-    suspend fun downloadArea(
+    fun downloadArea(
         bbox: BoundingBox,
         tileSize: Int,
-        tileCache: TileCache,
-        onStart: (total: Int) -> Unit,
-        onProgress: (progress: Float, text: String) -> Unit,
-        onFinished: (successCount: Int, total: Int) -> Unit,
-        onMessage: (msg: String) -> Unit
-    ) {
+        tileCache: TileCache
+    ): Flow<DownloadStatus> = flow {
         val zoomLevels = 10..16
         val tiles = mutableListOf<Tile>()
         for (z in zoomLevels) {
@@ -69,16 +75,16 @@ object OfflineMapDownloader {
 
         val total = tiles.size
         if (total == 0) {
-            withContext(Dispatchers.Main) { onMessage("Obszar nie zawiera żadnych kafelków.") }
-            return
+            emit(DownloadStatus.Message("Obszar nie zawiera żadnych kafelków."))
+            return@flow
         }
 
         if (total > 500) {
-            withContext(Dispatchers.Main) { onMessage("Obszar jest zbyt duży! Przybliż mapę, aby pobrać mniejszy wycinek (maksymalnie 500 kafelków, aktualnie: $total).") }
-            return
+            emit(DownloadStatus.Message("Obszar jest zbyt duży! Przybliż mapę, aby pobrać mniejszy wycinek (maksymalnie 500 kafelków, aktualnie: $total)."))
+            return@flow
         }
 
-        withContext(Dispatchers.Main) { onStart(total) }
+        emit(DownloadStatus.Start(total))
 
         val tileSource = createOnlineTileSource()
         val client = okhttp3.OkHttpClient.Builder()
@@ -86,52 +92,50 @@ object OfflineMapDownloader {
             .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
             .build()
 
-        withContext(Dispatchers.IO) {
-            var successCount = 0
-            for ((index, tile) in tiles.withIndex()) {
-                val job = DownloadJob(tile, tileSource)
+        var successCount = 0
+        for ((index, tile) in tiles.withIndex()) {
+            val job = DownloadJob(tile, tileSource)
 
-                if (tileCache.containsKey(job)) {
-                    successCount++
-                    withContext(Dispatchers.Main) {
-                        onProgress((index + 1).toFloat() / total, "Pomiń istniejący: ${index + 1} z $total...")
-                    }
-                    continue
-                }
-
-                val url = tileSource.getTileUrl(tile)
-                val request = okhttp3.Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "ZanocujWLesie/1.0 (Android)")
-                    .build()
-
-                try {
-                    val response = client.newCall(request).execute()
-                    if (response.isSuccessful) {
-                        val bytes = response.body?.bytes()
-                        if (bytes != null) {
-                            val inputStream = java.io.ByteArrayInputStream(bytes)
-                            val bitmap = AndroidGraphicFactory.INSTANCE.createTileBitmap(
-                                inputStream,
-                                tileSize,
-                                false
-                            )
-                            tileCache.put(job, bitmap)
-                            successCount++
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-
-                withContext(Dispatchers.Main) {
-                    onProgress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total...")
-                }
+            if (tileCache.containsKey(job)) {
+                successCount++
+                emit(DownloadStatus.Progress((index + 1).toFloat() / total, "Pomiń istniejący: ${index + 1} z $total..."))
+                continue
             }
 
-            withContext(Dispatchers.Main) {
-                onFinished(successCount, total)
+            val url = tileSource.getTileUrl(tile)
+            val request = okhttp3.Request.Builder()
+                .url(url)
+                .header("User-Agent", "ZanocujWLesie/1.0 (Android)")
+                .build()
+
+            try {
+                // Execute network call on Dispatchers.IO
+                val response = withContext(Dispatchers.IO) {
+                    client.newCall(request).execute()
+                }
+                if (response.isSuccessful) {
+                    val bytes = response.body?.bytes()
+                    if (bytes != null) {
+                        val inputStream = java.io.ByteArrayInputStream(bytes)
+                        val bitmap = AndroidGraphicFactory.INSTANCE.createTileBitmap(
+                            inputStream,
+                            tileSize,
+                            false
+                        )
+                        tileCache.put(job, bitmap)
+                        successCount++
+                    }
+                }
+            } catch (e: IOException) {
+                emit(DownloadStatus.Message("Błąd połączenia sieciowego podczas pobierania. Przerywam."))
+                break
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
+
+            emit(DownloadStatus.Progress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total..."))
         }
+
+        emit(DownloadStatus.Finished(successCount, total))
     }
 }

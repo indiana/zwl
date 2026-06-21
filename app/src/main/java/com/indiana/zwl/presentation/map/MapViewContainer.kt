@@ -182,29 +182,32 @@ fun MapViewContainer(
                                     OfflineMapDownloader.downloadArea(
                                         bbox = bbox,
                                         tileSize = mv.model.displayModel.tileSize,
-                                        tileCache = tc,
-                                        onStart = {
-                                            isDownloadingArea = true
-                                            downloadProgress = 0f
-                                            downloadText = "Rozpoczynanie pobierania..."
-                                        },
-                                        onProgress = { progress, text ->
-                                            downloadProgress = progress
-                                            downloadText = text
-                                        },
-                                        onFinished = { success, total ->
-                                            isDownloadingArea = false
-                                            Toast.makeText(
-                                                context,
-                                                "Pobrano pomyślnie $success z $total kafelków do cache offline!",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-                                        },
-                                        onMessage = { msg ->
-                                            isDownloadingArea = false
-                                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                        tileCache = tc
+                                    ).collect { status ->
+                                        when (status) {
+                                            is DownloadStatus.Start -> {
+                                                isDownloadingArea = true
+                                                downloadProgress = 0f
+                                                downloadText = "Rozpoczynanie pobierania..."
+                                            }
+                                            is DownloadStatus.Progress -> {
+                                                downloadProgress = status.progress
+                                                downloadText = status.text
+                                            }
+                                            is DownloadStatus.Finished -> {
+                                                isDownloadingArea = false
+                                                Toast.makeText(
+                                                    context,
+                                                    "Pobrano pomyślnie ${status.successCount} z ${status.total} kafelków do cache offline!",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                            is DownloadStatus.Message -> {
+                                                isDownloadingArea = false
+                                                Toast.makeText(context, status.msg, Toast.LENGTH_LONG).show()
+                                            }
                                         }
-                                    )
+                                    }
                                 } else {
                                     Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
                                 }
