@@ -58,7 +58,7 @@ fun MapViewContainer(
     var downloadProgress by remember { mutableStateOf(0f) }
     var downloadText by remember { mutableStateOf("") }
 
-    var userMarker by remember { mutableStateOf<Marker?>(null) }
+    var userMarker by remember { mutableStateOf<RotatingMarker?>(null) }
 
     LaunchedEffect(hasCenteredOnStartup, mapViewInstance, tileCacheInstance) {
         if (hasCenteredOnStartup && mapViewInstance != null && tileCacheInstance != null && !isDownloadingArea) {
@@ -134,8 +134,8 @@ fun MapViewContainer(
                     drawZonePolygons(ctx, this, zones)
 
                     // Initialize user location marker
-                    val userLocBitmap = getUserLocationArrowBitmap(ctx, 0f)
-                    val marker = Marker(LatLong(52.23, 21.01), userLocBitmap, 0, 0)
+                    val userLocBitmap = createUserLocationArrowBitmap(ctx)
+                    val marker = RotatingMarker(LatLong(52.23, 21.01), userLocBitmap, 0, 0)
                     this.layerManager.layers.add(marker)
                     userMarker = marker
 
@@ -149,7 +149,7 @@ fun MapViewContainer(
                     val userPos = LatLong(state.latitude, state.longitude)
                     userMarker?.let { marker ->
                         marker.latLong = userPos
-                        marker.setBitmap(getUserLocationArrowBitmap(mapView.context, state.azimuth))
+                        marker.azimuth = state.azimuth
                         marker.requestRedraw()
                     }
                     if (!hasCenteredOnStartup) {
@@ -321,22 +321,7 @@ private fun drawZonePolygons(context: Context, mapView: MapView, zones: List<Zon
     }
 }
 
-private var userLocationArrowBitmaps: Array<org.mapsforge.core.graphics.Bitmap>? = null
-
-private fun getUserLocationArrowBitmap(context: Context, azimuth: Float): org.mapsforge.core.graphics.Bitmap {
-    if (userLocationArrowBitmaps == null) {
-        userLocationArrowBitmaps = Array(360) { i ->
-            val bmp = createUserLocationArrowBitmap(context, i.toFloat())
-            bmp.incrementRefCount()
-            bmp
-        }
-    }
-    var index = Math.round(azimuth).toInt() % 360
-    if (index < 0) index += 360
-    return userLocationArrowBitmaps!![index]
-}
-
-private fun createUserLocationArrowBitmap(context: Context, rotationDegrees: Float): org.mapsforge.core.graphics.Bitmap {
+private fun createUserLocationArrowBitmap(context: Context): org.mapsforge.core.graphics.Bitmap {
     val size = (32f * context.resources.displayMetrics.density).toInt()
     val androidBitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(androidBitmap)
@@ -355,8 +340,7 @@ private fun createUserLocationArrowBitmap(context: Context, rotationDegrees: Flo
     }
 
     val radius = size / 2f
-    canvas.rotate(rotationDegrees, radius, radius)
-
+    
     val path = android.graphics.Path().apply {
         moveTo(radius, size * 0.1f) // Top tip
         lineTo(size * 0.85f, size * 0.85f) // Bottom right
@@ -371,4 +355,3 @@ private fun createUserLocationArrowBitmap(context: Context, rotationDegrees: Flo
     val drawable = android.graphics.drawable.BitmapDrawable(context.resources, androidBitmap)
     return AndroidGraphicFactory.convertToBitmap(drawable)
 }
-
