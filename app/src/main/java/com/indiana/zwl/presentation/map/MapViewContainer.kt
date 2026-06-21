@@ -180,6 +180,8 @@ fun MapViewContainer(
             },
             onRelease = { mapView ->
                 mapView.destroyAll()
+                tileCacheInstance?.destroy()
+                tileCacheInstance = null
             }
         )
 
