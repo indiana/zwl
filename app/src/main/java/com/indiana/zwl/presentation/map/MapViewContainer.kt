@@ -134,7 +134,7 @@ fun MapViewContainer(
                     drawZonePolygons(ctx, this, zones)
 
                     // Initialize user location marker
-                    val userLocBitmap = createUserLocationBitmap(ctx)
+                    val userLocBitmap = getUserLocationArrowBitmap(ctx, 0f)
                     val marker = Marker(LatLong(52.23, 21.01), userLocBitmap, 0, 0)
                     this.layerManager.layers.add(marker)
                     userMarker = marker
@@ -149,6 +149,7 @@ fun MapViewContainer(
                     val userPos = LatLong(state.latitude, state.longitude)
                     userMarker?.let { marker ->
                         marker.latLong = userPos
+                        marker.setBitmap(getUserLocationArrowBitmap(ctx, state.azimuth))
                         marker.requestRedraw()
                     }
                     if (!hasCenteredOnStartup) {
@@ -320,11 +321,25 @@ private fun drawZonePolygons(context: Context, mapView: MapView, zones: List<Zon
     }
 }
 
-private fun createUserLocationBitmap(context: Context): org.mapsforge.core.graphics.Bitmap {
-    val size = (16f * context.resources.displayMetrics.density).toInt()
+private var userLocationArrowBitmaps: Array<org.mapsforge.core.graphics.Bitmap>? = null
+
+private fun getUserLocationArrowBitmap(context: Context, azimuth: Float): org.mapsforge.core.graphics.Bitmap {
+    if (userLocationArrowBitmaps == null) {
+        userLocationArrowBitmaps = Array(360) { i ->
+            createUserLocationArrowBitmap(context, i.toFloat())
+        }
+    }
+    var index = Math.round(azimuth).toInt() % 360
+    if (index < 0) index += 360
+    return userLocationArrowBitmaps!![index]
+}
+
+private fun createUserLocationArrowBitmap(context: Context, rotationDegrees: Float): org.mapsforge.core.graphics.Bitmap {
+    val size = (32f * context.resources.displayMetrics.density).toInt()
     val androidBitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(androidBitmap)
-    val paint = android.graphics.Paint().apply {
+    
+    val fillPaint = android.graphics.Paint().apply {
         isAntiAlias = true
         color = android.graphics.Color.parseColor("#007AFF")
         style = android.graphics.Paint.Style.FILL
@@ -334,10 +349,22 @@ private fun createUserLocationBitmap(context: Context): org.mapsforge.core.graph
         color = android.graphics.Color.WHITE
         style = android.graphics.Paint.Style.STROKE
         strokeWidth = 2f * context.resources.displayMetrics.density
+        strokeJoin = android.graphics.Paint.Join.ROUND
     }
+
     val radius = size / 2f
-    canvas.drawCircle(radius, radius, radius - borderPaint.strokeWidth, paint)
-    canvas.drawCircle(radius, radius, radius - borderPaint.strokeWidth, borderPaint)
+    canvas.rotate(rotationDegrees, radius, radius)
+
+    val path = android.graphics.Path().apply {
+        moveTo(radius, size * 0.1f) // Top tip
+        lineTo(size * 0.85f, size * 0.85f) // Bottom right
+        lineTo(radius, size * 0.65f) // Bottom center indent
+        lineTo(size * 0.15f, size * 0.85f) // Bottom left
+        close()
+    }
+
+    canvas.drawPath(path, fillPaint)
+    canvas.drawPath(path, borderPaint)
 
     val drawable = android.graphics.drawable.BitmapDrawable(context.resources, androidBitmap)
     return AndroidGraphicFactory.convertToBitmap(drawable)
