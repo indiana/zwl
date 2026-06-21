@@ -8,3 +8,8 @@
 
 ## Środowisko i Narzędzia
 - Kliencka linia poleceń GitHuba (`gh.exe`) znajduje się w katalogu `assets/` projektu (tzn. `D:\priv\zwl\assets\gh.exe`). Używaj tej ścieżki zamiast globalnego polecenia `gh`.
+
+## Proces Tworzenia (Git Workflow)
+- Każdą większą zmianę lub nową funkcjonalność należy realizować na osobnym feature branchu.
+- Po zakończeniu implementacji na branchu, należy utworzyć Pull Request, a następnie zmergować go do brancha głównego (`main`).
+- Hasło projektowe / serwisowe (np. do autoryzacji zapytań) to: `LeoAmidala2026`.
