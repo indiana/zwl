@@ -43,6 +43,10 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import com.indiana.zwl.presentation.map.util.isOnline
+import com.indiana.zwl.presentation.map.util.rememberIsOnline
+import com.indiana.zwl.presentation.map.util.createUserLocationArrowBitmap
+import com.indiana.zwl.presentation.map.util.cleanupCorruptedCacheFiles
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -345,86 +349,6 @@ private fun drawZonePolygons(context: Context, mapView: MapView, zones: List<Zon
     }
 }
 
-private fun createUserLocationArrowBitmap(context: Context): org.mapsforge.core.graphics.Bitmap {
-    val size = (32f * context.resources.displayMetrics.density).toInt()
-    val androidBitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
-    val canvas = android.graphics.Canvas(androidBitmap)
-    
-    val fillPaint = android.graphics.Paint().apply {
-        isAntiAlias = true
-        color = android.graphics.Color.parseColor("#007AFF")
-        style = android.graphics.Paint.Style.FILL
-    }
-    val borderPaint = android.graphics.Paint().apply {
-        isAntiAlias = true
-        color = android.graphics.Color.WHITE
-        style = android.graphics.Paint.Style.STROKE
-        strokeWidth = 2f * context.resources.displayMetrics.density
-        strokeJoin = android.graphics.Paint.Join.ROUND
-    }
-
-    val radius = size / 2f
-    
-    val path = android.graphics.Path().apply {
-        moveTo(radius, size * 0.1f) // Top tip
-        lineTo(size * 0.85f, size * 0.85f) // Bottom right
-        lineTo(radius, size * 0.65f) // Bottom center indent
-        lineTo(size * 0.15f, size * 0.85f) // Bottom left
-        close()
-    }
-
-    canvas.drawPath(path, fillPaint)
-    canvas.drawPath(path, borderPaint)
-
-    val drawable = android.graphics.drawable.BitmapDrawable(context.resources, androidBitmap)
-    return AndroidGraphicFactory.convertToBitmap(drawable)
-}
-
-private fun isOnline(context: Context): Boolean {
-    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
-    val activeNetwork = connectivityManager.activeNetwork ?: return false
-    val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
-    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-}
-
-@Composable
-private fun rememberIsOnline(): State<Boolean> {
-    val context = LocalContext.current
-    return produceState(initialValue = isOnline(context)) {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        if (connectivityManager == null) {
-            value = false
-            return@produceState
-        }
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                value = true
-            }
-            override fun onLost(network: Network) {
-                value = isOnline(context)
-            }
-            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-                value = isOnline(context)
-            }
-        }
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
-        try {
-            connectivityManager.registerNetworkCallback(request, callback)
-        } catch (e: Exception) {
-            // Fallback
-        }
-        awaitDispose {
-            try {
-                connectivityManager.unregisterNetworkCallback(callback)
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
-    }
-}
-
 @Composable
 private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
     Canvas(modifier = modifier) {
@@ -456,24 +380,5 @@ private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.Whit
             radius = 1.5.dp.toPx(),
             center = Offset(width / 2f, height * 0.77f)
         )
-    }
-}
-
-private fun cleanupCorruptedCacheFiles(dir: File) {
-    try {
-        if (dir.exists() && dir.isDirectory) {
-            val files = dir.listFiles()
-            if (files != null) {
-                for (file in files) {
-                    if (file.isDirectory) {
-                        cleanupCorruptedCacheFiles(file)
-                    } else if (file.isFile && file.length() == 0L) {
-                        file.delete()
-                    }
-                }
-            }
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
     }
 }
