@@ -19,6 +19,7 @@ import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.presentation.MainUiState
 import com.indiana.zwl.presentation.MainViewModel
 import com.indiana.zwl.presentation.DownloadEvent
+import com.indiana.zwl.presentation.theme.ZwlTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -97,7 +98,10 @@ fun MapViewContainer(
 
     // Automatic download on startup removed to prevent concurrent download/write database lock conflicts with TileDownloadLayer.
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    val isInZone = (uiState as? MainUiState.Success)?.locationStatus is LocationStatus.InZone
+
+    ZwlTheme(isInZone = isInZone) {
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         AndroidView(
             factory = { ctx ->
                 // Clean up any corrupted 0-byte cache files from previous failed/interrupted runs
@@ -205,7 +209,7 @@ fun MapViewContainer(
                             Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(12.dp),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
                 ) {
@@ -219,7 +223,7 @@ fun MapViewContainer(
                 exit = fadeOut()
             ) {
                 Surface(
-                    color = Color(0xFFD84315).copy(alpha = 0.9f),
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
                     shape = RoundedCornerShape(12.dp),
                     shadowElevation = 6.dp
                 ) {
@@ -250,7 +254,7 @@ fun MapViewContainer(
         ) {
             Button(
                 onClick = onCloseMap,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier.height(48.dp),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
@@ -292,13 +296,14 @@ fun MapViewContainer(
                         LinearProgressIndicator(
                             progress = downloadProgress,
                             modifier = Modifier.fillMaxWidth(),
-                            color = Color(0xFF2E7D32)
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
             }
         }
     }
+}
 }
 
 
