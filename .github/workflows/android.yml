@@ -2,7 +2,6 @@ name: Android Build
 
 on:
   push:
-    branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
@@ -28,7 +27,15 @@ jobs:
         gradle-version: '8.7'
 
     - name: Build APKs and Bundle
-      run: gradle :app:assembleDebug :app:assembleRelease :app:bundleRelease --stacktrace > build_log.txt 2>&1 || (cat build_log.txt; exit 1)
+      run: |
+        if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ]]; then
+          echo "Building debug and release..."
+          gradle :app:assembleDebug :app:assembleRelease :app:bundleRelease --stacktrace > build_log.txt 2>&1 || (cat build_log.txt; exit 1)
+        else
+          echo "Building debug only..."
+          gradle :app:assembleDebug --stacktrace > build_log.txt 2>&1 || (cat build_log.txt; exit 1)
+        fi
+      shell: bash
 
     - name: Upload Build Log
       if: failure()
@@ -38,6 +45,7 @@ jobs:
         path: build_log.txt
 
     - name: Sign Release Build
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       env:
         SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
@@ -68,12 +76,14 @@ jobs:
         path: app/build/outputs/apk/debug/app-debug.apk
 
     - name: Upload Release APK
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
       with:
         name: app-release
         path: app/build/outputs/apk/release/app-release.apk
 
     - name: Upload Release Bundle (AAB)
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
       with:
         name: app-release-bundle
