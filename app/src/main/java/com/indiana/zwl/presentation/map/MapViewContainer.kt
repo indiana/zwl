@@ -93,6 +93,12 @@ fun MapViewContainer(
         }
     }
 
+    LaunchedEffect(context) {
+        withContext(Dispatchers.IO) {
+            cleanupCorruptedCacheFiles(File(context.externalCacheDir, "mapcache"))
+        }
+    }
+
     var userMarker by remember { mutableStateOf<RotatingMarker?>(null) }
 
     val isOnlineState by rememberIsOnline()
@@ -105,9 +111,6 @@ fun MapViewContainer(
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         AndroidView(
             factory = { ctx ->
-                // Clean up any corrupted 0-byte cache files from previous failed/interrupted runs
-                cleanupCorruptedCacheFiles(File(ctx.externalCacheDir, "mapcache"))
-
                 MapView(ctx).apply {
                     isClickable = true
                     getMapScaleBar().isVisible = true
