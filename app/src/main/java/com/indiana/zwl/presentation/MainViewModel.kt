@@ -24,6 +24,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import com.indiana.zwl.presentation.map.OfflineMapDownloader
+import com.indiana.zwl.presentation.map.DownloadStatus
+import org.mapsforge.core.model.BoundingBox
+import org.mapsforge.map.layer.cache.TileCache
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -38,6 +44,18 @@ class MainViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
     val uiState: StateFlow<MainUiState> = _uiState
+
+    private val _isDownloadingArea = MutableStateFlow(false)
+    val isDownloadingArea: StateFlow<Boolean> = _isDownloadingArea
+
+    private val _downloadProgress = MutableStateFlow(0f)
+    val downloadProgress: StateFlow<Float> = _downloadProgress
+
+    private val _downloadText = MutableStateFlow("")
+    val downloadText: StateFlow<String> = _downloadText
+
+    private val _downloadEvent = MutableSharedFlow<DownloadEvent>()
+    val downloadEvent = _downloadEvent.asSharedFlow()
 
     private var hasLocationPermission = false
     private var isEngineInitialized = false
@@ -162,4 +180,37 @@ class MainViewModel @Inject constructor(
         super.onCleared()
         stopTracking()
     }
+
+    fun downloadMapArea(bbox: BoundingBox, tileSize: Int, tileCache: TileCache) {
+        viewModelScope.launch {
+            OfflineMapDownloader.downloadArea(bbox, tileSize, tileCache).collect { status ->
+                when (status) {
+                    is DownloadStatus.Start -> {
+                        _isDownloadingArea.value = true
+                        _downloadProgress.value = 0f
+                        _downloadText.value = "Rozpoczynanie pobierania..."
+                    }
+                    is DownloadStatus.Progress -> {
+                        _downloadProgress.value = status.progress
+                        _downloadText.value = status.text
+                    }
+                    is DownloadStatus.Finished -> {
+                        _isDownloadingArea.value = false
+                        _downloadEvent.emit(DownloadEvent.ToastMessage(
+                            "Pobrano pomyślnie ${status.successCount} z ${status.total} kafelków do cache offline!",
+                            isLong = true
+                        ))
+                    }
+                    is DownloadStatus.Message -> {
+                        _isDownloadingArea.value = false
+                        _downloadEvent.emit(DownloadEvent.ToastMessage(status.msg, isLong = true))
+                    }
+                }
+            }
+        }
+    }
+}
+
+sealed class DownloadEvent {
+    data class ToastMessage(val message: String, val isLong: Boolean = false) : DownloadEvent()
 }
