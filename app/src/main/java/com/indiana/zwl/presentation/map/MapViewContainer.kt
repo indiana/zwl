@@ -34,6 +34,7 @@ import org.mapsforge.map.layer.download.TileDownloadLayer
 import org.mapsforge.map.layer.download.tilesource.OnlineTileSource
 import org.mapsforge.map.layer.overlay.Marker
 import java.net.URL
+import java.io.File
 import org.mapsforge.map.layer.overlay.Polygon
 import kotlin.math.ln
 import kotlin.math.tan
@@ -75,49 +76,14 @@ fun MapViewContainer(
 
     val isOnlineState by rememberIsOnline()
 
-    LaunchedEffect(hasCenteredOnStartup, mapViewInstance, tileCacheInstance) {
-        if (hasCenteredOnStartup && mapViewInstance != null && tileCacheInstance != null && !isDownloadingArea) {
-            if (!isOnline(context)) {
-                return@LaunchedEffect
-            }
-            try {
-                // Wait for map layout to complete and boundingBox to be populated
-                var bbox = mapViewInstance!!.boundingBox
-                while (bbox == null || bbox.latitudeSpan == 0.0 || bbox.longitudeSpan == 0.0) {
-                    kotlinx.coroutines.delay(100)
-                    bbox = mapViewInstance!!.boundingBox
-                }
-                OfflineMapDownloader.downloadArea(
-                    bbox = bbox,
-                    tileSize = mapViewInstance!!.model.displayModel.tileSize,
-                    tileCache = tileCacheInstance!!,
-                    onStart = {
-                        isDownloadingArea = true
-                        downloadProgress = 0f
-                        downloadText = "Automatyczne pobieranie..."
-                    },
-                    onProgress = { progress, text ->
-                        downloadProgress = progress
-                        downloadText = text
-                    },
-                    onFinished = { success, total ->
-                        Toast.makeText(
-                            context,
-                            "Pobrano automatycznie $success z $total kafelków do cache offline!",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    },
-                    onMessage = { msg -> }
-                )
-            } finally {
-                isDownloadingArea = false
-            }
-        }
-    }
+    // Automatic download on startup removed to prevent concurrent download/write database lock conflicts with TileDownloadLayer.
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
+                // Clean up any corrupted 0-byte cache files from previous failed/interrupted runs
+                cleanupCorruptedCacheFiles(File(ctx.externalCacheDir, "mapcache"))
+
                 MapView(ctx).apply {
                     isClickable = true
                     getMapScaleBar().isVisible = true
@@ -490,5 +456,24 @@ private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.Whit
             radius = 1.5.dp.toPx(),
             center = Offset(width / 2f, height * 0.77f)
         )
+    }
+}
+
+private fun cleanupCorruptedCacheFiles(dir: File) {
+    try {
+        if (dir.exists() && dir.isDirectory) {
+            val files = dir.listFiles()
+            if (files != null) {
+                for (file in files) {
+                    if (file.isDirectory) {
+                        cleanupCorruptedCacheFiles(file)
+                    } else if (file.isFile && file.length() == 0L) {
+                        file.delete()
+                    }
+                }
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
     }
 }
