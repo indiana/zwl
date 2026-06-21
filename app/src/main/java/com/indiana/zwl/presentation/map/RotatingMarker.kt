@@ -6,9 +6,9 @@ import org.mapsforge.core.model.BoundingBox
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.core.model.Point
 import org.mapsforge.core.model.Rectangle
-import org.mapsforge.core.model.Rotation
 import org.mapsforge.core.util.MercatorProjection
 import org.mapsforge.map.layer.overlay.Marker
+import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 
 class RotatingMarker(
     latLong: LatLong,
@@ -23,8 +23,7 @@ class RotatingMarker(
         boundingBox: BoundingBox,
         zoomLevel: Byte,
         canvas: Canvas,
-        topLeftPoint: Point,
-        rotation: Rotation
+        topLeftPoint: Point
     ) {
         val currentLatLong = latLong
         val currentBitmap = bitmap
@@ -50,9 +49,11 @@ class RotatingMarker(
             return
         }
 
-        canvas.save()
-        canvas.rotate(azimuth, (pixelX - topLeftPoint.x).toFloat(), (pixelY - topLeftPoint.y).toFloat())
-        canvas.drawBitmap(currentBitmap, left, top)
-        canvas.restore()
+        val matrix = AndroidGraphicFactory.INSTANCE.createMatrix()
+        matrix.translate(left.toFloat(), top.toFloat())
+        // Mapsforge matrix.rotate takes radians
+        matrix.rotate(Math.toRadians(azimuth.toDouble()).toFloat(), halfBitmapWidth.toFloat(), halfBitmapHeight.toFloat())
+        
+        canvas.drawBitmap(currentBitmap, matrix)
     }
 }
