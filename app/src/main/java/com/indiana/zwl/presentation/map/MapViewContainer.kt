@@ -326,7 +326,9 @@ private var userLocationArrowBitmaps: Array<org.mapsforge.core.graphics.Bitmap>?
 private fun getUserLocationArrowBitmap(context: Context, azimuth: Float): org.mapsforge.core.graphics.Bitmap {
     if (userLocationArrowBitmaps == null) {
         userLocationArrowBitmaps = Array(360) { i ->
-            createUserLocationArrowBitmap(context, i.toFloat())
+            val bmp = createUserLocationArrowBitmap(context, i.toFloat())
+            bmp.incrementRefCount()
+            bmp
         }
     }
     var index = Math.round(azimuth).toInt() % 360
