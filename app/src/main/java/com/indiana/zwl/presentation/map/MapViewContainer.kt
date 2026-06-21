@@ -110,7 +110,8 @@ fun MapViewContainer(
                         "mapcache",
                         this.model.displayModel.tileSize,
                         1f,
-                        this.model.frameBufferModel.overdrawFactor
+                        this.model.frameBufferModel.overdrawFactor,
+                        true
                     )
                     tileCacheInstance = tileCache
 

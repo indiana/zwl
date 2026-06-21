@@ -18,36 +18,42 @@ import kotlin.math.sqrt
 class SpatialEngine {
 
     private val geometryFactory = GeometryFactory(PrecisionModel(), 4326)
-    private val wktReader = WKTReader(geometryFactory)
-    private var strTree = STRtree()
-    private val parsedZones = ArrayList<ParsedZone>()
+    
+    @Volatile
+    private var engineState: EngineState? = null
 
     data class ParsedZone(
         val forestDistrict: String,
         val geometry: Geometry
     )
+    
+    class EngineState(
+        val strTree: STRtree,
+        val parsedZones: List<ParsedZone>
+    )
 
-    @Synchronized
     fun initialize(zones: List<Zone>) {
-        strTree = STRtree()
-        parsedZones.clear()
+        val wktReader = WKTReader(geometryFactory)
+        val newParsedZones = ArrayList<ParsedZone>()
+        val newStrTree = STRtree()
 
         for (zone in zones) {
             try {
                 val geom = wktReader.read(zone.geometryWkt)
                 val parsed = ParsedZone(zone.forestDistrict, geom)
-                parsedZones.add(parsed)
-                strTree.insert(geom.envelopeInternal, parsed)
+                newParsedZones.add(parsed)
+                newStrTree.insert(geom.envelopeInternal, parsed)
             } catch (e: Exception) {
                 // Ignoruj błędne geometrie
             }
         }
-        strTree.build()
+        newStrTree.build()
+        engineState = EngineState(newStrTree, newParsedZones)
     }
 
-    @Synchronized
     fun checkLocation(latitude: Double, longitude: Double): LocationStatus {
-        if (parsedZones.isEmpty()) {
+        val state = engineState ?: return LocationStatus.EmptyData
+        if (state.parsedZones.isEmpty()) {
             return LocationStatus.EmptyData
         }
 
@@ -57,7 +63,7 @@ class SpatialEngine {
         // 1. Zgrubne wyszukiwanie kandydatów (Bounding Box o zerowej wielkości - nakładanie)
         val searchEnvelope = Envelope(userCoord)
         @Suppress("UNCHECKED_CAST")
-        val exactCandidates = strTree.query(searchEnvelope) as List<ParsedZone>
+        val exactCandidates = state.strTree.query(searchEnvelope) as List<ParsedZone>
 
         // Dokładny test Point-in-Polygon
         for (candidate in exactCandidates) {
@@ -71,37 +77,48 @@ class SpatialEngine {
         val searchEnv = Envelope(userCoord)
         searchEnv.expandBy(0.1)
         @Suppress("UNCHECKED_CAST")
-        var distanceCandidates = strTree.query(searchEnv) as List<ParsedZone>
-
-        if (distanceCandidates.isEmpty()) {
-            // Jeśli puste, posortuj wszystkie strefy po odległości do ich Bounding Boxa i weź 5 najbliższych
-            distanceCandidates = parsedZones.sortedBy {
-                it.geometry.envelopeInternal.distance(searchEnvelope)
-            }.take(5)
-        }
+        val distanceCandidates = state.strTree.query(searchEnv) as List<ParsedZone>
 
         var nearestZone: ParsedZone? = null
         var minDistanceMeters = Double.MAX_VALUE
         var targetCoord: Coordinate? = null
 
-        var closestDistanceDeg = Double.MAX_VALUE
-
-        for (zone in distanceCandidates) {
-            val distDeg = zone.geometry.distance(userPoint)
-            if (distDeg < closestDistanceDeg) {
-                closestDistanceDeg = distDeg
-                nearestZone = zone
+        if (distanceCandidates.isEmpty()) {
+            // Jesteśmy daleko od jakiejkolwiek strefy (ponad 11 km).
+            // Obliczanie dokładnego dystansu do skomplikowanych poligonów jest bardzo kosztowne i może zablokować wątek.
+            // Zamiast tego, bierzemy po prostu strefę z najbliższym Bounding Boxem.
+            nearestZone = state.parsedZones.minByOrNull {
+                it.geometry.envelopeInternal.distance(searchEnvelope)
             }
-        }
+            
+            // Używamy środka Bounding Boxa strefy jako punktu docelowego, by uniknąć kosztownego DistanceOp.
+            nearestZone?.let { zone ->
+                val env = zone.geometry.envelopeInternal
+                targetCoord = Coordinate(env.centre().x, env.centre().y)
+                minDistanceMeters = calculateHaversineDistance(
+                    latitude, longitude,
+                    targetCoord!!.y, targetCoord!!.x
+                )
+            }
+        } else {
+            var closestDistanceDeg = Double.MAX_VALUE
+            for (zone in distanceCandidates) {
+                val distDeg = zone.geometry.distance(userPoint)
+                if (distDeg < closestDistanceDeg) {
+                    closestDistanceDeg = distDeg
+                    nearestZone = zone
+                }
+            }
 
-        nearestZone?.let { zone ->
-            val distanceOp = DistanceOp(zone.geometry, userPoint)
-            val nearestCoords = distanceOp.nearestPoints()
-            targetCoord = nearestCoords[0]
-            minDistanceMeters = calculateHaversineDistance(
-                latitude, longitude,
-                targetCoord!!.y, targetCoord!!.x
-            )
+            nearestZone?.let { zone ->
+                val distanceOp = DistanceOp(zone.geometry, userPoint)
+                val nearestCoords = distanceOp.nearestPoints()
+                targetCoord = nearestCoords[0]
+                minDistanceMeters = calculateHaversineDistance(
+                    latitude, longitude,
+                    targetCoord!!.y, targetCoord!!.x
+                )
+            }
         }
 
         val zone = nearestZone
