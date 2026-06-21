@@ -48,13 +48,6 @@ fun MainScreen(
         viewModel.setLocationPermissionGranted(fineGranted || coarseGranted)
     }
 
-    DisposableEffect(Unit) {
-        viewModel.startTracking()
-        onDispose {
-            viewModel.stopTracking()
-        }
-    }
-
     when (val state = uiState) {
         is MainUiState.Loading -> {
             Box(

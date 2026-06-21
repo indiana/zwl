@@ -12,6 +12,8 @@ import com.indiana.zwl.presentation.MainViewModel
 import com.indiana.zwl.presentation.map.MapViewContainer
 import dagger.hilt.android.AndroidEntryPoint
 
+import androidx.compose.runtime.DisposableEffect
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
@@ -21,6 +23,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
+            DisposableEffect(Unit) {
+                viewModel.startTracking()
+                onDispose {
+                    viewModel.stopTracking()
+                }
+            }
+
             val navController = rememberNavController()
             NavHost(navController = navController, startDestination = "main") {
                 composable("main") {
