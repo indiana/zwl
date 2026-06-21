@@ -38,6 +38,19 @@ import org.mapsforge.map.layer.overlay.Polygon
 import kotlin.math.ln
 import kotlin.math.tan
 import kotlin.math.cos
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
 
 @Composable
 fun MapViewContainer(
@@ -60,8 +73,13 @@ fun MapViewContainer(
 
     var userMarker by remember { mutableStateOf<RotatingMarker?>(null) }
 
+    val isOnlineState by rememberIsOnline()
+
     LaunchedEffect(hasCenteredOnStartup, mapViewInstance, tileCacheInstance) {
         if (hasCenteredOnStartup && mapViewInstance != null && tileCacheInstance != null && !isDownloadingArea) {
+            if (!isOnline(context)) {
+                return@LaunchedEffect
+            }
             try {
                 // Wait for map layout to complete and boundingBox to be populated
                 var bbox = mapViewInstance!!.boundingBox
@@ -165,6 +183,28 @@ fun MapViewContainer(
             }
         )
 
+        // Offline indicator
+        AnimatedVisibility(
+            visible = !isOnlineState,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.padding(16.dp).align(Alignment.TopCenter)
+        ) {
+            Surface(
+                color = Color.Red.copy(alpha = 0.8f),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(8.dp, 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OfflineIcon(modifier = Modifier.size(16.dp), color = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Tryb offline", color = Color.White, fontSize = 12.sp)
+                }
+            }
+        }
+
         // Floating download button (top-right)
         Box(
             modifier = Modifier
@@ -174,6 +214,10 @@ fun MapViewContainer(
         ) {
             Button(
                 onClick = {
+                    if (!isOnline(context)) {
+                        Toast.makeText(context, "Jesteś w trybie offline", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
                     val mv = mapViewInstance
                     val tc = tileCacheInstance
                     if (mv != null && tc != null) {
@@ -355,4 +399,83 @@ private fun createUserLocationArrowBitmap(context: Context): org.mapsforge.core.
 
     val drawable = android.graphics.drawable.BitmapDrawable(context.resources, androidBitmap)
     return AndroidGraphicFactory.convertToBitmap(drawable)
+}
+
+private fun isOnline(context: Context): Boolean {
+    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+    val activeNetwork = connectivityManager.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+}
+
+@Composable
+private fun rememberIsOnline(): State<Boolean> {
+    val context = LocalContext.current
+    return produceState(initialValue = isOnline(context)) {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        if (connectivityManager == null) {
+            value = false
+            return@produceState
+        }
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                value = true
+            }
+            override fun onLost(network: Network) {
+                value = isOnline(context)
+            }
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                value = isOnline(context)
+            }
+        }
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        try {
+            connectivityManager.registerNetworkCallback(request, callback)
+        } catch (e: Exception) {
+            // Fallback
+        }
+        awaitDispose {
+            try {
+                connectivityManager.unregisterNetworkCallback(callback)
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
+    Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+        val path = Path().apply {
+            moveTo(width / 2f, height * 0.15f)
+            lineTo(width * 0.15f, height * 0.85f)
+            lineTo(width * 0.85f, height * 0.85f)
+            close()
+        }
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(
+                width = 2.dp.toPx(),
+                join = StrokeJoin.Round
+            )
+        )
+        drawLine(
+            color = color,
+            start = Offset(width / 2f, height * 0.4f),
+            end = Offset(width / 2f, height * 0.65f),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawCircle(
+            color = color,
+            radius = 1.5.dp.toPx(),
+            center = Offset(width / 2f, height * 0.77f)
+        )
+    }
 }
