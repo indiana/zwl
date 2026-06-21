@@ -183,86 +183,97 @@ fun MapViewContainer(
             }
         )
 
-        // Offline indicator
-        AnimatedVisibility(
-            visible = !isOnlineState,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.padding(16.dp).align(Alignment.TopCenter)
-        ) {
-            Surface(
-                color = Color.Red.copy(alpha = 0.8f),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(8.dp, 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OfflineIcon(modifier = Modifier.size(16.dp), color = Color.White)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Tryb offline", color = Color.White, fontSize = 12.sp)
-                }
-            }
-        }
-
-        // Floating download button (top-right)
+        // Top-right UI controls (Download button / Offline status badge)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(24.dp),
             contentAlignment = Alignment.TopEnd
         ) {
-            Button(
-                onClick = {
-                    if (!isOnline(context)) {
-                        Toast.makeText(context, "Jesteś w trybie offline", Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
-                    val mv = mapViewInstance
-                    val tc = tileCacheInstance
-                    if (mv != null && tc != null) {
-                        coroutineScope.launch {
-                            val bbox = mv.boundingBox
-                            if (bbox != null) {
-                                OfflineMapDownloader.downloadArea(
-                                    bbox = bbox,
-                                    tileSize = mv.model.displayModel.tileSize,
-                                    tileCache = tc,
-                                    onStart = {
-                                        isDownloadingArea = true
-                                        downloadProgress = 0f
-                                        downloadText = "Rozpoczynanie pobierania..."
-                                    },
-                                    onProgress = { progress, text ->
-                                        downloadProgress = progress
-                                        downloadText = text
-                                    },
-                                    onFinished = { success, total ->
-                                        isDownloadingArea = false
-                                        Toast.makeText(
-                                            context,
-                                            "Pobrano pomyślnie $success z $total kafelków do cache offline!",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                    },
-                                    onMessage = { msg ->
-                                        isDownloadingArea = false
-                                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                                    }
-                                )
-                            } else {
-                                Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    } else {
-                        Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                shape = RoundedCornerShape(12.dp),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+            AnimatedVisibility(
+                visible = isOnlineState,
+                enter = fadeIn(),
+                exit = fadeOut()
             ) {
-                Text("Pobierz obszar offline", fontWeight = FontWeight.Bold, color = Color.White)
+                Button(
+                    onClick = {
+                        if (!isOnline(context)) {
+                            Toast.makeText(context, "Jesteś w trybie offline", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        val mv = mapViewInstance
+                        val tc = tileCacheInstance
+                        if (mv != null && tc != null) {
+                            coroutineScope.launch {
+                                val bbox = mv.boundingBox
+                                if (bbox != null) {
+                                    OfflineMapDownloader.downloadArea(
+                                        bbox = bbox,
+                                        tileSize = mv.model.displayModel.tileSize,
+                                        tileCache = tc,
+                                        onStart = {
+                                            isDownloadingArea = true
+                                            downloadProgress = 0f
+                                            downloadText = "Rozpoczynanie pobierania..."
+                                        },
+                                        onProgress = { progress, text ->
+                                            downloadProgress = progress
+                                            downloadText = text
+                                        },
+                                        onFinished = { success, total ->
+                                            isDownloadingArea = false
+                                            Toast.makeText(
+                                                context,
+                                                "Pobrano pomyślnie $success z $total kafelków do cache offline!",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        },
+                                        onMessage = { msg ->
+                                            isDownloadingArea = false
+                                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                        }
+                                    )
+                                } else {
+                                    Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } else {
+                            Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+                ) {
+                    Text("Pobierz obszar offline", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+
+            AnimatedVisibility(
+                visible = !isOnlineState,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Surface(
+                    color = Color(0xFFD84315).copy(alpha = 0.9f),
+                    shape = RoundedCornerShape(12.dp),
+                    shadowElevation = 6.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OfflineIcon(modifier = Modifier.size(16.dp), color = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Tryb offline",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
             }
         }
 
