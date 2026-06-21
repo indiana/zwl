@@ -18,6 +18,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.presentation.MainUiState
 import com.indiana.zwl.presentation.MainViewModel
+import com.indiana.zwl.presentation.DownloadEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -71,10 +72,24 @@ fun MapViewContainer(
     var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
 
-    // Download state
-    var isDownloadingArea by remember { mutableStateOf(false) }
-    var downloadProgress by remember { mutableStateOf(0f) }
-    var downloadText by remember { mutableStateOf("") }
+    // Download state from ViewModel
+    val isDownloadingArea by viewModel.isDownloadingArea.collectAsState()
+    val downloadProgress by viewModel.downloadProgress.collectAsState()
+    val downloadText by viewModel.downloadText.collectAsState()
+
+    LaunchedEffect(viewModel) {
+        viewModel.downloadEvent.collect { event ->
+            when (event) {
+                is DownloadEvent.ToastMessage -> {
+                    Toast.makeText(
+                        context,
+                        event.message,
+                        if (event.isLong) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
 
     var userMarker by remember { mutableStateOf<RotatingMarker?>(null) }
 
@@ -176,41 +191,15 @@ fun MapViewContainer(
                         val mv = mapViewInstance
                         val tc = tileCacheInstance
                         if (mv != null && tc != null) {
-                            coroutineScope.launch {
-                                val bbox = mv.boundingBox
-                                if (bbox != null) {
-                                    OfflineMapDownloader.downloadArea(
-                                        bbox = bbox,
-                                        tileSize = mv.model.displayModel.tileSize,
-                                        tileCache = tc
-                                    ).collect { status ->
-                                        when (status) {
-                                            is DownloadStatus.Start -> {
-                                                isDownloadingArea = true
-                                                downloadProgress = 0f
-                                                downloadText = "Rozpoczynanie pobierania..."
-                                            }
-                                            is DownloadStatus.Progress -> {
-                                                downloadProgress = status.progress
-                                                downloadText = status.text
-                                            }
-                                            is DownloadStatus.Finished -> {
-                                                isDownloadingArea = false
-                                                Toast.makeText(
-                                                    context,
-                                                    "Pobrano pomyślnie ${status.successCount} z ${status.total} kafelków do cache offline!",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-                                            }
-                                            is DownloadStatus.Message -> {
-                                                isDownloadingArea = false
-                                                Toast.makeText(context, status.msg, Toast.LENGTH_LONG).show()
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
-                                }
+                            val bbox = mv.boundingBox
+                            if (bbox != null) {
+                                viewModel.downloadMapArea(
+                                    bbox = bbox,
+                                    tileSize = mv.model.displayModel.tileSize,
+                                    tileCache = tc
+                                )
+                            } else {
+                                Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
                             }
                         } else {
                             Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
