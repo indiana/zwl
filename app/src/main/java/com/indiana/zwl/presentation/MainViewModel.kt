@@ -131,7 +131,9 @@ class MainViewModel @Inject constructor(
     }
 
     private suspend fun processTrackingUpdate(location: Location, azimuth: Float) {
-        val status = spatialEngine.checkLocation(location.latitude, location.longitude)
+        val status = withContext(Dispatchers.Default) {
+            spatialEngine.checkLocation(location.latitude, location.longitude)
+        }
 
         val lastLoc = lastFireRiskLocation
         if (lastLoc == null || location.distanceTo(lastLoc) > 1000f) {

@@ -74,8 +74,10 @@ class SpatialEngine {
         var distanceCandidates = strTree.query(searchEnv) as List<ParsedZone>
 
         if (distanceCandidates.isEmpty()) {
-            // Jeśli puste, przeszukaj wszystkie strefy
-            distanceCandidates = parsedZones
+            // Jeśli puste, posortuj wszystkie strefy po odległości do ich Bounding Boxa i weź 5 najbliższych
+            distanceCandidates = parsedZones.sortedBy {
+                it.geometry.envelopeInternal.distance(searchEnvelope)
+            }.take(5)
         }
 
         var nearestZone: ParsedZone? = null
