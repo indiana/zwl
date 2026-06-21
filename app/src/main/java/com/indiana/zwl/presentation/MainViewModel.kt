@@ -19,6 +19,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -111,14 +112,31 @@ class MainViewModel @Inject constructor(
         locationRepository.startLocationUpdates()
         compassRepository.startListening()
 
+        val locationWithStatusFlow = locationRepository.locationFlow.mapLatest { location ->
+            val status = withContext(Dispatchers.Default) {
+                spatialEngine.checkLocation(location.latitude, location.longitude)
+            }
+            val lastLoc = lastFireRiskLocation
+            if (lastLoc == null || location.distanceTo(lastLoc) > 1000f) {
+                fetchFireHazard(location)
+            }
+            Triple(location, status, currentFireRisk)
+        }
+
         trackingJob = viewModelScope.launch {
             combine(
-                locationRepository.locationFlow,
+                locationWithStatusFlow,
                 compassRepository.azimuthFlow
-            ) { location, azimuth ->
-                Pair(location, azimuth)
-            }.collectLatest { (location, azimuth) ->
-                processTrackingUpdate(location, azimuth)
+            ) { (location, status, fireRisk), azimuth ->
+                MainUiState.Success(
+                    locationStatus = status,
+                    fireRiskLevel = fireRisk,
+                    azimuth = azimuth,
+                    latitude = location.latitude,
+                    longitude = location.longitude
+                )
+            }.collect { state ->
+                _uiState.value = state
             }
         }
     }
@@ -128,25 +146,6 @@ class MainViewModel @Inject constructor(
         trackingJob = null
         locationRepository.stopLocationUpdates()
         compassRepository.stopListening()
-    }
-
-    private suspend fun processTrackingUpdate(location: Location, azimuth: Float) {
-        val status = withContext(Dispatchers.Default) {
-            spatialEngine.checkLocation(location.latitude, location.longitude)
-        }
-
-        val lastLoc = lastFireRiskLocation
-        if (lastLoc == null || location.distanceTo(lastLoc) > 1000f) {
-            fetchFireHazard(location)
-        }
-
-        _uiState.value = MainUiState.Success(
-            locationStatus = status,
-            fireRiskLevel = currentFireRisk,
-            azimuth = azimuth,
-            latitude = location.latitude,
-            longitude = location.longitude
-        )
     }
 
     private suspend fun fetchFireHazard(location: Location) {
