@@ -149,7 +149,7 @@ fun MapViewContainer(
                     val userPos = LatLong(state.latitude, state.longitude)
                     userMarker?.let { marker ->
                         marker.latLong = userPos
-                        marker.setBitmap(getUserLocationArrowBitmap(ctx, state.azimuth))
+                        marker.setBitmap(getUserLocationArrowBitmap(mapView.context, state.azimuth))
                         marker.requestRedraw()
                     }
                     if (!hasCenteredOnStartup) {
