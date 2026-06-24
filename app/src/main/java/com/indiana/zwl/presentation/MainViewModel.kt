@@ -219,6 +219,9 @@ class MainViewModel @Inject constructor(
                     }
                 }
             }
+        }
+    }
+
     fun selectZone(zone: Zone, clickLat: Double, clickLon: Double) {
         viewModelScope.launch {
             val currentLoc = (uiState.value as? MainUiState.Success)?.let { successState ->
