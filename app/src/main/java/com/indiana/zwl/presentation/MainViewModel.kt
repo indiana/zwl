@@ -30,6 +30,15 @@ import org.mapsforge.core.model.BoundingBox
 import org.mapsforge.map.layer.cache.TileCache
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import org.locationtech.jts.io.WKTReader
+import org.locationtech.jts.operation.distance.DistanceOp
+
+data class SelectedZoneDetails(
+    val zone: Zone,
+    val distanceMeters: Double?,
+    val fireRiskLevel: Int,
+    val isLoadingFireRisk: Boolean
+)
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -56,6 +65,9 @@ class MainViewModel @Inject constructor(
 
     private val _downloadEvent = MutableSharedFlow<DownloadEvent>()
     val downloadEvent = _downloadEvent.asSharedFlow()
+
+    private val _selectedZoneDetails = MutableStateFlow<SelectedZoneDetails?>(null)
+    val selectedZoneDetails: StateFlow<SelectedZoneDetails?> = _selectedZoneDetails
 
     private var hasLocationPermission = false
     private var isEngineInitialized = false
@@ -207,7 +219,60 @@ class MainViewModel @Inject constructor(
                     }
                 }
             }
+    fun selectZone(zone: Zone, clickLat: Double, clickLon: Double) {
+        viewModelScope.launch {
+            val currentLoc = (uiState.value as? MainUiState.Success)?.let { successState ->
+                Location("").apply {
+                    latitude = successState.latitude
+                    longitude = successState.longitude
+                }
+            }
+
+            val distance = currentLoc?.let { loc ->
+                try {
+                    val userPoint = WKTReader().read("POINT(${loc.longitude} ${loc.latitude})")
+                    val zoneGeom = WKTReader().read(zone.geometryWkt)
+                    val distanceOp = DistanceOp(zoneGeom, userPoint)
+                    val nearestCoords = distanceOp.nearestPoints()
+                    val targetCoord = nearestCoords[0]
+                    val results = FloatArray(1)
+                    Location.distanceBetween(
+                        loc.latitude, loc.longitude,
+                        targetCoord.y, targetCoord.x,
+                        results
+                    )
+                    results[0].toDouble()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
+                }
+            }
+
+            _selectedZoneDetails.value = SelectedZoneDetails(
+                zone = zone,
+                distanceMeters = distance,
+                fireRiskLevel = -1,
+                isLoadingFireRisk = true
+            )
+
+            val tempLoc = Location("").apply {
+                latitude = clickLat
+                longitude = clickLon
+            }
+            val fireRiskResult = getFireRiskUseCase(tempLoc)
+            val riskCode = fireRiskResult.getOrDefault(-1)
+
+            if (_selectedZoneDetails.value?.zone?.id == zone.id) {
+                _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
+                    fireRiskLevel = riskCode,
+                    isLoadingFireRisk = false
+                )
+            }
         }
+    }
+
+    fun clearSelectedZone() {
+        _selectedZoneDetails.value = null
     }
 }
 
