@@ -452,20 +452,19 @@ class ClickablePolygon(
     override fun safeOnTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
         try {
             if (tapLatLong == null) {
-                android.widget.Toast.makeText(mapView.context, "Polygon TAP: tapLatLong is null", android.widget.Toast.LENGTH_SHORT).show()
                 return false
             }
             val gf = org.locationtech.jts.geom.GeometryFactory()
             val clickedPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(tapLatLong.longitude, tapLatLong.latitude))
             val contains = jtsPolygon.contains(clickedPoint)
-            
-            android.widget.Toast.makeText(
-                mapView.context, 
-                "Polygon TAP: ${zone.forestDistrict}\nContains: $contains\nClicked: (${tapLatLong.latitude}, ${tapLatLong.longitude})", 
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
 
             if (contains) {
+                android.widget.Toast.makeText(
+                    mapView.context, 
+                    "Kliknięto strefę: ${zone.forestDistrict}", 
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+
                 mapView.post {
                     try {
                         onClick(zone, jtsPolygon, tapLatLong)
@@ -480,7 +479,7 @@ class ClickablePolygon(
             e.printStackTrace()
             android.widget.Toast.makeText(mapView.context, "Polygon TAP error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
         }
-        return parentOnTap(tapLatLong, layerXY, tapXY)
+        return false
     }
 }
 
@@ -496,7 +495,6 @@ class MapTapInterceptor(private val context: Context, private val onMapTap: () -
     }
 
     override fun safeOnTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
-        android.widget.Toast.makeText(context, "Interceptor TAP", android.widget.Toast.LENGTH_SHORT).show()
         onMapTap()
         return false
     }
