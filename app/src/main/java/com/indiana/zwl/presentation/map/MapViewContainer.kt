@@ -448,8 +448,8 @@ class ClickablePolygon(
     graphicFactory: org.mapsforge.core.graphics.GraphicFactory,
     private val onClick: (Zone, org.locationtech.jts.geom.Polygon, LatLong) -> Unit,
     private val onError: (String) -> Unit
-) : org.mapsforge.map.layer.overlay.Polygon(fillPaint, strokePaint, graphicFactory) {
-    override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
+) : SafePolygon(fillPaint, strokePaint, graphicFactory) {
+    override fun safeOnTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
         try {
             if (tapLatLong == null) {
                 onError("Tap details: tapLatLong is null")
@@ -475,13 +475,13 @@ class ClickablePolygon(
             }
         } catch (e: Throwable) {
             e.printStackTrace()
-            onError("ClickablePolygon.onTap crash:\n" + e.stackTraceToString())
+            onError("ClickablePolygon.safeOnTap crash:\n" + e.stackTraceToString())
         }
-        return super.onTap(tapLatLong, layerXY, tapXY)
+        return parentOnTap(tapLatLong, layerXY, tapXY)
     }
 }
 
-class MapTapInterceptor(private val onMapTap: () -> Unit) : org.mapsforge.map.layer.Layer() {
+class MapTapInterceptor(private val onMapTap: () -> Unit) : SafeLayer() {
     override fun draw(
         boundingBox: org.mapsforge.core.model.BoundingBox?,
         zoomLevel: Byte,
@@ -492,7 +492,7 @@ class MapTapInterceptor(private val onMapTap: () -> Unit) : org.mapsforge.map.la
         // Nothing to draw
     }
 
-    override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
+    override fun safeOnTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
         onMapTap()
         return false
     }
