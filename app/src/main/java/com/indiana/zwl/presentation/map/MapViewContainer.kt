@@ -442,6 +442,7 @@ private fun drawZonePolygons(
                     }
 
                     val clickablePolygon = ClickablePolygon(
+                        mapView = mapView,
                         zone = zone,
                         jtsPolygon = subGeom,
                         fillPaint = fillPaint,
@@ -461,6 +462,7 @@ private fun drawZonePolygons(
 }
 
 class ClickablePolygon(
+    private val mapView: MapView,
     private val zone: Zone,
     private val jtsPolygon: org.locationtech.jts.geom.Polygon,
     fillPaint: org.mapsforge.core.graphics.Paint,
@@ -474,7 +476,14 @@ class ClickablePolygon(
             val gf = org.locationtech.jts.geom.GeometryFactory()
             val clickedPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(tapLatLong.longitude, tapLatLong.latitude))
             if (jtsPolygon.contains(clickedPoint)) {
-                onClick(zone, jtsPolygon, tapLatLong)
+                mapView.post {
+                    try {
+                        onClick(zone, jtsPolygon, tapLatLong)
+                    } catch (e: Throwable) {
+                        e.printStackTrace()
+                        onError("onClick posted execution error:\n" + e.stackTraceToString())
+                    }
+                }
                 return true
             }
         } catch (e: Throwable) {

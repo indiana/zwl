@@ -25,6 +25,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             DisposableEffect(Unit) {
                 viewModel.startTracking()
+
+                try {
+                    val file = java.io.File(cacheDir, "crash_log.txt")
+                    if (file.exists()) {
+                        val crashText = file.readText()
+                        viewModel.setDebugError("Wykryto poprzednią awarię aplikacji (Crash Log):\n\n$crashText")
+                        file.delete()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
                 onDispose {
                     viewModel.stopTracking()
                 }

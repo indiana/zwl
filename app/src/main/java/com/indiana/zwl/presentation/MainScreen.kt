@@ -7,6 +7,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +31,34 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val debugError by viewModel.debugError.collectAsStateWithLifecycle()
+
+    debugError?.let { errorMsg ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearDebugError() },
+            title = { Text("Błąd Debugowania (Crash Log)") },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = errorMsg,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearDebugError() }) {
+                    Text("Zamknij")
+                }
+            }
+        )
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
