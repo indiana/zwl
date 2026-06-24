@@ -449,8 +449,9 @@ class ClickablePolygon(
     private val onClick: (Zone, org.locationtech.jts.geom.Polygon, LatLong) -> Unit,
     private val onError: (String) -> Unit
 ) : org.mapsforge.map.layer.overlay.Polygon(fillPaint, strokePaint, graphicFactory) {
-    override fun onTap(tapLatLong: LatLong, layerXY: org.mapsforge.core.model.Point, tapXY: org.mapsforge.core.model.Point): Boolean {
+    override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
         try {
+            if (tapLatLong == null) return false
             val gf = org.locationtech.jts.geom.GeometryFactory()
             val clickedPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(tapLatLong.longitude, tapLatLong.latitude))
             if (jtsPolygon.contains(clickedPoint)) {
@@ -483,7 +484,7 @@ class MapTapInterceptor(private val onMapTap: () -> Unit) : org.mapsforge.map.la
         // Nothing to draw
     }
 
-    override fun onTap(tapLatLong: LatLong, layerXY: org.mapsforge.core.model.Point, tapXY: org.mapsforge.core.model.Point): Boolean {
+    override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
         onMapTap()
         return false
     }
