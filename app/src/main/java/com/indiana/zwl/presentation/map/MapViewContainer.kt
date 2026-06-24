@@ -70,8 +70,7 @@ import androidx.compose.material.icons.filled.Close
 @Composable
 fun MapViewContainer(
     viewModel: MainViewModel,
-    zones: List<Zone>,
-    onCloseMap: () -> Unit
+    zones: List<Zone>
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -277,24 +276,7 @@ fun MapViewContainer(
                 }
             }
         }
-
-        // Return button (bottom center)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            Button(
-                onClick = onCloseMap,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.height(48.dp),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
-            ) {
-                Text("Wróć do statusu", fontWeight = FontWeight.Bold)
-            }
-        }        // Silent background download card in the top-left
+        // Silent background download card in the top-left
         if (isDownloadingArea) {
             Box(
                 modifier = Modifier

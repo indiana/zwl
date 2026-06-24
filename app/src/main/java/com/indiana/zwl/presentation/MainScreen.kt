@@ -252,8 +252,7 @@ fun MainScreen(
                                 is LocationStatus.InZone -> {
                                     InZoneContent(
                                         forestDistrict = status.forestDistrict,
-                                        fireRiskLevel = state.fireRiskLevel,
-                                        onSwitchToMap = { selectedTab = 1 }
+                                        fireRiskLevel = state.fireRiskLevel
                                     )
                                 }
 
@@ -262,8 +261,7 @@ fun MainScreen(
                                         nearestDistrict = status.nearestDistrict,
                                         distanceMeters = status.distanceMeters,
                                         bearingDegrees = status.bearingDegrees,
-                                        azimuth = state.azimuth,
-                                        onSwitchToMap = { selectedTab = 1 }
+                                        azimuth = state.azimuth
                                     )
                                 }
 
@@ -281,8 +279,7 @@ fun MainScreen(
                         } else {
                             MapViewContainer(
                                 viewModel = viewModel,
-                                zones = viewModel.zones,
-                                onCloseMap = { selectedTab = 0 }
+                                zones = viewModel.zones
                             )
                         }
                     }

@@ -26,8 +26,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun InZoneContent(
     forestDistrict: String,
-    fireRiskLevel: Int,
-    onSwitchToMap: () -> Unit
+    fireRiskLevel: Int
 ) {
     Column(
         modifier = Modifier
@@ -35,11 +34,11 @@ fun InZoneContent(
             .background(MaterialTheme.colorScheme.background)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        verticalArrangement = Arrangement.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(top = 40.dp)
+            modifier = Modifier.padding(top = 16.dp)
         ) {
             Box(
                 modifier = Modifier
@@ -72,6 +71,8 @@ fun InZoneContent(
                 textAlign = TextAlign.Center
             )
         }
+        
+        Spacer(modifier = Modifier.height(24.dp))
 
         Card(
             modifier = Modifier
@@ -191,18 +192,5 @@ fun InZoneContent(
                     }
                 }
             }
-        }
-
-        Button(
-            onClick = onSwitchToMap,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier
-                .padding(bottom = 24.dp)
-                .height(48.dp)
-                .fillMaxWidth(0.6f)
-        ) {
-            Text("Pokaż na mapie", fontWeight = FontWeight.Bold)
-        }
     }
 }
