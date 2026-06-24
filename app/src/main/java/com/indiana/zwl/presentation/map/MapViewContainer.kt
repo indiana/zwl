@@ -57,6 +57,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -111,6 +113,30 @@ fun MapViewContainer(
         }
     }
 
+    LaunchedEffect(context, viewModel) {
+        try {
+            val file = File(context.cacheDir, "crash_log.txt")
+            if (file.exists()) {
+                val crashText = file.readText()
+                viewModel.setDebugError("Wykryto poprzednią awarię aplikacji (Crash Log):\n\n$crashText")
+                file.delete()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        val originalHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val file = File(context.cacheDir, "crash_log.txt")
+                file.writeText(throwable.stackTraceToString())
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            originalHandler?.uncaughtException(thread, throwable)
+        }
+    }
+
     var userMarker by remember { mutableStateOf<RotatingMarker?>(null) }
 
     val isOnlineState by rememberIsOnline()
@@ -160,9 +186,17 @@ fun MapViewContainer(
                     this.setCenter(LatLong(52.23, 21.01))
                     this.setZoomLevel(15)
 
-                    drawZonePolygons(ctx, this, zones) { zone, geom, latLong ->
-                        viewModel.selectZone(zone, geom, latLong.latitude, latLong.longitude)
-                    }
+                    drawZonePolygons(
+                        context = ctx,
+                        mapView = this,
+                        zones = zones,
+                        onZoneClick = { zone, geom, latLong ->
+                            viewModel.selectZone(zone, geom, latLong.latitude, latLong.longitude)
+                        },
+                        onZoneError = { errorMsg ->
+                            viewModel.setDebugError(errorMsg)
+                        }
+                    )
 
                     // Initialize user location marker
                     val userLocBitmap = createUserLocationArrowBitmap(ctx)
@@ -339,6 +373,34 @@ fun MapViewContainer(
                     )
                 }
             }
+
+            val debugError by viewModel.debugError.collectAsState()
+            debugError?.let { errorMsg ->
+                AlertDialog(
+                    onDismissRequest = { viewModel.clearDebugError() },
+                    title = { Text("Błąd Debugowania (Crash Log)") },
+                    text = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 300.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = errorMsg,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { viewModel.clearDebugError() }) {
+                            Text("Zamknij")
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -349,7 +411,8 @@ private fun drawZonePolygons(
     context: Context,
     mapView: MapView,
     zones: List<Zone>,
-    onZoneClick: (Zone, org.locationtech.jts.geom.Polygon, LatLong) -> Unit
+    onZoneClick: (Zone, org.locationtech.jts.geom.Polygon, LatLong) -> Unit,
+    onZoneError: (String) -> Unit
 ) {
     val graphicFactory = AndroidGraphicFactory.INSTANCE
     val wktReader = WKTReader()
@@ -384,14 +447,15 @@ private fun drawZonePolygons(
                         fillPaint = fillPaint,
                         strokePaint = strokePaint,
                         graphicFactory = graphicFactory,
-                        onClick = onZoneClick
+                        onClick = onZoneClick,
+                        onError = onZoneError
                     )
                     clickablePolygon.setPoints(mfPoints)
                     mapView.layerManager.layers.add(clickablePolygon)
                 }
             }
         } catch (e: Throwable) {
-            // Ignoruj błędne strefy
+            onZoneError("drawZonePolygons error:\n" + e.stackTraceToString())
         }
     }
 }
@@ -402,7 +466,8 @@ class ClickablePolygon(
     fillPaint: org.mapsforge.core.graphics.Paint,
     strokePaint: org.mapsforge.core.graphics.Paint,
     graphicFactory: org.mapsforge.core.graphics.GraphicFactory,
-    private val onClick: (Zone, org.locationtech.jts.geom.Polygon, LatLong) -> Unit
+    private val onClick: (Zone, org.locationtech.jts.geom.Polygon, LatLong) -> Unit,
+    private val onError: (String) -> Unit
 ) : org.mapsforge.map.layer.overlay.Polygon(fillPaint, strokePaint, graphicFactory) {
     override fun onTap(tapLatLong: LatLong, layerXY: org.mapsforge.core.model.Point, tapXY: org.mapsforge.core.model.Point): Boolean {
         try {
@@ -414,6 +479,7 @@ class ClickablePolygon(
             }
         } catch (e: Throwable) {
             e.printStackTrace()
+            onError("ClickablePolygon.onTap crash:\n" + e.stackTraceToString())
         }
         return super.onTap(tapLatLong, layerXY, tapXY)
     }
