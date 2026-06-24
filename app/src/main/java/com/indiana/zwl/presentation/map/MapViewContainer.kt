@@ -451,10 +451,18 @@ class ClickablePolygon(
 ) : org.mapsforge.map.layer.overlay.Polygon(fillPaint, strokePaint, graphicFactory) {
     override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
         try {
-            if (tapLatLong == null) return false
+            if (tapLatLong == null) {
+                onError("Tap details: tapLatLong is null")
+                return false
+            }
             val gf = org.locationtech.jts.geom.GeometryFactory()
             val clickedPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(tapLatLong.longitude, tapLatLong.latitude))
-            if (jtsPolygon.contains(clickedPoint)) {
+            val contains = jtsPolygon.contains(clickedPoint)
+            
+            // Temporary debug alert
+            onError("DEBUG TAP:\nZone: ${zone.forestDistrict}\nClicked: (${tapLatLong.latitude}, ${tapLatLong.longitude})\nContains: $contains\nEnvelope: ${jtsPolygon.envelopeInternal}")
+
+            if (contains) {
                 mapView.post {
                     try {
                         onClick(zone, jtsPolygon, tapLatLong)
