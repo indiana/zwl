@@ -188,13 +188,21 @@ class MainViewModel @Inject constructor(
             lastFireRiskLocation = location
         } else {
             val exception = result.exceptionOrNull()
-            if (exception is java.io.IOException) {
+            _debugError.value = "fetchFireHazard API error:\n" + exception?.stackTraceToString()
+            if (isNetworkException(exception)) {
                 currentFireRisk = -2
             } else {
                 currentFireRisk = -1
-                _debugError.value = "fetchFireHazard API error:\n" + exception?.stackTraceToString()
             }
         }
+    }
+
+    private fun isNetworkException(e: Throwable?): Boolean {
+        return e is java.net.UnknownHostException ||
+               e is java.net.ConnectException ||
+               e is java.net.SocketTimeoutException ||
+               e is java.net.SocketException ||
+               e is javax.net.ssl.SSLException
     }
 
     override fun onCleared() {
@@ -280,10 +288,10 @@ class MainViewModel @Inject constructor(
                     fireRiskResult.getOrDefault(-1)
                 } else {
                     val exception = fireRiskResult.exceptionOrNull()
-                    if (exception is java.io.IOException) {
+                    _debugError.value = "selectZone fire risk API error:\n" + exception?.stackTraceToString()
+                    if (isNetworkException(exception)) {
                         -2
                     } else {
-                        _debugError.value = "selectZone fire risk API error:\n" + exception?.stackTraceToString()
                         -1
                     }
                 }
