@@ -157,7 +157,7 @@ fun MapViewContainer(
                     downloadLayer.onResume()
 
                     // Add background tap interceptor to clear selection when tapping empty areas of the map
-                    this.layerManager.layers.add(MapTapInterceptor {
+                    this.layerManager.layers.add(MapTapInterceptor(ctx) {
                         viewModel.clearSelectedZone()
                     })
 
@@ -452,15 +452,18 @@ class ClickablePolygon(
     override fun safeOnTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
         try {
             if (tapLatLong == null) {
-                onError("Tap details: tapLatLong is null")
+                android.widget.Toast.makeText(mapView.context, "Polygon TAP: tapLatLong is null", android.widget.Toast.LENGTH_SHORT).show()
                 return false
             }
             val gf = org.locationtech.jts.geom.GeometryFactory()
             val clickedPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(tapLatLong.longitude, tapLatLong.latitude))
             val contains = jtsPolygon.contains(clickedPoint)
             
-            // Temporary debug alert
-            onError("DEBUG TAP:\nZone: ${zone.forestDistrict}\nClicked: (${tapLatLong.latitude}, ${tapLatLong.longitude})\nContains: $contains\nEnvelope: ${jtsPolygon.envelopeInternal}")
+            android.widget.Toast.makeText(
+                mapView.context, 
+                "Polygon TAP: ${zone.forestDistrict}\nContains: $contains\nClicked: (${tapLatLong.latitude}, ${tapLatLong.longitude})", 
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
 
             if (contains) {
                 mapView.post {
@@ -475,13 +478,13 @@ class ClickablePolygon(
             }
         } catch (e: Throwable) {
             e.printStackTrace()
-            onError("ClickablePolygon.safeOnTap crash:\n" + e.stackTraceToString())
+            android.widget.Toast.makeText(mapView.context, "Polygon TAP error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
         }
         return parentOnTap(tapLatLong, layerXY, tapXY)
     }
 }
 
-class MapTapInterceptor(private val onMapTap: () -> Unit) : SafeLayer() {
+class MapTapInterceptor(private val context: Context, private val onMapTap: () -> Unit) : SafeLayer() {
     override fun draw(
         boundingBox: org.mapsforge.core.model.BoundingBox?,
         zoomLevel: Byte,
@@ -493,6 +496,7 @@ class MapTapInterceptor(private val onMapTap: () -> Unit) : SafeLayer() {
     }
 
     override fun safeOnTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
+        android.widget.Toast.makeText(context, "Interceptor TAP", android.widget.Toast.LENGTH_SHORT).show()
         onMapTap()
         return false
     }
