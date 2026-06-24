@@ -222,7 +222,7 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    fun selectZone(zone: Zone, clickLat: Double, clickLon: Double) {
+    fun selectZone(zone: Zone, jtsPolygon: org.locationtech.jts.geom.Geometry, clickLat: Double, clickLon: Double) {
         viewModelScope.launch {
             val currentLoc = (uiState.value as? MainUiState.Success)?.let { successState ->
                 Location("").apply {
@@ -233,9 +233,9 @@ class MainViewModel @Inject constructor(
 
             val distance = currentLoc?.let { loc ->
                 try {
-                    val userPoint = WKTReader().read("POINT(${loc.longitude} ${loc.latitude})")
-                    val zoneGeom = WKTReader().read(zone.geometryWkt)
-                    val distanceOp = DistanceOp(zoneGeom, userPoint)
+                    val gf = org.locationtech.jts.geom.GeometryFactory()
+                    val userPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(loc.longitude, loc.latitude))
+                    val distanceOp = DistanceOp(jtsPolygon, userPoint)
                     val nearestCoords = distanceOp.nearestPoints()
                     val targetCoord = nearestCoords[0]
                     val results = FloatArray(1)
@@ -245,7 +245,7 @@ class MainViewModel @Inject constructor(
                         results
                     )
                     results[0].toDouble()
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     e.printStackTrace()
                     null
                 }

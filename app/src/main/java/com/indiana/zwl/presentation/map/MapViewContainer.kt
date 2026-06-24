@@ -160,8 +160,8 @@ fun MapViewContainer(
                     this.setCenter(LatLong(52.23, 21.01))
                     this.setZoomLevel(15)
 
-                    drawZonePolygons(ctx, this, zones) { zone, latLong ->
-                        viewModel.selectZone(zone, latLong.latitude, latLong.longitude)
+                    drawZonePolygons(ctx, this, zones) { zone, geom, latLong ->
+                        viewModel.selectZone(zone, geom, latLong.latitude, latLong.longitude)
                     }
 
                     // Initialize user location marker
@@ -349,7 +349,7 @@ private fun drawZonePolygons(
     context: Context,
     mapView: MapView,
     zones: List<Zone>,
-    onZoneClick: (Zone, LatLong) -> Unit
+    onZoneClick: (Zone, org.locationtech.jts.geom.Polygon, LatLong) -> Unit
 ) {
     val graphicFactory = AndroidGraphicFactory.INSTANCE
     val wktReader = WKTReader()
@@ -390,7 +390,7 @@ private fun drawZonePolygons(
                     mapView.layerManager.layers.add(clickablePolygon)
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             // Ignoruj błędne strefy
         }
     }
@@ -402,17 +402,17 @@ class ClickablePolygon(
     fillPaint: org.mapsforge.core.graphics.Paint,
     strokePaint: org.mapsforge.core.graphics.Paint,
     graphicFactory: org.mapsforge.core.graphics.GraphicFactory,
-    private val onClick: (Zone, LatLong) -> Unit
+    private val onClick: (Zone, org.locationtech.jts.geom.Polygon, LatLong) -> Unit
 ) : org.mapsforge.map.layer.overlay.Polygon(fillPaint, strokePaint, graphicFactory) {
     override fun onTap(tapLatLong: LatLong, layerXY: org.mapsforge.core.model.Point, tapXY: org.mapsforge.core.model.Point): Boolean {
         try {
             val gf = org.locationtech.jts.geom.GeometryFactory()
             val clickedPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(tapLatLong.longitude, tapLatLong.latitude))
             if (jtsPolygon.contains(clickedPoint)) {
-                onClick(zone, tapLatLong)
+                onClick(zone, jtsPolygon, tapLatLong)
                 return true
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
         }
         return super.onTap(tapLatLong, layerXY, tapXY)
@@ -485,10 +485,11 @@ fun ZoneDetailsCard(
                     )
                 }
                 IconButton(onClick = onClose) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Zamknij",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    Text(
+                        text = "✕",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
