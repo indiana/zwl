@@ -25,6 +25,9 @@ import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.presentation.theme.ZwlTheme
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.indiana.zwl.presentation.map.MapViewContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Map
 
 @Composable
 fun MainScreen(
@@ -209,21 +212,32 @@ fun MainScreen(
 
             ZwlTheme(isInZone = isInZone) {
                 Scaffold(
-                    topBar = {
-                        TabRow(
-                            selectedTabIndex = selectedTab,
+                    bottomBar = {
+                        NavigationBar(
                             containerColor = MaterialTheme.colorScheme.surface,
                             contentColor = MaterialTheme.colorScheme.onSurface,
                         ) {
-                            Tab(
+                            NavigationBarItem(
                                 selected = selectedTab == 0,
                                 onClick = { selectedTab = 0 },
-                                text = { Text("STATUS", fontWeight = FontWeight.Bold) }
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "Status"
+                                    )
+                                },
+                                label = { Text("Status", fontWeight = FontWeight.Bold) }
                             )
-                            Tab(
+                            NavigationBarItem(
                                 selected = selectedTab == 1,
                                 onClick = { selectedTab = 1 },
-                                text = { Text("MAPA", fontWeight = FontWeight.Bold) }
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Map,
+                                        contentDescription = "Mapa"
+                                    )
+                                },
+                                label = { Text("Mapa", fontWeight = FontWeight.Bold) }
                             )
                         }
                     }
