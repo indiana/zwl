@@ -88,6 +88,14 @@ fun MapViewContainer(
     var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
 
+    LaunchedEffect(selectedZone) {
+        if (selectedZone != null) {
+            Toast.makeText(context, "COMPOSE STATE: Non-null selectedZone = ${selectedZone?.zone?.forestDistrict}", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "COMPOSE STATE: null", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // Download state from ViewModel
     val isDownloadingArea by viewModel.isDownloadingArea.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
@@ -461,12 +469,17 @@ class ClickablePolygon(
             if (contains) {
                 android.widget.Toast.makeText(
                     mapView.context, 
-                    "Kliknięto strefę: ${zone.forestDistrict}", 
+                    "Polygon TAP: contains = true. Posting onClick...", 
                     android.widget.Toast.LENGTH_SHORT
                 ).show()
 
-                mapView.post {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
                     try {
+                        android.widget.Toast.makeText(
+                            mapView.context, 
+                            "Main Looper: executing onClick for ${zone.forestDistrict}", 
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
                         onClick(zone, jtsPolygon, tapLatLong)
                     } catch (e: Throwable) {
                         e.printStackTrace()
