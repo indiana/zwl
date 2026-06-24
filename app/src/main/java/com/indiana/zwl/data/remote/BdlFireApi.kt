@@ -4,7 +4,7 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 
 data class FireRiskGeoJson(
-    val features: List<FireRiskFeature>
+    val features: List<FireRiskFeature>?
 )
 
 data class FireRiskFeature(

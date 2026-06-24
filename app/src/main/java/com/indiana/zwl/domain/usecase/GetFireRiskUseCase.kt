@@ -11,7 +11,7 @@ class GetFireRiskUseCase @Inject constructor(
         return try {
             val geometry = "${location.longitude},${location.latitude}"
             val response = fireApi.getFireHazard(geometry = geometry)
-            val code = response.features.firstOrNull()?.properties?.kod ?: -1
+            val code = response.features?.firstOrNull()?.properties?.kod ?: -1
             Result.success(code)
         } catch (e: Exception) {
             e.printStackTrace()

@@ -187,7 +187,13 @@ class MainViewModel @Inject constructor(
             currentFireRisk = result.getOrDefault(-1)
             lastFireRiskLocation = location
         } else {
-            currentFireRisk = -2
+            val exception = result.exceptionOrNull()
+            if (exception is java.io.IOException) {
+                currentFireRisk = -2
+            } else {
+                currentFireRisk = -1
+                _debugError.value = "fetchFireHazard API error:\n" + exception?.stackTraceToString()
+            }
         }
     }
 
@@ -273,7 +279,13 @@ class MainViewModel @Inject constructor(
                 val riskCode = if (fireRiskResult.isSuccess) {
                     fireRiskResult.getOrDefault(-1)
                 } else {
-                    -2
+                    val exception = fireRiskResult.exceptionOrNull()
+                    if (exception is java.io.IOException) {
+                        -2
+                    } else {
+                        _debugError.value = "selectZone fire risk API error:\n" + exception?.stackTraceToString()
+                        -1
+                    }
                 }
 
                 if (_selectedZoneDetails.value?.zone?.id == zone.id) {
