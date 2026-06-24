@@ -187,7 +187,7 @@ class MainViewModel @Inject constructor(
             currentFireRisk = result.getOrDefault(-1)
             lastFireRiskLocation = location
         } else {
-            currentFireRisk = -1
+            currentFireRisk = -2
         }
     }
 
@@ -270,7 +270,11 @@ class MainViewModel @Inject constructor(
                     longitude = clickLon
                 }
                 val fireRiskResult = getFireRiskUseCase(tempLoc)
-                val riskCode = fireRiskResult.getOrDefault(-1)
+                val riskCode = if (fireRiskResult.isSuccess) {
+                    fireRiskResult.getOrDefault(-1)
+                } else {
+                    -2
+                }
 
                 if (_selectedZoneDetails.value?.zone?.id == zone.id) {
                     _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(

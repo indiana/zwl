@@ -96,7 +96,8 @@ fun InZoneContent(
                     1 -> "STOPNIEŃ 1 (Niskie zagrożenie)"
                     2 -> "STOPNIEŃ 2 (Średnie zagrożenie)"
                     3 -> "STOPNIEŃ 3 (BARDZO WYSOKIE)"
-                    else -> "Status pożarowy: Nieznany (brak sieci)"
+                    -2 -> "Status pożarowy: Nieznany (brak sieci)"
+                    else -> "Status pożarowy: Brak danych"
                 }
                 
                 val riskColor = when (fireRiskLevel) {

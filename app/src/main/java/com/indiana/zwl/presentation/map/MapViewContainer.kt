@@ -611,7 +611,8 @@ fun ZoneDetailsCard(
                                 1 -> "STOPIEŃ 1 (Niskie)"
                                 2 -> "STOPIEŃ 2 (Średnie)"
                                 3 -> "STOPIEŃ 3 (WYSOKIE)"
-                                else -> "Nieznany (brak sieci)"
+                                -2 -> "Nieznany (brak sieci)"
+                                else -> "Brak danych"
                             }
                             val riskColor = when (details.fireRiskLevel) {
                                 0 -> Color(0xFF81C784)
@@ -660,6 +661,7 @@ fun ZoneDetailsCard(
                         val permissionText = when (details.fireRiskLevel) {
                             0, 1, 2 -> "DOZWOLONE"
                             3 -> "BEZWZGLĘDNY ZAKAZ"
+                            -2 -> "WARUNKOWO DOZWOLONE (brak sieci)"
                             else -> "WARUNKOWO DOZWOLONE (brak danych)"
                         }
                         val permissionColor = when (details.fireRiskLevel) {
