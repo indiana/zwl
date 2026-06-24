@@ -113,29 +113,7 @@ fun MapViewContainer(
         }
     }
 
-    LaunchedEffect(context, viewModel) {
-        try {
-            val file = File(context.cacheDir, "crash_log.txt")
-            if (file.exists()) {
-                val crashText = file.readText()
-                viewModel.setDebugError("Wykryto poprzednią awarię aplikacji (Crash Log):\n\n$crashText")
-                file.delete()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
 
-        val originalHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            try {
-                val file = File(context.cacheDir, "crash_log.txt")
-                file.writeText(throwable.stackTraceToString())
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            originalHandler?.uncaughtException(thread, throwable)
-        }
-    }
 
     var userMarker by remember { mutableStateOf<RotatingMarker?>(null) }
 

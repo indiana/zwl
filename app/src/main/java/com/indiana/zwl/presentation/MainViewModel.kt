@@ -236,23 +236,25 @@ class MainViewModel @Inject constructor(
                 }
 
                 val distance = currentLoc?.let { loc ->
-                    try {
-                        val gf = org.locationtech.jts.geom.GeometryFactory()
-                        val userPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(loc.longitude, loc.latitude))
-                        val distanceOp = DistanceOp(jtsPolygon, userPoint)
-                        val nearestCoords = distanceOp.nearestPoints()
-                        val targetCoord = nearestCoords[0]
-                        val results = FloatArray(1)
-                        Location.distanceBetween(
-                            loc.latitude, loc.longitude,
-                            targetCoord.y, targetCoord.x,
-                            results
-                        )
-                        results[0].toDouble()
-                    } catch (e: Throwable) {
-                        e.printStackTrace()
-                        _debugError.value = "Distance calculation error:\n" + e.stackTraceToString()
-                        null
+                    withContext(Dispatchers.Default) {
+                        try {
+                            val gf = org.locationtech.jts.geom.GeometryFactory()
+                            val userPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(loc.longitude, loc.latitude))
+                            val distanceOp = DistanceOp(jtsPolygon, userPoint)
+                            val nearestCoords = distanceOp.nearestPoints()
+                            val targetCoord = nearestCoords[0]
+                            val results = FloatArray(1)
+                            Location.distanceBetween(
+                                loc.latitude, loc.longitude,
+                                targetCoord.y, targetCoord.x,
+                                results
+                            )
+                            results[0].toDouble()
+                        } catch (e: Throwable) {
+                            e.printStackTrace()
+                            _debugError.value = "Distance calculation error:\n" + e.stackTraceToString()
+                            null
+                        }
                     }
                 }
 

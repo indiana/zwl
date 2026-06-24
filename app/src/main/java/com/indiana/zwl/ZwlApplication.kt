@@ -27,6 +27,19 @@ class ZwlApplication : Application(), androidx.work.Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        
+        // Global uncaught exception handler to write crash logs for diagnostics
+        val originalHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val file = java.io.File(cacheDir, "crash_log.txt")
+                file.writeText(throwable.stackTraceToString())
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            originalHandler?.uncaughtException(thread, throwable)
+        }
+
         AndroidGraphicFactory.createInstance(this)
 
         val constraints = Constraints.Builder()
