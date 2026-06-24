@@ -66,6 +66,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Delete
 
 @Composable
 fun MapViewContainer(
@@ -86,6 +90,7 @@ fun MapViewContainer(
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
+    var isSettingsOpen by remember { mutableStateOf(false) }
 
     // Download state from ViewModel
     val isDownloadingArea by viewModel.isDownloadingArea.collectAsState()
@@ -213,65 +218,172 @@ fun MapViewContainer(
                 .padding(24.dp),
             contentAlignment = Alignment.TopEnd
         ) {
-            AnimatedVisibility(
-                visible = isOnlineState,
-                enter = fadeIn(),
-                exit = fadeOut()
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Button(
-                    onClick = {
-                        if (!isOnline(context)) {
-                            Toast.makeText(context, "Jesteś w trybie offline", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        val mv = mapViewInstance
-                        val tc = tileCacheInstance
-                        if (mv != null && tc != null) {
-                            val bbox = mv.boundingBox
-                            if (bbox != null) {
-                                viewModel.downloadMapArea(
-                                    bbox = bbox,
-                                    tileSize = mv.model.displayModel.tileSize,
-                                    tileCache = tc
-                                )
-                            } else {
-                                Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
-                            }
-                        } else {
-                            Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Pobierz obszar offline", fontWeight = FontWeight.Bold, color = Color.White)
-                }
-            }
-
-            AnimatedVisibility(
-                visible = !isOnlineState,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(12.dp),
-                    shadowElevation = 6.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    AnimatedVisibility(
+                        visible = !isOnlineState,
+                        enter = fadeIn(),
+                        exit = fadeOut()
                     ) {
-                        OfflineIcon(modifier = Modifier.size(16.dp), color = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Tryb offline",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            letterSpacing = 0.5.sp
+                        Surface(
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                            shape = RoundedCornerShape(12.dp),
+                            shadowElevation = 6.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OfflineIcon(modifier = Modifier.size(16.dp), color = Color.White)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Tryb offline",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+                    }
+
+                    FloatingActionButton(
+                        onClick = { isSettingsOpen = !isSettingsOpen },
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.size(48.dp),
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Ustawienia mapy"
                         )
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = isSettingsOpen,
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { -20 }),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { -20 })
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.width(200.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "Ustawienia Mapy",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            
+                            HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
+
+                            if (isOnlineState) {
+                                Button(
+                                    onClick = {
+                                        isSettingsOpen = false
+                                        if (!isOnline(context)) {
+                                            Toast.makeText(context, "Jesteś w trybie offline", Toast.LENGTH_SHORT).show()
+                                            return@Button
+                                        }
+                                        val mv = mapViewInstance
+                                        val tc = tileCacheInstance
+                                        if (mv != null && tc != null) {
+                                            val bbox = mv.boundingBox
+                                            if (bbox != null) {
+                                                viewModel.downloadMapArea(
+                                                    bbox = bbox,
+                                                    tileSize = mv.model.displayModel.tileSize,
+                                                    tileCache = tc
+                                                )
+                                            } else {
+                                                Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
+                                            }
+                                        } else {
+                                            Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudDownload,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Pobierz obszar",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color.White
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "Pobieranie niedostępne w trybie offline",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.error,
+                                    lineHeight = 16.sp
+                                )
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    isSettingsOpen = false
+                                    coroutineScope.launch {
+                                        val success = withContext(Dispatchers.IO) {
+                                            val cacheDir = File(context.externalCacheDir, "mapcache")
+                                            if (cacheDir.exists()) {
+                                                cacheDir.deleteRecursively()
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        Toast.makeText(
+                                            context,
+                                            if (success) "Pamięć podręczna została wyczyszczona" else "Brak pamięci podręcznej do wyczyszczenia",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Wyczyść cache",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
