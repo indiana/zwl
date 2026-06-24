@@ -35,14 +35,22 @@ class MainActivity : ComponentActivity() {
                 composable("main") {
                     MainScreen(
                         viewModel = viewModel,
-                        onNavigateToMap = { navController.navigate("map") }
+                        onNavigateToMap = {
+                            if (navController.currentDestination?.route == "main") {
+                                navController.navigate("map")
+                            }
+                        }
                     )
                 }
                 composable("map") {
                     MapViewContainer(
                         viewModel = viewModel,
                         zones = viewModel.zones,
-                        onCloseMap = { navController.popBackStack() }
+                        onCloseMap = {
+                            if (navController.currentDestination?.route == "map") {
+                                navController.popBackStack()
+                            }
+                        }
                     )
                 }
             }
