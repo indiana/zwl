@@ -88,14 +88,6 @@ fun MapViewContainer(
     var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
 
-    LaunchedEffect(selectedZone) {
-        if (selectedZone != null) {
-            Toast.makeText(context, "COMPOSE STATE: Non-null selectedZone = ${selectedZone?.zone?.forestDistrict}", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, "COMPOSE STATE: null", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     // Download state from ViewModel
     val isDownloadingArea by viewModel.isDownloadingArea.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
@@ -126,8 +118,6 @@ fun MapViewContainer(
     var userMarker by remember { mutableStateOf<RotatingMarker?>(null) }
 
     val isOnlineState by rememberIsOnline()
-
-    // Automatic download on startup removed to prevent concurrent download/write database lock conflicts with TileDownloadLayer.
 
     val isInZone = (uiState as? MainUiState.Success)?.locationStatus is LocationStatus.InZone
 
@@ -304,9 +294,7 @@ fun MapViewContainer(
             ) {
                 Text("Wróć do statusu", fontWeight = FontWeight.Bold)
             }
-        }
-
-        // Silent background download card in the top-left
+        }        // Silent background download card in the top-left
         if (isDownloadingArea) {
             Box(
                 modifier = Modifier
@@ -344,52 +332,51 @@ fun MapViewContainer(
                     }
                 }
             }
+        }
 
-            AnimatedVisibility(
-                visible = selectedZone != null,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { height -> height / 2 }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { height -> height / 2 }),
-                modifier = Modifier.align(Alignment.BottomCenter)
-            ) {
-                selectedZone?.let { details ->
-                    ZoneDetailsCard(
-                        details = details,
-                        onClose = { viewModel.clearSelectedZone() },
-                        modifier = Modifier.padding(bottom = 88.dp)
-                    )
-                }
-            }
-
-            val debugError by viewModel.debugError.collectAsState()
-            debugError?.let { errorMsg ->
-                AlertDialog(
-                    onDismissRequest = { viewModel.clearDebugError() },
-                    title = { Text("Błąd Debugowania (Crash Log)") },
-                    text = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 300.dp)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            Text(
-                                text = errorMsg,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { viewModel.clearDebugError() }) {
-                            Text("Zamknij")
-                        }
-                    }
+        AnimatedVisibility(
+            visible = selectedZone != null,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { height -> height / 2 }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { height -> height / 2 }),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            selectedZone?.let { details ->
+                ZoneDetailsCard(
+                    details = details,
+                    onClose = { viewModel.clearSelectedZone() },
+                    modifier = Modifier.padding(bottom = 88.dp)
                 )
             }
         }
+
+        val debugError by viewModel.debugError.collectAsState()
+        debugError?.let { errorMsg ->
+            AlertDialog(
+                onDismissRequest = { viewModel.clearDebugError() },
+                title = { Text("Błąd Debugowania (Crash Log)") },
+                text = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = errorMsg,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.clearDebugError() }) {
+                        Text("Zamknij")
+                    }
+                }
+            )
+        }    }
     }
-}
 }
 
 
@@ -467,19 +454,8 @@ class ClickablePolygon(
             val contains = jtsPolygon.contains(clickedPoint)
 
             if (contains) {
-                android.widget.Toast.makeText(
-                    mapView.context, 
-                    "Polygon TAP: contains = true. Posting onClick...", 
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
-
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     try {
-                        android.widget.Toast.makeText(
-                            mapView.context, 
-                            "Main Looper: executing onClick for ${zone.forestDistrict}", 
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
                         onClick(zone, jtsPolygon, tapLatLong)
                     } catch (e: Throwable) {
                         e.printStackTrace()
@@ -490,7 +466,6 @@ class ClickablePolygon(
             }
         } catch (e: Throwable) {
             e.printStackTrace()
-            android.widget.Toast.makeText(mapView.context, "Polygon TAP error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
         }
         return false
     }
