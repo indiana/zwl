@@ -20,6 +20,7 @@ import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.presentation.MainUiState
 import com.indiana.zwl.presentation.MainViewModel
 import com.indiana.zwl.presentation.DownloadEvent
+import com.indiana.zwl.presentation.SelectedZoneDetails
 import com.indiana.zwl.presentation.theme.ZwlTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -326,8 +327,8 @@ fun MapViewContainer(
 
             AnimatedVisibility(
                 visible = selectedZone != null,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
+                enter = fadeIn() + slideInVertically(initialOffsetY = { height -> height / 2 }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { height -> height / 2 }),
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 selectedZone?.let { details ->
@@ -423,7 +424,8 @@ class MapTapInterceptor(private val onMapTap: () -> Unit) : org.mapsforge.map.la
         boundingBox: org.mapsforge.core.model.BoundingBox?,
         zoomLevel: Byte,
         canvas: org.mapsforge.core.graphics.Canvas?,
-        topLeftPoint: org.mapsforge.core.model.Point?
+        topLeftPoint: org.mapsforge.core.model.Point?,
+        rotation: org.mapsforge.core.model.Rotation?
     ) {
         // Nothing to draw
     }
