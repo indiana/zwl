@@ -160,6 +160,7 @@ fun OutsideZoneContent(
                     textAlign = TextAlign.Center
                 )
             }
+        }
     }
 }
 

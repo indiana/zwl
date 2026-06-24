@@ -192,5 +192,6 @@ fun InZoneContent(
                     }
                 }
             }
+        }
     }
 }
