@@ -42,30 +42,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val navController = rememberNavController()
-            NavHost(navController = navController, startDestination = "main") {
-                composable("main") {
-                    MainScreen(
-                        viewModel = viewModel,
-                        onNavigateToMap = {
-                            if (navController.currentDestination?.route == "main") {
-                                navController.navigate("map")
-                            }
-                        }
-                    )
-                }
-                composable("map") {
-                    MapViewContainer(
-                        viewModel = viewModel,
-                        zones = viewModel.zones,
-                        onCloseMap = {
-                            if (navController.currentDestination?.route == "map") {
-                                navController.popBackStack()
-                            }
-                        }
-                    )
-                }
-            }
+            MainScreen(
+                viewModel = viewModel
+            )
         }
     }
 }

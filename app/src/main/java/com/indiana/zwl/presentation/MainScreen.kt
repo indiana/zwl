@@ -23,11 +23,12 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.presentation.theme.ZwlTheme
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.indiana.zwl.presentation.map.MapViewContainer
 
 @Composable
 fun MainScreen(
-    viewModel: MainViewModel,
-    onNavigateToMap: () -> Unit
+    viewModel: MainViewModel
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -204,35 +205,71 @@ fun MainScreen(
 
         is MainUiState.Success -> {
             val isInZone = state.locationStatus is LocationStatus.InZone
-            
+            var selectedTab by rememberSaveable { mutableStateOf(0) }
+
             ZwlTheme(isInZone = isInZone) {
-                when (val status = state.locationStatus) {
-                    is LocationStatus.InZone -> {
-                        InZoneContent(
-                            forestDistrict = status.forestDistrict,
-                            fireRiskLevel = state.fireRiskLevel,
-                            onSwitchToMap = onNavigateToMap
-                        )
-                    }
-
-                    is LocationStatus.OutsideZone -> {
-                        OutsideZoneContent(
-                            nearestDistrict = status.nearestDistrict,
-                            distanceMeters = status.distanceMeters,
-                            bearingDegrees = status.bearingDegrees,
-                            azimuth = state.azimuth,
-                            onSwitchToMap = onNavigateToMap
-                        )
-                    }
-
-                    is LocationStatus.EmptyData -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background),
-                            contentAlignment = Alignment.Center
+                Scaffold(
+                    topBar = {
+                        TabRow(
+                            selectedTabIndex = selectedTab,
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
                         ) {
-                            Text("Inicjalizacja silnika przestrzennego...", color = Color.White)
+                            Tab(
+                                selected = selectedTab == 0,
+                                onClick = { selectedTab = 0 },
+                                text = { Text("STATUS", fontWeight = FontWeight.Bold) }
+                            )
+                            Tab(
+                                selected = selectedTab == 1,
+                                onClick = { selectedTab = 1 },
+                                text = { Text("MAPA", fontWeight = FontWeight.Bold) }
+                            )
+                        }
+                    }
+                ) { paddingValues ->
+                    Box(
+                        modifier = Modifier
+                            .padding(paddingValues)
+                            .fillMaxSize()
+                    ) {
+                        if (selectedTab == 0) {
+                            when (val status = state.locationStatus) {
+                                is LocationStatus.InZone -> {
+                                    InZoneContent(
+                                        forestDistrict = status.forestDistrict,
+                                        fireRiskLevel = state.fireRiskLevel,
+                                        onSwitchToMap = { selectedTab = 1 }
+                                    )
+                                }
+
+                                is LocationStatus.OutsideZone -> {
+                                    OutsideZoneContent(
+                                        nearestDistrict = status.nearestDistrict,
+                                        distanceMeters = status.distanceMeters,
+                                        bearingDegrees = status.bearingDegrees,
+                                        azimuth = state.azimuth,
+                                        onSwitchToMap = { selectedTab = 1 }
+                                    )
+                                }
+
+                                is LocationStatus.EmptyData -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(MaterialTheme.colorScheme.background),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("Inicjalizacja silnika przestrzennego...", color = Color.White)
+                                    }
+                                }
+                            }
+                        } else {
+                            MapViewContainer(
+                                viewModel = viewModel,
+                                zones = viewModel.zones,
+                                onCloseMap = { selectedTab = 0 }
+                            )
                         }
                     }
                 }
