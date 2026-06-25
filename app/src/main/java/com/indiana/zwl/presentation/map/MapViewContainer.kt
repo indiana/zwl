@@ -87,6 +87,9 @@ fun MapViewContainer(
     val selectedZone by viewModel.selectedZoneDetails.collectAsState()
     val selectedPoi by viewModel.selectedPoiDetails.collectAsState()
     val pois by viewModel.pois.collectAsState()
+    val showFireplaces by viewModel.showFireplaces.collectAsState()
+    val showShelters by viewModel.showShelters.collectAsState()
+    val showOthers by viewModel.showOthers.collectAsState()
 
     DisposableEffect(Unit) {
         onDispose {
@@ -373,11 +376,11 @@ fun MapViewContainer(
                         ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
                         shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.width(200.dp)
+                        modifier = Modifier.width(220.dp)
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
                                 text = "Ustawienia Mapy",
@@ -386,6 +389,65 @@ fun MapViewContainer(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             
+                            HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
+
+                            Text(
+                                text = "Wyświetlaj na mapie:",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = showShelters,
+                                        onCheckedChange = { viewModel.setShowShelters(it) },
+                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                    )
+                                    Text(
+                                        text = "Wiaty i wiatopodobne",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = showFireplaces,
+                                        onCheckedChange = { viewModel.setShowFireplaces(it) },
+                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                    )
+                                    Text(
+                                        text = "Miejsca na ognisko",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = showOthers,
+                                        onCheckedChange = { viewModel.setShowOthers(it) },
+                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                    )
+                                    Text(
+                                        text = "Inne punkty",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+
                             HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
 
                             if (isOnlineState) {

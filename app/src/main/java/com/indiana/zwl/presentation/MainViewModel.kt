@@ -17,6 +17,8 @@ import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +65,8 @@ class MainViewModel @Inject constructor(
     private val getFireRiskUseCase: GetFireRiskUseCase,
     private val getZonesUseCase: GetZonesUseCase,
     private val spatialEngine: SpatialEngine,
-    private val okHttpClient: OkHttpClient
+    private val okHttpClient: OkHttpClient,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
@@ -87,12 +90,54 @@ class MainViewModel @Inject constructor(
     private val _selectedPoiDetails = MutableStateFlow<SelectedPoiDetails?>(null)
     val selectedPoiDetails: StateFlow<SelectedPoiDetails?> = _selectedPoiDetails
 
-    val pois: StateFlow<List<PoiEntity>> = poiDao.getAllPois()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    private val sharedPrefs = context.getSharedPreferences("zwl_map_settings", Context.MODE_PRIVATE)
+
+    private val _showFireplaces = MutableStateFlow(sharedPrefs.getBoolean("show_fireplaces", true))
+    val showFireplaces: StateFlow<Boolean> = _showFireplaces
+
+    private val _showShelters = MutableStateFlow(sharedPrefs.getBoolean("show_shelters", true))
+    val showShelters: StateFlow<Boolean> = _showShelters
+
+    private val _showOthers = MutableStateFlow(sharedPrefs.getBoolean("show_others", true))
+    val showOthers: StateFlow<Boolean> = _showOthers
+
+    val pois: StateFlow<List<PoiEntity>> = combine(
+        poiDao.getAllPois(),
+        _showFireplaces,
+        _showShelters,
+        _showOthers
+    ) { allPois, showFireplaces, showShelters, showOthers ->
+        allPois.filter { poi ->
+            val nameLower = poi.name.lowercase(java.util.Locale.getDefault())
+            val isWiata = nameLower.contains("wiata") || nameLower.contains("altan") ||
+                    nameLower.contains("szałas") || nameLower.contains("shelter")
+            val isFireplace = nameLower.contains("ognis") || nameLower.contains("palenis") ||
+                    nameLower.contains("fire")
+            
+            if (isWiata) showShelters
+            else if (isFireplace) showFireplaces
+            else showOthers
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    fun setShowFireplaces(show: Boolean) {
+        _showFireplaces.value = show
+        sharedPrefs.edit().putBoolean("show_fireplaces", show).apply()
+    }
+
+    fun setShowShelters(show: Boolean) {
+        _showShelters.value = show
+        sharedPrefs.edit().putBoolean("show_shelters", show).apply()
+    }
+
+    fun setShowOthers(show: Boolean) {
+        _showOthers.value = show
+        sharedPrefs.edit().putBoolean("show_others", show).apply()
+    }
 
     private val _debugError = MutableStateFlow<String?>(null)
     val debugError: StateFlow<String?> = _debugError
