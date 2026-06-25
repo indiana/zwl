@@ -2,6 +2,7 @@ package com.indiana.zwl.domain.usecase
 
 import android.location.Location
 import com.indiana.zwl.data.remote.BdlFireApi
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 class GetFireRiskUseCase @Inject constructor(
@@ -14,6 +15,7 @@ class GetFireRiskUseCase @Inject constructor(
             val code = response.features?.firstOrNull()?.properties?.kod ?: -1
             Result.success(code)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
             Result.failure(e)
         }

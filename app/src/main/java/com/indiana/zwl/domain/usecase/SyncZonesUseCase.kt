@@ -7,6 +7,7 @@ import com.indiana.zwl.data.remote.BdlArcgisApi
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.util.GeoJsonConverter
 import org.locationtech.jts.io.WKTWriter
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 class SyncZonesUseCase @Inject constructor(
@@ -39,6 +40,7 @@ class SyncZonesUseCase @Inject constructor(
                 Result.failure(Exception("Otrzymano pustą listę stref od API ArcGis."))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
             Result.failure(e)
         }

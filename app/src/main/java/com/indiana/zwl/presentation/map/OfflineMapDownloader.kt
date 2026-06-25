@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
 import org.mapsforge.core.model.BoundingBox
 import org.mapsforge.core.model.Tile
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
@@ -130,6 +131,7 @@ object OfflineMapDownloader {
                 emit(DownloadStatus.Message("Błąd połączenia sieciowego podczas pobierania. Przerywam."))
                 break
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 e.printStackTrace()
             }
 

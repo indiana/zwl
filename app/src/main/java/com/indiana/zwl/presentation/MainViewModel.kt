@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import com.indiana.zwl.presentation.map.OfflineMapDownloader
 import com.indiana.zwl.presentation.map.DownloadStatus
@@ -129,6 +130,7 @@ class MainViewModel @Inject constructor(
                     if (hasLocationPermission) startTracking() else _uiState.value = MainUiState.PermissionsRequired
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.value = MainUiState.Error(e.message ?: "Wystąpił nieoczekiwany błąd podczas inicjalizacji danych.")
             }
         }
@@ -265,6 +267,7 @@ class MainViewModel @Inject constructor(
                             )
                             results[0].toDouble()
                         } catch (e: Throwable) {
+                            if (e is CancellationException) throw e
                             e.printStackTrace()
                             _debugError.value = "Distance calculation error:\n" + e.stackTraceToString()
                             null
@@ -303,6 +306,7 @@ class MainViewModel @Inject constructor(
                     )
                 }
             } catch (e: Throwable) {
+                if (e is CancellationException) throw e
                 e.printStackTrace()
                 _debugError.value = "selectZone coroutine error:\n" + e.stackTraceToString()
             }
