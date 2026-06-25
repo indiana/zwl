@@ -146,10 +146,13 @@ fun MapViewContainer(
                     0
                 ) {
                     override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            viewModel.selectPoi(poi)
+                        if (layerXY != null && tapXY != null && contains(layerXY, tapXY, mv)) {
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                viewModel.selectPoi(poi)
+                            }
+                            return true
                         }
-                        return true
+                        return false
                     }
                 }
                 marker.setDisplayModel(mv.model.displayModel)
