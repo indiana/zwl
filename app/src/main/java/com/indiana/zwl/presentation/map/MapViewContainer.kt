@@ -146,11 +146,15 @@ fun MapViewContainer(
                     0
                 ) {
                     override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
-                        if (layerXY != null && tapXY != null && contains(layerXY, tapXY, mv)) {
-                            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                viewModel.selectPoi(poi)
+                        if (tapXY != null) {
+                            val projection = org.mapsforge.map.util.MapViewProjection(mv)
+                            val center = projection.toPixels(LatLong(poi.latitude, poi.longitude))
+                            if (center != null && contains(center, tapXY, mv)) {
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    viewModel.selectPoi(poi)
+                                }
+                                return true
                             }
-                            return true
                         }
                         return false
                     }
