@@ -2,6 +2,7 @@ package com.indiana.zwl.di
 
 import android.content.Context
 import com.indiana.zwl.data.local.ZoneDao
+import com.indiana.zwl.data.local.PoiDao
 import com.indiana.zwl.data.local.ZwlDatabase
 import dagger.Module
 import dagger.Provides
@@ -23,5 +24,10 @@ object DatabaseModule {
     @Provides
     fun provideZoneDao(database: ZwlDatabase): ZoneDao {
         return database.zoneDao()
+    }
+
+    @Provides
+    fun providePoiDao(database: ZwlDatabase): PoiDao {
+        return database.poiDao()
     }
 }

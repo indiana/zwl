@@ -21,6 +21,8 @@ import com.indiana.zwl.presentation.MainUiState
 import com.indiana.zwl.presentation.MainViewModel
 import com.indiana.zwl.presentation.DownloadEvent
 import com.indiana.zwl.presentation.SelectedZoneDetails
+import com.indiana.zwl.presentation.SelectedPoiDetails
+import com.indiana.zwl.data.local.PoiEntity
 import com.indiana.zwl.presentation.theme.ZwlTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -81,10 +83,13 @@ fun MapViewContainer(
     val coroutineScope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
     val selectedZone by viewModel.selectedZoneDetails.collectAsState()
+    val selectedPoi by viewModel.selectedPoiDetails.collectAsState()
+    val pois by viewModel.pois.collectAsState()
 
     DisposableEffect(Unit) {
         onDispose {
             viewModel.clearSelectedZone()
+            viewModel.clearSelectedPoi()
         }
     }
 
@@ -94,6 +99,7 @@ fun MapViewContainer(
     var isSettingsOpen by remember { mutableStateOf(false) }
 
     var downloadLayerInstance by remember { mutableStateOf<TileDownloadLayer?>(null) }
+    var poiFolderOverlay by remember { mutableStateOf<org.mapsforge.map.layer.overlay.FolderOverlay?>(null) }
 
     LaunchedEffect(isActive, downloadLayerInstance) {
         downloadLayerInstance?.let { layer ->
@@ -103,6 +109,63 @@ fun MapViewContainer(
                 layer.onPause()
             }
         }
+    }
+
+    LaunchedEffect(pois, poiFolderOverlay, mapViewInstance) {
+        val folder = poiFolderOverlay ?: return@LaunchedEffect
+        val mv = mapViewInstance ?: return@LaunchedEffect
+        
+        folder.layers.clear()
+        
+        val shelterDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_shelter)
+        val fireplaceDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_fireplace)
+        
+        val shelterBitmap = shelterDrawable?.let { drawable ->
+            val width = (32 * context.resources.displayMetrics.density).toInt()
+            val height = (32 * context.resources.displayMetrics.density).toInt()
+            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            drawable.setBounds(0, 0, width, height)
+            androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#4E342E")) // Brown 800
+            drawable.draw(canvas)
+            AndroidGraphicFactory.convertToBitmap(bitmap)
+        }
+
+        val fireplaceBitmap = fireplaceDrawable?.let { drawable ->
+            val width = (32 * context.resources.displayMetrics.density).toInt()
+            val height = (32 * context.resources.displayMetrics.density).toInt()
+            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            drawable.setBounds(0, 0, width, height)
+            androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#E65100")) // Orange 900
+            drawable.draw(canvas)
+            AndroidGraphicFactory.convertToBitmap(bitmap)
+        }
+
+        for (poi in pois) {
+            val nameLower = poi.name.lowercase(java.util.Locale.getDefault())
+            val isWiata = nameLower.contains("wiata") || nameLower.contains("altan") ||
+                    nameLower.contains("szałas") || nameLower.contains("shelter")
+            
+            val bitmap = if (isWiata) shelterBitmap else fireplaceBitmap
+            if (bitmap != null) {
+                val marker = object : Marker(
+                    LatLong(poi.latitude, poi.longitude),
+                    bitmap,
+                    0,
+                    0
+                ) {
+                    override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            viewModel.selectPoi(poi)
+                        }
+                        return true
+                    }
+                }
+                folder.layers.add(marker)
+            }
+        }
+        folder.requestRedraw()
     }
 
     // Download state from ViewModel
@@ -175,7 +238,12 @@ fun MapViewContainer(
                     // Add background tap interceptor to clear selection when tapping empty areas of the map
                     this.layerManager.layers.add(MapTapInterceptor(ctx) {
                         viewModel.clearSelectedZone()
+                        viewModel.clearSelectedPoi()
                     })
+
+                    val poiFolder = org.mapsforge.map.layer.overlay.FolderOverlay()
+                    this.layerManager.layers.add(poiFolder)
+                    poiFolderOverlay = poiFolder
 
                     this.setCenter(LatLong(52.23, 21.01))
                     this.setZoomLevel(15)
@@ -452,6 +520,21 @@ fun MapViewContainer(
                 ZoneDetailsCard(
                     details = details,
                     onClose = { viewModel.clearSelectedZone() },
+                    modifier = Modifier.padding(bottom = 88.dp)
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = selectedPoi != null,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { height -> height / 2 }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { height -> height / 2 }),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            selectedPoi?.let { details ->
+                PoiDetailsCard(
+                    details = details,
+                    onClose = { viewModel.clearSelectedPoi() },
                     modifier = Modifier.padding(bottom = 88.dp)
                 )
             }

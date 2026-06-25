@@ -10,10 +10,15 @@ import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.Zone
+import com.indiana.zwl.data.local.PoiDao
+import com.indiana.zwl.data.local.PoiEntity
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
+import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,12 +47,19 @@ data class SelectedZoneDetails(
     val isLoadingFireRisk: Boolean
 )
 
+data class SelectedPoiDetails(
+    val poi: PoiEntity,
+    val distanceMeters: Double?
+)
+
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val zoneDao: ZoneDao,
+    private val poiDao: PoiDao,
     private val locationRepository: LocationRepository,
     private val compassRepository: CompassRepository,
     private val syncZonesUseCase: SyncZonesUseCase,
+    private val syncPoiUseCase: SyncPoiUseCase,
     private val getFireRiskUseCase: GetFireRiskUseCase,
     private val getZonesUseCase: GetZonesUseCase,
     private val spatialEngine: SpatialEngine,
@@ -71,6 +83,23 @@ class MainViewModel @Inject constructor(
 
     private val _selectedZoneDetails = MutableStateFlow<SelectedZoneDetails?>(null)
     val selectedZoneDetails: StateFlow<SelectedZoneDetails?> = _selectedZoneDetails
+
+    private val _selectedPoiDetails = MutableStateFlow<SelectedPoiDetails?>(null)
+    val selectedPoiDetails: StateFlow<SelectedPoiDetails?> = _selectedPoiDetails
+
+    val pois: StateFlow<List<PoiEntity>> = poiDao.getAllPois()
+        .mapLatest { allPois ->
+            allPois.filter { poi ->
+                val name = poi.name.lowercase(java.util.Locale.getDefault())
+                name.contains("wiata") || name.contains("altan") || name.contains("szałas") || name.contains("shelter") ||
+                name.contains("ognis") || name.contains("palenis") || name.contains("fire")
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     private val _debugError = MutableStateFlow<String?>(null)
     val debugError: StateFlow<String?> = _debugError
@@ -104,6 +133,17 @@ class MainViewModel @Inject constructor(
     private fun loadZonesAndInitializeEngine() {
         viewModelScope.launch {
             _uiState.value = MainUiState.Loading
+
+            // Asynchroniczne pobieranie punktów POI w tle
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    syncPoiUseCase()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    e.printStackTrace()
+                }
+            }
+
             try {
                 val count = withContext(Dispatchers.IO) { zoneDao.getZonesCount() }
                 if (count == 0) {
@@ -165,6 +205,17 @@ class MainViewModel @Inject constructor(
                 locationWithStatusFlow,
                 compassRepository.azimuthFlow
             ) { (location, status, fireRisk), azimuth ->
+                // Aktualizujemy odległość do wybranego POI na żywo w tle
+                _selectedPoiDetails.value?.let { currentPoiDetails ->
+                    val results = FloatArray(1)
+                    Location.distanceBetween(
+                        location.latitude, location.longitude,
+                        currentPoiDetails.poi.latitude, currentPoiDetails.poi.longitude,
+                        results
+                    )
+                    _selectedPoiDetails.value = currentPoiDetails.copy(distanceMeters = results[0].toDouble())
+                }
+
                 MainUiState.Success(
                     locationStatus = status,
                     fireRiskLevel = fireRisk,
@@ -246,6 +297,7 @@ class MainViewModel @Inject constructor(
     fun selectZone(zone: Zone, jtsPolygon: org.locationtech.jts.geom.Geometry, clickLat: Double, clickLon: Double) {
         viewModelScope.launch {
             try {
+                _selectedPoiDetails.value = null
                 val currentLoc = (uiState.value as? MainUiState.Success)?.let { successState ->
                     Location("").apply {
                         latitude = successState.latitude
@@ -325,6 +377,37 @@ class MainViewModel @Inject constructor(
 
     fun clearSelectedZone() {
         _selectedZoneDetails.value = null
+    }
+
+    fun selectPoi(poi: PoiEntity) {
+        viewModelScope.launch {
+            _selectedZoneDetails.value = null
+            val currentLoc = (uiState.value as? MainUiState.Success)?.let { successState ->
+                Location("").apply {
+                    latitude = successState.latitude
+                    longitude = successState.longitude
+                }
+            }
+
+            val distance = currentLoc?.let { loc ->
+                val results = FloatArray(1)
+                Location.distanceBetween(
+                    loc.latitude, loc.longitude,
+                    poi.latitude, poi.longitude,
+                    results
+                )
+                results[0].toDouble()
+            }
+
+            _selectedPoiDetails.value = SelectedPoiDetails(
+                poi = poi,
+                distanceMeters = distance
+            )
+        }
+    }
+
+    fun clearSelectedPoi() {
+        _selectedPoiDetails.value = null
     }
 }
 
