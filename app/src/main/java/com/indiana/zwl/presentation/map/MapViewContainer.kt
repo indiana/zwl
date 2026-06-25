@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -99,7 +101,7 @@ fun MapViewContainer(
     var isSettingsOpen by remember { mutableStateOf(false) }
 
     var downloadLayerInstance by remember { mutableStateOf<TileDownloadLayer?>(null) }
-    var poiFolderOverlay by remember { mutableStateOf<org.mapsforge.map.layer.overlay.FolderOverlay?>(null) }
+    var poiFolderOverlay by remember { mutableStateOf<org.mapsforge.map.layer.GroupLayer?>(null) }
 
     LaunchedEffect(isActive, downloadLayerInstance) {
         downloadLayerInstance?.let { layer ->
@@ -121,25 +123,13 @@ fun MapViewContainer(
         val fireplaceDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_fireplace)
         
         val shelterBitmap = shelterDrawable?.let { drawable ->
-            val width = (32 * context.resources.displayMetrics.density).toInt()
-            val height = (32 * context.resources.displayMetrics.density).toInt()
-            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(bitmap)
-            drawable.setBounds(0, 0, width, height)
             androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#4E342E")) // Brown 800
-            drawable.draw(canvas)
-            AndroidGraphicFactory.convertToBitmap(bitmap)
+            AndroidGraphicFactory.convertToBitmap(drawable)
         }
 
         val fireplaceBitmap = fireplaceDrawable?.let { drawable ->
-            val width = (32 * context.resources.displayMetrics.density).toInt()
-            val height = (32 * context.resources.displayMetrics.density).toInt()
-            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(bitmap)
-            drawable.setBounds(0, 0, width, height)
             androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#E65100")) // Orange 900
-            drawable.draw(canvas)
-            AndroidGraphicFactory.convertToBitmap(bitmap)
+            AndroidGraphicFactory.convertToBitmap(drawable)
         }
 
         for (poi in pois) {
@@ -241,7 +231,7 @@ fun MapViewContainer(
                         viewModel.clearSelectedPoi()
                     })
 
-                    val poiFolder = org.mapsforge.map.layer.overlay.FolderOverlay()
+                    val poiFolder = org.mapsforge.map.layer.GroupLayer()
                     this.layerManager.layers.add(poiFolder)
                     poiFolderOverlay = poiFolder
 
