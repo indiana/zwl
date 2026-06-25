@@ -31,17 +31,14 @@ fun rememberIsOnline(): State<Boolean> {
                 value = true
             }
             override fun onLost(network: Network) {
-                value = isOnline(context)
+                value = false
             }
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-                value = isOnline(context)
+                value = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             }
         }
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
         try {
-            connectivityManager.registerNetworkCallback(request, callback)
+            connectivityManager.registerDefaultNetworkCallback(callback)
         } catch (e: Exception) {
             // Fallback
         }
