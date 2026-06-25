@@ -93,12 +93,14 @@ fun MapViewContainer(
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
 
-    LaunchedEffect(isActive, mapViewInstance) {
-        mapViewInstance?.let { mapView ->
+    var downloadLayerInstance by remember { mutableStateOf<TileDownloadLayer?>(null) }
+
+    LaunchedEffect(isActive, downloadLayerInstance) {
+        downloadLayerInstance?.let { layer ->
             if (isActive) {
-                mapView.onResume()
+                layer.onResume()
             } else {
-                mapView.onPause()
+                layer.onPause()
             }
         }
     }
@@ -168,6 +170,7 @@ fun MapViewContainer(
                     )
                     this.layerManager.layers.add(downloadLayer)
                     downloadLayer.onResume()
+                    downloadLayerInstance = downloadLayer
 
                     // Add background tap interceptor to clear selection when tapping empty areas of the map
                     this.layerManager.layers.add(MapTapInterceptor(ctx) {
