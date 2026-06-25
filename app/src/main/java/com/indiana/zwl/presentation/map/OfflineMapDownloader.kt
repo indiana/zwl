@@ -52,7 +52,8 @@ object OfflineMapDownloader {
     fun downloadArea(
         bbox: BoundingBox,
         tileSize: Int,
-        tileCache: TileCache
+        tileCache: TileCache,
+        client: okhttp3.OkHttpClient
     ): Flow<DownloadStatus> = flow {
         val zoomLevels = 10..16
         val tiles = mutableListOf<Tile>()
@@ -88,10 +89,6 @@ object OfflineMapDownloader {
         emit(DownloadStatus.Start(total))
 
         val tileSource = createOnlineTileSource()
-        val client = okhttp3.OkHttpClient.Builder()
-            .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-            .build()
 
         var successCount = 0
         for ((index, tile) in tiles.withIndex()) {

@@ -25,6 +25,8 @@ class MotionDetector(context: Context) {
         val accelBuffer = FloatArray(BUFFER_SIZE)
         var bufferIndex = 0
         var isBufferFull = false
+        var runningSum = 0.0
+        var runningSumOfSquares = 0.0
 
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
@@ -32,30 +34,29 @@ class MotionDetector(context: Context) {
                     val x = event.values[0]
                     val y = event.values[1]
                     val z = event.values[2]
-                    val magnitude = sqrt(x * x + y * y + z * z)
+                    val magnitude = sqrt((x * x + y * y + z * z).toDouble())
 
-                    accelBuffer[bufferIndex] = magnitude
-                    bufferIndex++
-                    if (bufferIndex >= accelBuffer.size) {
-                        bufferIndex = 0
-                        isBufferFull = true
+                    if (isBufferFull) {
+                        val oldValue = accelBuffer[bufferIndex].toDouble()
+                        runningSum = runningSum - oldValue + magnitude
+                        runningSumOfSquares = runningSumOfSquares - (oldValue * oldValue) + (magnitude * magnitude)
+                        accelBuffer[bufferIndex] = magnitude.toFloat()
+                        bufferIndex = (bufferIndex + 1) % BUFFER_SIZE
+                    } else {
+                        accelBuffer[bufferIndex] = magnitude.toFloat()
+                        runningSum += magnitude
+                        runningSumOfSquares += magnitude * magnitude
+                        bufferIndex++
+                        if (bufferIndex >= BUFFER_SIZE) {
+                            bufferIndex = 0
+                            isBufferFull = true
+                        }
                     }
 
                     if (isBufferFull) {
-                        var sum = 0f
-                        for (valMag in accelBuffer) {
-                            sum += valMag
-                        }
-                        val mean = sum / accelBuffer.size
-
-                        var varianceSum = 0f
-                        for (valMag in accelBuffer) {
-                            val diff = valMag - mean
-                            varianceSum += diff * diff
-                        }
-                        val variance = varianceSum / accelBuffer.size
-
-                        trySend(variance > VARIANCE_THRESHOLD)
+                        val mean = runningSum / BUFFER_SIZE
+                        val variance = (runningSumOfSquares / BUFFER_SIZE) - (mean * mean)
+                        trySend(variance.toFloat() > VARIANCE_THRESHOLD)
                     }
                 }
             }

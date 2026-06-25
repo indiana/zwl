@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
+import okhttp3.OkHttpClient
 import javax.inject.Inject
 import com.indiana.zwl.presentation.map.OfflineMapDownloader
 import com.indiana.zwl.presentation.map.DownloadStatus
@@ -49,7 +50,8 @@ class MainViewModel @Inject constructor(
     private val syncZonesUseCase: SyncZonesUseCase,
     private val getFireRiskUseCase: GetFireRiskUseCase,
     private val getZonesUseCase: GetZonesUseCase,
-    private val spatialEngine: SpatialEngine
+    private val spatialEngine: SpatialEngine,
+    private val okHttpClient: OkHttpClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
@@ -214,7 +216,7 @@ class MainViewModel @Inject constructor(
 
     fun downloadMapArea(bbox: BoundingBox, tileSize: Int, tileCache: TileCache) {
         viewModelScope.launch {
-            OfflineMapDownloader.downloadArea(bbox, tileSize, tileCache).collect { status ->
+            OfflineMapDownloader.downloadArea(bbox, tileSize, tileCache, okHttpClient).collect { status ->
                 when (status) {
                     is DownloadStatus.Start -> {
                         _isDownloadingArea.value = true
