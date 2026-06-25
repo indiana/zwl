@@ -152,6 +152,7 @@ fun MapViewContainer(
                         return true
                     }
                 }
+                marker.setDisplayModel(mv.model.displayModel)
                 folder.layers.add(marker)
             }
         }
