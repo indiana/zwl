@@ -74,7 +74,8 @@ import androidx.compose.material.icons.filled.Delete
 @Composable
 fun MapViewContainer(
     viewModel: MainViewModel,
-    zones: List<Zone>
+    zones: List<Zone>,
+    isActive: Boolean
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -91,6 +92,16 @@ fun MapViewContainer(
     var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isActive, mapViewInstance) {
+        mapViewInstance?.let { mapView ->
+            if (isActive) {
+                mapView.onResume()
+            } else {
+                mapView.onPause()
+            }
+        }
+    }
 
     // Download state from ViewModel
     val isDownloadingArea by viewModel.isDownloadingArea.collectAsState()

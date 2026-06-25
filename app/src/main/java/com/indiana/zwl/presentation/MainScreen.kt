@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.alpha
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.indiana.zwl.domain.model.LocationStatus
@@ -254,7 +255,12 @@ fun MainScreen(
                             .padding(paddingValues)
                             .fillMaxSize()
                     ) {
-                        if (selectedTab == 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .alpha(if (selectedTab == 0) 1f else 0f)
+                                .then(if (selectedTab == 0) Modifier else Modifier.size(0.dp))
+                        ) {
                             when (val status = state.locationStatus) {
                                 is LocationStatus.InZone -> {
                                     InZoneContent(
@@ -283,10 +289,18 @@ fun MainScreen(
                                     }
                                 }
                             }
-                        } else {
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .alpha(if (selectedTab == 1) 1f else 0f)
+                                .then(if (selectedTab == 1) Modifier else Modifier.size(0.dp))
+                        ) {
                             MapViewContainer(
                                 viewModel = viewModel,
-                                zones = viewModel.zones
+                                zones = viewModel.zones,
+                                isActive = selectedTab == 1
                             )
                         }
                     }
