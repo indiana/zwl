@@ -121,6 +121,7 @@ fun MapViewContainer(
         
         val shelterDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_shelter)
         val fireplaceDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_fireplace)
+        val genericDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_generic_point)
         
         val shelterBitmap = shelterDrawable?.let { drawable ->
             androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#4E342E")) // Brown 800
@@ -132,12 +133,25 @@ fun MapViewContainer(
             AndroidGraphicFactory.convertToBitmap(drawable)
         }
 
+        val genericBitmap = genericDrawable?.let { drawable ->
+            androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#1976D2")) // Blue 700
+            AndroidGraphicFactory.convertToBitmap(drawable)
+        }
+
         for (poi in pois) {
             val nameLower = poi.name.lowercase(java.util.Locale.getDefault())
             val isWiata = nameLower.contains("wiata") || nameLower.contains("altan") ||
                     nameLower.contains("szałas") || nameLower.contains("shelter")
+            val isFireplace = nameLower.contains("ognis") || nameLower.contains("palenis") ||
+                    nameLower.contains("fire")
             
-            val bitmap = if (isWiata) shelterBitmap else fireplaceBitmap
+            val bitmap = if (isWiata) {
+                shelterBitmap
+            } else if (isFireplace) {
+                fireplaceBitmap
+            } else {
+                genericBitmap
+            }
             if (bitmap != null) {
                 val marker = object : Marker(
                     LatLong(poi.latitude, poi.longitude),

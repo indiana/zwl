@@ -88,13 +88,6 @@ class MainViewModel @Inject constructor(
     val selectedPoiDetails: StateFlow<SelectedPoiDetails?> = _selectedPoiDetails
 
     val pois: StateFlow<List<PoiEntity>> = poiDao.getAllPois()
-        .mapLatest { allPois ->
-            allPois.filter { poi ->
-                val name = poi.name.lowercase(java.util.Locale.getDefault())
-                name.contains("wiata") || name.contains("altan") || name.contains("szałas") || name.contains("shelter") ||
-                name.contains("ognis") || name.contains("palenis") || name.contains("fire")
-            }
-        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
