@@ -253,10 +253,6 @@ fun MapViewContainer(
                         viewModel.clearSelectedPoi()
                     })
 
-                    val poiFolder = org.mapsforge.map.layer.GroupLayer()
-                    this.layerManager.layers.add(poiFolder)
-                    poiFolderOverlay = poiFolder
-
                     this.setCenter(LatLong(52.23, 21.01))
                     this.setZoomLevel(15)
 
@@ -271,6 +267,10 @@ fun MapViewContainer(
                             viewModel.setDebugError(errorMsg)
                         }
                     )
+
+                    val poiFolder = org.mapsforge.map.layer.GroupLayer()
+                    this.layerManager.layers.add(poiFolder)
+                    poiFolderOverlay = poiFolder
 
                     // Initialize user location marker
                     val userLocBitmap = createUserLocationArrowBitmap(ctx)
