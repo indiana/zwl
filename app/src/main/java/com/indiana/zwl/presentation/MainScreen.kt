@@ -23,6 +23,13 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.presentation.theme.ZwlTheme
+import com.indiana.zwl.presentation.theme.DarkForestBackground
+import com.indiana.zwl.presentation.theme.ForestGreenAccent
+import com.indiana.zwl.presentation.theme.ForestGreenText
+import com.indiana.zwl.presentation.theme.ErrorDarkBackground
+import com.indiana.zwl.presentation.theme.ErrorRedAccent
+import com.indiana.zwl.presentation.theme.ErrorRedText
+import com.indiana.zwl.presentation.theme.ErrorRedButton
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.indiana.zwl.presentation.map.MapViewContainer
 import androidx.compose.material.icons.Icons
@@ -87,7 +94,7 @@ fun MainScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF0F1B10))
+                    .background(DarkForestBackground)
                     .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -96,7 +103,7 @@ fun MainScreen(
                     verticalArrangement = Arrangement.Center
                 ) {
                     CircularProgressIndicator(
-                        color = Color(0xFF81C784),
+                        color = ForestGreenAccent,
                         strokeWidth = 4.dp,
                         modifier = Modifier.size(48.dp)
                     )
@@ -105,14 +112,14 @@ fun MainScreen(
                         text = "Zanocuj w Lesie",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF81C784),
+                        color = ForestGreenAccent,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Inicjalizacja silnika przestrzennego i lokalizacji...",
                         fontSize = 14.sp,
-                        color = Color(0xFFA5D6A7),
+                        color = ForestGreenText,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -123,7 +130,7 @@ fun MainScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF261010))
+                    .background(ErrorDarkBackground)
                     .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -135,20 +142,20 @@ fun MainScreen(
                         text = "Wystąpił błąd",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFEF5350)
+                        color = ErrorRedAccent
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = state.message,
                         fontSize = 15.sp,
-                        color = Color(0xFFFFCDD2),
+                        color = ErrorRedText,
                         textAlign = TextAlign.Center,
                         lineHeight = 22.sp
                     )
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
                         onClick = { viewModel.retryDatabaseLoad() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                        colors = ButtonDefaults.buttonColors(containerColor = ErrorRedButton),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text("Spróbuj ponownie", color = Color.White)
@@ -172,7 +179,7 @@ fun MainScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF261010))
+                    .background(ErrorDarkBackground)
                     .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -184,20 +191,20 @@ fun MainScreen(
                         text = "Brak Danych Lokalnych",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFEF5350)
+                        color = ErrorRedAccent
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Brak dostępu do internetu i brak zapisanych lokalnie danych o strefach Zanocuj w Lesie.\n\nPołącz się z siecią i spróbuj ponownie, aby pobrać wymaganą bazę danych stref.",
                         fontSize = 15.sp,
-                        color = Color(0xFFFFCDD2),
+                        color = ErrorRedText,
                         textAlign = TextAlign.Center,
                         lineHeight = 22.sp
                     )
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
                         onClick = { viewModel.retryDatabaseLoad() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                        colors = ButtonDefaults.buttonColors(containerColor = ErrorRedButton),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text("Spróbuj ponownie", color = Color.White)

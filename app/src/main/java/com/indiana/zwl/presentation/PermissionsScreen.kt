@@ -12,20 +12,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.indiana.zwl.presentation.theme.DarkForestBackground
+import com.indiana.zwl.presentation.theme.DarkForestSurface
+import com.indiana.zwl.presentation.theme.ForestGreenSubtext
+import com.indiana.zwl.presentation.theme.GreenPrimary
 
 @Composable
 fun PermissionsScreen(onRequestPermission: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0F1B10)),
+            .background(DarkForestBackground),
         contentAlignment = Alignment.Center
     ) {
         Card(
             modifier = Modifier
                 .padding(24.dp)
                 .fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF192F1B)),
+            colors = CardDefaults.cardColors(containerColor = DarkForestSurface),
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(
@@ -47,7 +51,7 @@ fun PermissionsScreen(onRequestPermission: () -> Unit) {
                 Text(
                     text = "Aplikacja \"Zanocuj w Lesie\" wymaga dostępu do precyzyjnej lokalizacji GPS w celu sprawdzania czy znajdujesz się w legalnej strefie biwakowania oraz do nawigacji kompasem offline w terenie.",
                     fontSize = 14.sp,
-                    color = Color(0xFFC8E6C9),
+                    color = ForestGreenSubtext,
                     textAlign = TextAlign.Center,
                     lineHeight = 20.sp
                 )
@@ -56,7 +60,7 @@ fun PermissionsScreen(onRequestPermission: () -> Unit) {
 
                 Button(
                     onClick = onRequestPermission,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                    colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
                 ) {
