@@ -281,7 +281,11 @@ class MainViewModel @Inject constructor(
             lastFireRiskLocation = location
         } else {
             val exception = result.exceptionOrNull()
-            _debugError.value = "fetchFireHazard API error:\n" + exception?.stackTraceToString()
+            if (!isNetworkException(exception)) {
+                _debugError.value = "fetchFireHazard API error:\n" + exception?.stackTraceToString()
+            } else {
+                exception?.printStackTrace()
+            }
             if (isNetworkException(exception)) {
                 currentFireRisk = -2
             } else {
@@ -383,7 +387,11 @@ class MainViewModel @Inject constructor(
                     fireRiskResult.getOrDefault(-1)
                 } else {
                     val exception = fireRiskResult.exceptionOrNull()
-                    _debugError.value = "selectZone fire risk API error:\n" + exception?.stackTraceToString()
+                    if (!isNetworkException(exception)) {
+                        _debugError.value = "selectZone fire risk API error:\n" + exception?.stackTraceToString()
+                    } else {
+                        exception?.printStackTrace()
+                    }
                     if (isNetworkException(exception)) {
                         -2
                     } else {
