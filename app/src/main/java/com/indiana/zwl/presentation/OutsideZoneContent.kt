@@ -1,5 +1,7 @@
 package com.indiana.zwl.presentation
 
+import com.indiana.zwl.presentation.theme.*
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -57,11 +59,11 @@ fun OutsideZoneContent(
             Box(
                 modifier = Modifier
                     .size(100.dp)
-                    .background(Color(0xFFFFB300).copy(alpha = 0.1f), RoundedCornerShape(50.dp))
-                    .border(3.dp, Color(0xFFFBC02D), RoundedCornerShape(50.dp)),
+                    .background(AmberAccent.copy(alpha = 0.1f), RoundedCornerShape(50.dp))
+                    .border(3.dp, YellowPrimary, RoundedCornerShape(50.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("!", fontSize = 48.sp, fontWeight = FontWeight.Black, color = Color(0xFFFBC02D))
+                Text("!", fontSize = 48.sp, fontWeight = FontWeight.Black, color = YellowPrimary)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -107,7 +109,7 @@ fun OutsideZoneContent(
                         lineTo(0f, size.height)
                         close()
                     }
-                    drawPath(path, color = Color(0xFFFBC02D))
+                    drawPath(path, color = YellowPrimary)
                 }
             }
         }
@@ -146,7 +148,7 @@ fun OutsideZoneContent(
                 Text(
                     text = formatDistance(distanceMeters),
                     fontSize = 16.sp,
-                    color = Color(0xFFFFF176),
+                    color = RiskLevelLow,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center
                 )

@@ -1,5 +1,7 @@
 package com.indiana.zwl.presentation
 
+import com.indiana.zwl.presentation.theme.*
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -43,11 +45,11 @@ fun InZoneContent(
             Box(
                 modifier = Modifier
                     .size(100.dp)
-                    .background(Color(0xFF2E7D32).copy(alpha = 0.2f), RoundedCornerShape(50.dp))
-                    .border(3.dp, Color(0xFF81C784), RoundedCornerShape(50.dp)),
+                    .background(GreenPrimary.copy(alpha = 0.2f), RoundedCornerShape(50.dp))
+                    .border(3.dp, ForestGreenAccent, RoundedCornerShape(50.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("ZwL", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C784))
+                Text("ZwL", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = ForestGreenAccent)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -66,7 +68,7 @@ fun InZoneContent(
             Text(
                 text = forestDistrict,
                 fontSize = 18.sp,
-                color = Color(0xFFA5D6A7),
+                color = ForestGreenText,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center
             )
@@ -106,11 +108,11 @@ fun InZoneContent(
                 }
                 
                 val riskColor = when (fireRiskLevel) {
-                    0, 10 -> Color(0xFF81C784)
-                    1, 11 -> Color(0xFFFFF176)
-                    2, 12 -> Color(0xFFFFB74D)
-                    3, 13 -> Color(0xFFE57373)
-                    else -> Color(0xFFB0BEC5)
+                    0, 10 -> RiskLevelNone
+                    1, 11 -> RiskLevelLow
+                    2, 12 -> RiskLevelMedium
+                    3, 13 -> RiskLevelHigh
+                    else -> RiskLevelUnknown
                 }
 
                 Text(
@@ -138,30 +140,30 @@ fun InZoneContent(
                 when (fireRiskLevel) {
                     0, 1, 2 -> {
                         Surface(
-                            color = Color(0xFF2E7D32).copy(alpha = 0.15f),
+                            color = GreenPrimary.copy(alpha = 0.15f),
                             shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, Color(0xFF2E7D32))
+                            border = BorderStroke(1.dp, GreenPrimary)
                         ) {
                             Text(
                                 text = "DOZWOLONE",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF81C784),
+                                color = ForestGreenAccent,
                                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
                             )
                         }
                     }
                     10, 11, 12 -> {
                         Surface(
-                            color = Color(0xFF2E7D32).copy(alpha = 0.15f),
+                            color = GreenPrimary.copy(alpha = 0.15f),
                             shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, Color(0xFF2E7D32))
+                            border = BorderStroke(1.dp, GreenPrimary)
                         ) {
                             Text(
                                 text = "DOZWOLONE (dane archiwalne)",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF81C784),
+                                color = ForestGreenAccent,
                                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
                             )
                         }
@@ -179,16 +181,16 @@ fun InZoneContent(
                         )
 
                         Surface(
-                            color = Color(0xFFC62828).copy(alpha = 0.2f * pulseAlpha),
+                            color = ErrorRedButton.copy(alpha = 0.2f * pulseAlpha),
                             shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(2.dp, Color(0xFFC62828).copy(alpha = pulseAlpha)),
+                            border = BorderStroke(2.dp, ErrorRedButton.copy(alpha = pulseAlpha)),
                             modifier = Modifier.alpha(pulseAlpha)
                         ) {
                             Text(
                                 text = "BEZWZGLĘDNY ZAKAZ",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFEF5350),
+                                color = ErrorRedAccent,
                                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
                             )
                         }
@@ -206,31 +208,31 @@ fun InZoneContent(
                         )
 
                         Surface(
-                            color = Color(0xFFC62828).copy(alpha = 0.2f * pulseAlpha),
+                            color = ErrorRedButton.copy(alpha = 0.2f * pulseAlpha),
                             shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(2.dp, Color(0xFFC62828).copy(alpha = pulseAlpha)),
+                            border = BorderStroke(2.dp, ErrorRedButton.copy(alpha = pulseAlpha)),
                             modifier = Modifier.alpha(pulseAlpha)
                         ) {
                             Text(
                                 text = "BEZWZGLĘDNY ZAKAZ (dane archiwalne)",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFEF5350),
+                                color = ErrorRedAccent,
                                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
                             )
                         }
                     }
                     else -> {
                         Surface(
-                            color = Color(0xFFF57F17).copy(alpha = 0.15f),
+                            color = YellowSecondary.copy(alpha = 0.15f),
                             shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, Color(0xFFF57F17))
+                            border = BorderStroke(1.dp, YellowSecondary)
                         ) {
                             Text(
                                 text = "WARUNKOWO DOZWOLONE\n(brak aktualnych danych pożarowych)",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFFF176),
+                                color = RiskLevelLow,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                             )

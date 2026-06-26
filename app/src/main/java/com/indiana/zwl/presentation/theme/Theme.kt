@@ -29,6 +29,16 @@ val ErrorRedAccent = Color(0xFFEF5350)
 val ErrorRedText = Color(0xFFFFCDD2)
 val ErrorRedButton = Color(0xFFC62828)
 
+// Fire Risk Level Colors
+val RiskLevelNone = Color(0xFF81C784)
+val RiskLevelLow = Color(0xFFFFF176)
+val RiskLevelMedium = Color(0xFFFFB74D)
+val RiskLevelHigh = Color(0xFFE57373)
+val RiskLevelUnknown = Color(0xFFB0BEC5)
+
+// Additional UI Colors
+val AmberAccent = Color(0xFFFFB300)
+
 private val InZoneColorScheme = darkColorScheme(
     primary = GreenPrimary,
     secondary = GreenSecondary,

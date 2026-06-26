@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.presentation.SelectedZoneDetails
+import com.indiana.zwl.presentation.theme.*
 
 @Composable
 fun ZoneDetailsCard(
@@ -134,11 +135,11 @@ fun ZoneDetailsCard(
                                 else -> "Brak danych"
                             }
                             val riskColor = when (details.fireRiskLevel) {
-                                0, 10 -> Color(0xFF81C784)
-                                1, 11 -> Color(0xFFFFF176)
-                                2, 12 -> Color(0xFFFFB74D)
-                                3, 13 -> Color(0xFFE57373)
-                                else -> Color(0xFFB0BEC5)
+                                0, 10 -> RiskLevelNone
+                                1, 11 -> RiskLevelLow
+                                2, 12 -> RiskLevelMedium
+                                3, 13 -> RiskLevelHigh
+                                else -> RiskLevelUnknown
                             }
                             Text(
                                 text = riskText,
@@ -186,11 +187,11 @@ fun ZoneDetailsCard(
                             else -> "WARUNKOWO DOZWOLONE (brak danych)"
                         }
                         val permissionColor = when (details.fireRiskLevel) {
-                            0, 1, 2 -> Color(0xFF81C784)
-                            10, 11, 12 -> Color(0xFF81C784)
-                            3 -> Color(0xFFEF5350)
-                            13 -> Color(0xFFEF5350)
-                            else -> Color(0xFFFFF176)
+                            0, 1, 2 -> ForestGreenAccent
+                            10, 11, 12 -> ForestGreenAccent
+                            3 -> ErrorRedAccent
+                            13 -> ErrorRedAccent
+                            else -> RiskLevelLow
                         }
                         Text(
                             text = permissionText,
