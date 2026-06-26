@@ -1,6 +1,6 @@
-# <img src="assets/app_icon.png" width="48" align="center" alt="App Icon"/> Zanocuj w Lesie – Lokator
+# <img src="assets/app_icon.png" width="48" align="center" alt="App Icon"/> Zanocuj w Lesie
 
-**Zanocuj w Lesie – Lokator** to nowoczesna aplikacja mobilna na system Android, stworzona z myślą o miłośnikach bushcraftu, survivalu i turystyki leśnej. Jej głównym celem jest natychmiastowe i w pełni niezawodne (również w trybie offline) udzielenie odpowiedzi na pytanie, czy użytkownik znajduje się wewnątrz oficjalnej strefy programu **„Zanocuj w lesie” (ZwL)** Lasów Państwowych, oraz jakie zasady bezpieczeństwa pożarowego obowiązują w danej lokalizacji.
+**Zanocuj w Lesie** to nowoczesna aplikacja mobilna na system Android, stworzona z myślą o miłośnikach bushcraftu, survivalu i turystyki leśnej. Jej głównym celem jest natychmiastowe i w pełni niezawodne (również w trybie offline) udzielenie odpowiedzi na pytanie, czy użytkownik znajduje się wewnątrz oficjalnej strefy programu **„Zanocuj w lesie” (ZwL)** Lasów Państwowych, oraz jakie zasady bezpieczeństwa pożarowego obowiązują w danej lokalizacji.
 
 ---
 
