@@ -120,8 +120,6 @@ fun MapViewContainer(
         val folder = poiFolderOverlay ?: return@LaunchedEffect
         val mv = mapViewInstance ?: return@LaunchedEffect
         
-        folder.layers.clear()
-        
         val shelterDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_shelter)
         val fireplaceDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_fireplace)
         val genericDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_generic_point)
@@ -141,6 +139,7 @@ fun MapViewContainer(
             AndroidGraphicFactory.convertToBitmap(drawable)
         }
 
+        val newMarkers = mutableListOf<Marker>()
         for (poi in pois) {
             val nameLower = poi.name.lowercase(java.util.Locale.getDefault())
             val isWiata = nameLower.contains("wiata") || nameLower.contains("altan") ||
@@ -177,8 +176,13 @@ fun MapViewContainer(
                     }
                 }
                 marker.setDisplayModel(mv.model.displayModel)
-                folder.layers.add(marker)
+                newMarkers.add(marker)
             }
+        }
+
+        synchronized(folder) {
+            folder.layers.clear()
+            folder.layers.addAll(newMarkers)
         }
         folder.requestRedraw()
     }
