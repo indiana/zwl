@@ -7,5 +7,7 @@ import androidx.room.PrimaryKey
 data class ZoneEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val forestDistrict: String,
-    val geometryWkt: String
+    val geometryWkt: String,
+    val fireRiskLevel: Int? = null,
+    val fireRiskTimestamp: Long? = null
 )

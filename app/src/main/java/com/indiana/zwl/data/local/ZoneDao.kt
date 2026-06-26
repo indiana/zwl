@@ -18,4 +18,10 @@ interface ZoneDao {
 
     @Query("DELETE FROM zones")
     suspend fun clearAll()
+
+    @Query("UPDATE zones SET fireRiskLevel = :fireRiskLevel, fireRiskTimestamp = :timestamp WHERE forestDistrict = :forestDistrict")
+    suspend fun updateFireRisk(forestDistrict: String, fireRiskLevel: Int, timestamp: Long)
+
+    @Query("UPDATE zones SET fireRiskLevel = :fireRiskLevel, fireRiskTimestamp = :timestamp WHERE id = :zoneId")
+    suspend fun updateFireRiskById(zoneId: Long, fireRiskLevel: Int, timestamp: Long)
 }

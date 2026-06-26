@@ -7,7 +7,9 @@ fun ZoneEntity.toDomainModel(): Zone {
     return Zone(
         id = this.id,
         forestDistrict = this.forestDistrict,
-        geometryWkt = this.geometryWkt
+        geometryWkt = this.geometryWkt,
+        fireRiskLevel = this.fireRiskLevel,
+        fireRiskTimestamp = this.fireRiskTimestamp
     )
 }
 
@@ -15,6 +17,8 @@ fun Zone.toEntity(): ZoneEntity {
     return ZoneEntity(
         id = this.id,
         forestDistrict = this.forestDistrict,
-        geometryWkt = this.geometryWkt
+        geometryWkt = this.geometryWkt,
+        fireRiskLevel = this.fireRiskLevel,
+        fireRiskTimestamp = this.fireRiskTimestamp
     )
 }

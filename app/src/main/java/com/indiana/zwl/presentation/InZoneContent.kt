@@ -97,15 +97,19 @@ fun InZoneContent(
                     1 -> "STOPNIEŃ 1 (Niskie zagrożenie)"
                     2 -> "STOPNIEŃ 2 (Średnie zagrożenie)"
                     3 -> "STOPNIEŃ 3 (BARDZO WYSOKIE)"
+                    10 -> "STOPNIEŃ 0 (Brak - archiwalne offline)"
+                    11 -> "STOPNIEŃ 1 (Niskie - archiwalne offline)"
+                    12 -> "STOPNIEŃ 2 (Średnie - archiwalne offline)"
+                    13 -> "STOPNIEŃ 3 (WYSOKIE - archiwalne offline)"
                     -2 -> "Status pożarowy: Nieznany (brak sieci)"
                     else -> "Status pożarowy: Brak danych"
                 }
                 
                 val riskColor = when (fireRiskLevel) {
-                    0 -> Color(0xFF81C784)
-                    1 -> Color(0xFFFFF176)
-                    2 -> Color(0xFFFFB74D)
-                    3 -> Color(0xFFE57373)
+                    0, 10 -> Color(0xFF81C784)
+                    1, 11 -> Color(0xFFFFF176)
+                    2, 12 -> Color(0xFFFFB74D)
+                    3, 13 -> Color(0xFFE57373)
                     else -> Color(0xFFB0BEC5)
                 }
 
@@ -147,6 +151,21 @@ fun InZoneContent(
                             )
                         }
                     }
+                    10, 11, 12 -> {
+                        Surface(
+                            color = Color(0xFF2E7D32).copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFF2E7D32))
+                        ) {
+                            Text(
+                                text = "DOZWOLONE (dane archiwalne)",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF81C784),
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
+                            )
+                        }
+                    }
                     3 -> {
                         val infiniteTransition = rememberInfiniteTransition(label = " Stove Warning Pulse")
                         val pulseAlpha by infiniteTransition.animateFloat(
@@ -168,6 +187,33 @@ fun InZoneContent(
                             Text(
                                 text = "BEZWZGLĘDNY ZAKAZ",
                                 fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFEF5350),
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
+                            )
+                        }
+                    }
+                    13 -> {
+                        val infiniteTransition = rememberInfiniteTransition(label = " Stove Warning Pulse Offline")
+                        val pulseAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.4f,
+                            targetValue = 1.0f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(800, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "PulseAlpha"
+                        )
+
+                        Surface(
+                            color = Color(0xFFC62828).copy(alpha = 0.2f * pulseAlpha),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(2.dp, Color(0xFFC62828).copy(alpha = pulseAlpha)),
+                            modifier = Modifier.alpha(pulseAlpha)
+                        ) {
+                            Text(
+                                text = "BEZWZGLĘDNY ZAKAZ (dane archiwalne)",
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFEF5350),
                                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)

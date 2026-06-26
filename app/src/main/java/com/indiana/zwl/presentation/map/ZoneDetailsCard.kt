@@ -126,14 +126,18 @@ fun ZoneDetailsCard(
                                 1 -> "STOPIEŃ 1 (Niskie)"
                                 2 -> "STOPIEŃ 2 (Średnie)"
                                 3 -> "STOPIEŃ 3 (WYSOKIE)"
+                                10 -> "STOPIEŃ 0 (Brak - offline)"
+                                11 -> "STOPIEŃ 1 (Niskie - offline)"
+                                12 -> "STOPIEŃ 2 (Średnie - offline)"
+                                13 -> "STOPIEŃ 3 (WYSOKIE - offline)"
                                 -2 -> "Nieznany (brak sieci)"
                                 else -> "Brak danych"
                             }
                             val riskColor = when (details.fireRiskLevel) {
-                                0 -> Color(0xFF81C784)
-                                1 -> Color(0xFFFFF176)
-                                2 -> Color(0xFFFFB74D)
-                                3 -> Color(0xFFE57373)
+                                0, 10 -> Color(0xFF81C784)
+                                1, 11 -> Color(0xFFFFF176)
+                                2, 12 -> Color(0xFFFFB74D)
+                                3, 13 -> Color(0xFFE57373)
                                 else -> Color(0xFFB0BEC5)
                             }
                             Text(
@@ -175,13 +179,17 @@ fun ZoneDetailsCard(
                     } else {
                         val permissionText = when (details.fireRiskLevel) {
                             0, 1, 2 -> "DOZWOLONE"
+                            10, 11, 12 -> "DOZWOLONE (archiwalne)"
                             3 -> "BEZWZGLĘDNY ZAKAZ"
+                            13 -> "BEZWZGLĘDNY ZAKAZ (archiwalne)"
                             -2 -> "WARUNKOWO DOZWOLONE (brak sieci)"
                             else -> "WARUNKOWO DOZWOLONE (brak danych)"
                         }
                         val permissionColor = when (details.fireRiskLevel) {
                             0, 1, 2 -> Color(0xFF81C784)
+                            10, 11, 12 -> Color(0xFF81C784)
                             3 -> Color(0xFFEF5350)
+                            13 -> Color(0xFFEF5350)
                             else -> Color(0xFFFFF176)
                         }
                         Text(
