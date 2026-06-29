@@ -19,10 +19,12 @@ class SyncPoiUseCase @Inject constructor(
                 var offset = 0
                 var hasMore = true
                 val recordCount = 2000
+                val outFields = if (layerId == 4) "tur_edu_pnt_cd,tur_obj_desc,nzw_ob" else "tur_rec_pnt_cd,tur_obj_desc,nzw_ob"
 
                 while (hasMore) {
                     val response = arcgisApi.getTouristPoints(
                         layerId = layerId,
+                        outFields = outFields,
                         resultOffset = offset,
                         resultRecordCount = recordCount
                     )
@@ -42,7 +44,9 @@ class SyncPoiUseCase @Inject constructor(
                                 val lon = coords.get(0).asDouble
                                 val lat = coords.get(1).asDouble
                                 
-                                val code = properties?.get("tur_rec_pnt_cd") as? String ?: ""
+                                val code = properties?.get("tur_rec_pnt_cd") as? String
+                                    ?: properties?.get("tur_edu_pnt_cd") as? String
+                                    ?: ""
                                 val desc = properties?.get("tur_obj_desc") as? String ?: ""
                                 val name = properties?.get("nzw_ob") as? String ?: ""
 

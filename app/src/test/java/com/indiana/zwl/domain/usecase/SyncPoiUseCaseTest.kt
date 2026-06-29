@@ -45,13 +45,16 @@ class SyncPoiUseCaseTest {
         // Arrange
         val layers = listOf(1, 2, 3, 4)
         for (layerId in layers) {
+            val codeField = if (layerId == 4) "tur_edu_pnt_cd" else "tur_rec_pnt_cd"
+            val outFields = if (layerId == 4) "tur_edu_pnt_cd,tur_obj_desc,nzw_ob" else "tur_rec_pnt_cd,tur_obj_desc,nzw_ob"
+
             val mockResponse = GeoJsonCollection(
                 type = "FeatureCollection",
                 features = listOf(
                     GeoJsonFeature(
                         type = "Feature",
                         properties = mapOf(
-                            "tur_rec_pnt_cd" to "MSC WYPOCZ",
+                            codeField to "MSC WYPOCZ",
                             "tur_obj_desc" to "Miejsce wypoczynku dla warstwy $layerId",
                             "nzw_ob" to "Wiata $layerId"
                         ),
@@ -62,6 +65,7 @@ class SyncPoiUseCaseTest {
             coEvery {
                 arcgisApi.getTouristPoints(
                     layerId = layerId,
+                    outFields = outFields,
                     resultOffset = 0,
                     resultRecordCount = 2000
                 )
@@ -71,6 +75,7 @@ class SyncPoiUseCaseTest {
             coEvery {
                 arcgisApi.getTouristPoints(
                     layerId = layerId,
+                    outFields = outFields,
                     resultOffset = 2000,
                     resultRecordCount = 2000
                 )
@@ -109,6 +114,7 @@ class SyncPoiUseCaseTest {
         coEvery {
             arcgisApi.getTouristPoints(
                 layerId = any(),
+                outFields = any(),
                 resultOffset = any(),
                 resultRecordCount = any()
             )
@@ -130,6 +136,7 @@ class SyncPoiUseCaseTest {
         coEvery {
             arcgisApi.getTouristPoints(
                 layerId = any(),
+                outFields = any(),
                 resultOffset = any(),
                 resultRecordCount = any()
             )
