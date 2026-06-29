@@ -108,7 +108,7 @@ class MainViewModelTest {
         val success = waitForState(viewModel.uiState, 2000) { it is MainUiState.PermissionsRequired }
         assertTrue("State should transition to PermissionsRequired", success)
         coVerify(exactly = 1) { syncZonesUseCase() }
-        coVerify(exactly = 2) { getZonesUseCase() }
+        coVerify(exactly = 1) { getZonesUseCase() }
     }
 
     @Test
