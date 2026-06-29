@@ -45,7 +45,7 @@ object OfflineMapDownloader {
                 return URL("https://$host/${tile.zoomLevel}/${tile.tileX}/${tile.tileY}.png")
             }
         }
-        tileSource.setUserAgent("ZanocujWLesie/1.0 (Android)")
+        tileSource.setUserAgent("LegalnyBushcraft/1.0 (Android)")
         return tileSource
     }
 
@@ -103,7 +103,7 @@ object OfflineMapDownloader {
             val url = tileSource.getTileUrl(tile)
             val request = okhttp3.Request.Builder()
                 .url(url)
-                .header("User-Agent", "ZanocujWLesie/1.0 (Android)")
+                .header("User-Agent", "LegalnyBushcraft/1.0 (Android)")
                 .build()
 
             try {

@@ -49,7 +49,7 @@ fun PermissionsScreen(onRequestPermission: () -> Unit) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Aplikacja \"Zanocuj w Lesie\" wymaga dostępu do precyzyjnej lokalizacji GPS w celu sprawdzania czy znajdujesz się w legalnej strefie biwakowania oraz do nawigacji kompasem offline w terenie.",
+                    text = "Aplikacja \"Legalny Bushcraft\" wymaga dostępu do precyzyjnej lokalizacji GPS w celu sprawdzania czy znajdujesz się w legalnej strefie biwakowania oraz do nawigacji kompasem offline w terenie.",
                     fontSize = 14.sp,
                     color = ForestGreenSubtext,
                     textAlign = TextAlign.Center,

@@ -49,13 +49,13 @@ fun InZoneContent(
                     .border(3.dp, ForestGreenAccent, RoundedCornerShape(50.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("ZwL", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = ForestGreenAccent)
+                Text("LB", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = ForestGreenAccent)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Jesteś w strefie\nZanocuj w Lesie",
+                text = "Jesteś w strefie\nprogramu \"Zanocuj w Lesie\"",
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,

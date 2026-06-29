@@ -69,7 +69,7 @@ fun OutsideZoneContent(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Jesteś poza strefą\nZanocuj w Lesie",
+                text = "Jesteś poza strefą\nprogramu \"Zanocuj w Lesie\"",
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,

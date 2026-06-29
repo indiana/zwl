@@ -110,7 +110,7 @@ fun MainScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "Zanocuj w Lesie",
+                        text = "Legalny Bushcraft",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = ForestGreenAccent,
@@ -196,7 +196,7 @@ fun MainScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Brak dostępu do internetu i brak zapisanych lokalnie danych o strefach Zanocuj w Lesie.\n\nPołącz się z siecią i spróbuj ponownie, aby pobrać wymaganą bazę danych stref.",
+                        text = "Brak dostępu do internetu i brak zapisanych lokalnie danych o strefach programu „Zanocuj w Lesie”.\n\nPołącz się z siecią i spróbuj ponownie, aby pobrać wymaganą bazę danych stref.",
                         fontSize = 15.sp,
                         color = ErrorRedText,
                         textAlign = TextAlign.Center,

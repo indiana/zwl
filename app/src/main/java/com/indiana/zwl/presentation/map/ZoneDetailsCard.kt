@@ -47,7 +47,7 @@ fun ZoneDetailsCard(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Strefa Zanocuj w Lesie",
+                        text = "Strefa programu \"Zanocuj w Lesie\"",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
