@@ -1,6 +1,6 @@
 package com.indiana.zwl.domain
 
-import com.indiana.zwl.data.local.ZoneEntity
+import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.LocationStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -21,7 +21,7 @@ class SpatialEngineTest {
     fun testSpatialEngineCalculations() {
         val wktSpychowo = "POLYGON ((21.30 53.60, 21.35 53.60, 21.35 53.65, 21.30 53.65, 21.30 53.60))"
         val zones = listOf(
-            ZoneEntity(id = 1, forestDistrict = "Nadleśnictwo Spychowo", geometryWkt = wktSpychowo)
+            Zone(id = 1, forestDistrict = "Nadleśnictwo Spychowo", geometryWkt = wktSpychowo)
         )
 
         spatialEngine.initialize(zones)
@@ -44,7 +44,7 @@ class SpatialEngineTest {
     @Test
     fun testPerformanceNfr2() {
         val zones = (1..100).map { id ->
-            ZoneEntity(
+            Zone(
                 id = id.toLong(),
                 forestDistrict = "Nadleśnictwo $id",
                 geometryWkt = "POLYGON ((${21.30 + id * 0.01} 53.60, ${21.35 + id * 0.01} 53.60, ${21.35 + id * 0.01} 53.65, ${21.30 + id * 0.01} 53.65, ${21.30 + id * 0.01} 53.60))"
