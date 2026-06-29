@@ -27,17 +27,7 @@ jobs:
         gradle-version: '8.7'
 
     - name: Run Unit Tests
-      run: |
-        echo "Running unit tests..."
-        gradle :app:testDebugUnitTest --stacktrace > test_log.txt 2>&1 || (cat test_log.txt; exit 1)
-      shell: bash
-
-    - name: Upload Test Log
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-log
-        path: test_log.txt
+      run: gradle :app:testDebugUnitTest --stacktrace
 
     - name: Build APKs and Bundle
       run: |
