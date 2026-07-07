@@ -282,7 +282,6 @@ fun MapViewContainer(
                     // Initialize user location marker
                     val userLocBitmap = createUserLocationArrowBitmap(ctx)
                     val marker = RotatingMarker(LatLong(52.23, 21.01), userLocBitmap, 0, 0)
-                    this.layerManager.layers.add(marker)
                     userMarker = marker
 
                     mapViewInstance = this
@@ -292,16 +291,34 @@ fun MapViewContainer(
             update = { mapView ->
                 val state = uiState
                 if (state is MainUiState.Success) {
-                    val userPos = LatLong(state.latitude, state.longitude)
-                    userMarker?.let { marker ->
-                        marker.latLong = userPos
-                        marker.azimuth = state.azimuth
-                        marker.requestRedraw()
-                    }
-                    if (!hasCenteredOnStartup) {
-                        mapView.setCenter(userPos)
-                        mapView.setZoomLevel(15)
-                        hasCenteredOnStartup = true
+                    val lat = state.latitude
+                    val lon = state.longitude
+                    if (lat != null && lon != null) {
+                        val userPos = LatLong(lat, lon)
+                        userMarker?.let { marker ->
+                            marker.latLong = userPos
+                            marker.azimuth = state.azimuth
+                            marker.requestRedraw()
+                            if (!mapView.layerManager.layers.contains(marker)) {
+                                mapView.layerManager.layers.add(marker)
+                            }
+                        }
+                        if (!hasCenteredOnStartup) {
+                            mapView.setCenter(userPos)
+                            mapView.setZoomLevel(15)
+                            hasCenteredOnStartup = true
+                        }
+                    } else {
+                        userMarker?.let { marker ->
+                            if (mapView.layerManager.layers.contains(marker)) {
+                                mapView.layerManager.layers.remove(marker)
+                            }
+                        }
+                        if (!hasCenteredOnStartup) {
+                            mapView.setCenter(LatLong(52.23, 21.01))
+                            mapView.setZoomLevel(6)
+                            hasCenteredOnStartup = true
+                        }
                     }
                 }
             },

@@ -11,7 +11,7 @@ sealed class MainUiState {
         val locationStatus: LocationStatus,
         val fireRiskLevel: Int,
         val azimuth: Float,
-        val latitude: Double,
-        val longitude: Double
+        val latitude: Double?,
+        val longitude: Double?
     ) : MainUiState()
 }

@@ -282,10 +282,36 @@ fun MainScreen(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .background(MaterialTheme.colorScheme.background),
+                                            .background(DarkForestBackground)
+                                            .padding(24.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text("Inicjalizacja silnika przestrzennego...", color = Color.White)
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            CircularProgressIndicator(
+                                                color = ForestGreenAccent,
+                                                strokeWidth = 3.dp,
+                                                modifier = Modifier.size(36.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            Text(
+                                                text = "Ustalanie lokalizacji GPS...",
+                                                fontSize = 18.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = ForestGreenAccent,
+                                                textAlign = TextAlign.Center
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = "Aplikacja oczekuje na pierwsze współrzędne z Twojego urządzenia. Upewnij się, że funkcja lokalizacji (GPS) jest włączona.",
+                                                fontSize = 13.sp,
+                                                color = ForestGreenText,
+                                                textAlign = TextAlign.Center,
+                                                lineHeight = 18.sp
+                                            )
+                                        }
                                     }
                                 }
                             }
