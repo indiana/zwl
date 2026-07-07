@@ -1,16 +1,20 @@
-# <img src="assets/app_icon.png" width="48" align="center" alt="App Icon"/> Zanocuj w Lesie
+# <img src="assets/app_icon.png" width="48" align="center" alt="App Icon"/> Legalny Bushcraft
 
-**Zanocuj w Lesie** to nowoczesna aplikacja mobilna na system Android, stworzona z myślą o miłośnikach bushcraftu, survivalu i turystyki leśnej. Jej głównym celem jest natychmiastowe i w pełni niezawodne (również w trybie offline) udzielenie odpowiedzi na pytanie, czy użytkownik znajduje się wewnątrz oficjalnej strefy programu **„Zanocuj w lesie” (ZwL)** Lasów Państwowych, oraz jakie zasady bezpieczeństwa pożarowego obowiązują w danej lokalizacji.
+**Legalny Bushcraft** to nowoczesna aplikacja mobilna na system Android, stworzona z myślą o miłośnikach bushcraftu, survivalu i turystyki leśnej. Jej głównym celem jest natychmiastowe i w pełni niezawodne (również w trybie offline) udzielenie odpowiedzi na pytanie, czy użytkownik znajduje się wewnątrz oficjalnej strefy programu **„Zanocuj w lesie" (ZwL)** Lasów Państwowych, oraz jakie zasady bezpieczeństwa pożarowego obowiązują w danej lokalizacji.
+
+> **Wersja:** 1.4 (versionCode 5) | **Minimalna wersja Androida:** 8.0 (API 26)
 
 ---
 
 ## 🌲 Cel i Działanie Projektu
 
-Aplikacja została zaprojektowana w myśl zasady **Offline-First**, ponieważ w głębi lasu zasięg sieci komórkowej jest często ograniczony lub niedostępny. 
+Aplikacja została zaprojektowana w myśl zasady **Offline-First**, ponieważ w głębi lasu zasięg sieci komórkowej jest często ograniczony lub niedostępny.
 
 * **W strefie:** Interfejs przybiera bezpieczną, zieloną oprawę, informując o nazwie nadleśnictwa, stopniu zagrożenia pożarowego (od 0 do 3) oraz o tym, czy dozwolone jest używanie turystycznych kuchenek gazowych.
 * **Poza strefą:** Interfejs zmienia się na ostrzegawczy (żółto-pomarańczowy) i działa jako nawigator – wskazuje precyzyjną odległość do najbliższego obszaru legalnego biwakowania oraz fizyczny kierunek świata (wraz z dynamiczną strzałką kompasu).
 * **Interaktywna mapa:** Umożliwia wyświetlanie granic stref ZwL jako półprzezroczystych wielokątów oraz lokalizacji użytkownika na wektorowym podkładzie mapowym działającym całkowicie bez dostępu do Internetu.
+
+Strefy programu „Zanocuj w lesie" pobierane są z oficjalnych źródeł rządowych — serwera danych przestrzennych Lasów Państwowych: [mapserver.bdl.lasy.gov.pl](https://mapserver.bdl.lasy.gov.pl/). Informacje o zagrożeniu pożarowym pobierane są z publicznego API Banku Danych o Lasach ([lasy.gov.pl](https://www.lasy.gov.pl/)).
 
 ---
 
@@ -43,4 +47,13 @@ Aplikacja przestrzega zasad **Clean Architecture** oraz podziału na warstwy:
 
 * **Minimalna wersja Androida:** Android 8.0 (API 26)
 * **Docelowa wersja Androida:** Android 15 (API 35)
-* **Środowisko:** Java/JDK 17 + Gradle Kotlin DSL
+* **Środowisko deweloperskie:** Java/JDK 17 + Gradle Kotlin DSL
+* **CI/CD:** GitHub Actions (budowanie, podpisywanie i publikacja artefaktów)
+
+---
+
+## 🔒 Prywatność
+
+Aplikacja nie gromadzi, nie przechowuje ani nie udostępnia żadnych danych osobowych użytkowników na zewnętrznych serwerach. Dane o lokalizacji przetwarzane są wyłącznie lokalnie na urządzeniu.
+
+Szczegóły zawiera [Polityka Prywatności](PRIVACY_POLICY.md).
