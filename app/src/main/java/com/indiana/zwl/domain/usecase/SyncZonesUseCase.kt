@@ -16,19 +16,20 @@ class SyncZonesUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(): Result<List<Zone>> {
         return try {
-            val response = arcgisApi.getZanocujWLesieZones()
+            val responseBody = arcgisApi.getZanocujWLesieZones()
             val wktWriter = WKTWriter()
+            val entities = mutableListOf<ZoneEntity>()
 
-            val entities = response.features.mapNotNull { feature ->
-                val jtsGeom = GeoJsonConverter.toJtsGeometry(feature.geometry)
-                if (jtsGeom != null) {
-                    val wkt = wktWriter.write(jtsGeom)
-                    ZoneEntity(
-                        forestDistrict = feature.forestDistrict,
-                        geometryWkt = wkt
+            responseBody.use { body ->
+                GeoJsonConverter.parseFeatureCollectionStream(body.charStream()) { properties, geometry ->
+                    val wkt = wktWriter.write(geometry)
+                    val forestDistrict = GeoJsonConverter.extractForestDistrict(properties)
+                    entities.add(
+                        ZoneEntity(
+                            forestDistrict = forestDistrict,
+                            geometryWkt = wkt
+                        )
                     )
-                } else {
-                    null
                 }
             }
 
