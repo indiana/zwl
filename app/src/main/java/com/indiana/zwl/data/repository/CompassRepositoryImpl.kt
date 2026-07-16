@@ -40,8 +40,12 @@ class CompassRepositoryImpl(context: Context) : CompassRepository, SensorEventLi
         if (useRotationVector) {
             sensorManager.registerListener(this, rotationVectorSensor, SensorManager.SENSOR_DELAY_UI)
         } else {
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
-            sensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI)
+            accelerometer?.let {
+                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            }
+            magnetometer?.let {
+                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            }
         }
     }
 
