@@ -74,6 +74,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MyLocation
 
 @Composable
 fun MapViewContainer(
@@ -314,11 +315,6 @@ fun MapViewContainer(
                                 mapView.layerManager.layers.remove(marker)
                             }
                         }
-                        if (!hasCenteredOnStartup) {
-                            mapView.setCenter(LatLong(52.23, 21.01))
-                            mapView.setZoomLevel(6)
-                            hasCenteredOnStartup = true
-                        }
                     }
                 }
             },
@@ -369,6 +365,32 @@ fun MapViewContainer(
                                 )
                             }
                         }
+                    }
+
+                    FloatingActionButton(
+                        onClick = {
+                            val state = uiState
+                            if (state is MainUiState.Success) {
+                                val lat = state.latitude
+                                val lon = state.longitude
+                                if (lat != null && lon != null) {
+                                    mapViewInstance?.setCenter(LatLong(lat, lon))
+                                    mapViewInstance?.setZoomLevel(15)
+                                } else {
+                                    Toast.makeText(context, "Oczekiwanie na sygnał GPS...", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.size(48.dp),
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MyLocation,
+                            contentDescription = "Moja lokalizacja"
+                        )
                     }
 
                     FloatingActionButton(
