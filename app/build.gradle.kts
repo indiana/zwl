@@ -84,7 +84,7 @@ dependencies {
     implementation(libs.jts.core)
 
     // Mapsforge (Map rendering)
-    implementation(libs.mapsforge.map.android)
+    implementation("com.caverock:androidsvg:1.4")
     implementation(libs.mapsforge.map)
     implementation(libs.mapsforge.themes)
 

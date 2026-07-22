@@ -30,6 +30,15 @@ import java.util.logging.Logger;
  * of SVG images all the time.
  * The SVG bitmaps are stored as PNG files in the applications internal directory by their
  * hash (which also encodes the size). Storage is handled asynchronously.
+ *
+ * There is a potential issue, which I have not yet seen in testing, that a bitmap can
+ * be retrieved while it is still in process of being stored. To avoid this, it would be
+ * possible to first store with a temporary name, then move to the permanent name when storage
+ * is complete, but there is no renaming api for files in the internal storage.
+ *
+ * For developers please note that the storage is permanent, so if you introduce new icons with
+ * the same name/size (=hash) you will retrieve the old, cached one unless you uninstall the
+ * app first or clear its data.
  */
 public class AndroidSvgBitmapStore {
     private static final Logger LOGGER = Logger.getLogger(AndroidSvgBitmapStore.class.getName());
@@ -58,7 +67,7 @@ public class AndroidSvgBitmapStore {
                 LOGGER.warning("SVG Failed to stream bitmap to file " + fileName);
             } catch (FileNotFoundException e) {
                 LOGGER.warning("SVG Failed to create file for svg bitmap " + fileName);
-            } if (outputStream != null) {
+            } finally {
                 IOUtils.closeQuietly(outputStream);
             }
         }
