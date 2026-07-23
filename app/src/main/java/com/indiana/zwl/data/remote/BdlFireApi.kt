@@ -12,9 +12,11 @@ data class FireRiskFeature(
 )
 
 data class FireRiskProperties(
-    val kod: Int?,
+    val kod: Number?,  // ArcGIS GeoJSON może zwrócić Double (np. 3.0) zamiast Int
     val opis: String?
-)
+) {
+    val kodInt: Int? get() = kod?.toInt()
+}
 
 interface BdlFireApi {
     @GET("arcgis/rest/services/WMS_zagrozenie_pozarowe_w_lasach/MapServer/0/query")
