@@ -7,6 +7,12 @@
 # Keep Data models / DTOs
 -keep class com.indiana.zwl.domain.model.** { *; }
 
+# Keep remote DTO classes used by Gson via reflection
+# Without this, R8 renames/removes fields like `kod`, `features`, `properties`
+# causing ClassCastException at runtime during JSON deserialization
+-keep class com.indiana.zwl.data.remote.** { *; }
+-dontwarn com.indiana.zwl.data.remote.**
+
 # Keep Gson annotations and serialization fields
 -keepattributes Signature
 -keepattributes *Annotation*
