@@ -33,3 +33,25 @@
 -keep class com.google.dagger.** { *; }
 -keep class dagger.** { *; }
 -keep class * extends androidx.lifecycle.ViewModel
+
+# Keep AndroidSVG library (used by Mapsforge for rendering SVG icons)
+-keep class com.caverock.androidsvg.** { *; }
+-dontwarn com.caverock.androidsvg.**
+
+# Keep WorkManager workers and Hilt worker injection
+-keep class com.indiana.zwl.data.sync.** { *; }
+-keep class * extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+-keep class androidx.hilt.work.** { *; }
+
+# Keep Retrofit interface annotations and DTO models
+-keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations, AnnotationDefault
+-keep interface com.indiana.zwl.data.remote.** { *; }
+-keep class com.indiana.zwl.data.remote.model.** { *; }
+-dontwarn retrofit2.**
+
+# Keep Room database generated implementation
+-keep class * extends androidx.room.RoomDatabase
+-keepclassmembers class * extends androidx.room.RoomDatabase { *; }
+

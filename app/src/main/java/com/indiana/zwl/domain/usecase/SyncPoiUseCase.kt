@@ -4,14 +4,16 @@ import com.indiana.zwl.data.local.PoiDao
 import com.indiana.zwl.data.local.PoiEntity
 import com.indiana.zwl.data.remote.BdlArcgisApi
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 class SyncPoiUseCase @Inject constructor(
     private val arcgisApi: BdlArcgisApi,
     private val poiDao: PoiDao
 ) {
-    suspend operator fun invoke(): Result<Unit> {
-        return try {
+    suspend operator fun invoke(): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
             val allEntities = mutableListOf<PoiEntity>()
             val layers = listOf(1, 2, 3, 4)
 
@@ -44,11 +46,11 @@ class SyncPoiUseCase @Inject constructor(
                                 val lon = coords.get(0).asDouble
                                 val lat = coords.get(1).asDouble
                                 
-                                val code = properties?.get("tur_rec_pnt_cd") as? String
-                                    ?: properties?.get("tur_edu_pnt_cd") as? String
+                                val code = properties?.get("tur_rec_pnt_cd")?.toString()
+                                    ?: properties?.get("tur_edu_pnt_cd")?.toString()
                                     ?: ""
-                                val desc = properties?.get("tur_obj_desc") as? String ?: ""
-                                val name = properties?.get("nzw_ob") as? String ?: ""
+                                val desc = properties?.get("tur_obj_desc")?.toString() ?: ""
+                                val name = properties?.get("nzw_ob")?.toString() ?: ""
 
                                 allEntities.add(
                                     PoiEntity(

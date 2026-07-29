@@ -8,14 +8,16 @@ import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.util.GeoJsonConverter
 import org.locationtech.jts.io.WKTWriter
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 class SyncZonesUseCase @Inject constructor(
     private val arcgisApi: BdlArcgisApi,
     private val zoneDao: ZoneDao
 ) {
-    suspend operator fun invoke(): Result<List<Zone>> {
-        return try {
+    suspend operator fun invoke(): Result<List<Zone>> = withContext(Dispatchers.IO) {
+        try {
             val responseBody = arcgisApi.getZanocujWLesieZones()
             val wktWriter = WKTWriter()
             val entities = mutableListOf<ZoneEntity>()
