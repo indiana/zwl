@@ -6,7 +6,7 @@ import retrofit2.http.Query
 import retrofit2.http.Path
 
 interface BdlArcgisApi {
-    @GET("arcgis/rest/services/WFS_BDL_mapa_turystyczna/MapServer/76/query")
+    @GET("arcgis/rest/services/WFS_BDL_mapa_turystyczna/MapServer/7/query")
     suspend fun getZanocujWLesieZones(
         @Query("where") where: String = "1=1",
         @Query("outFields") outFields: String = "link,nzw_ob",
