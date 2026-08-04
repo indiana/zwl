@@ -16,9 +16,6 @@ interface ZoneDao {
     @Query("SELECT * FROM zones WHERE forestDistrict = :forestDistrict COLLATE NOCASE LIMIT 1")
     suspend fun getByForestDistrict(forestDistrict: String): ZoneEntity?
 
-    @Query("SELECT * FROM zones WHERE id = :zoneId LIMIT 1")
-    suspend fun getById(zoneId: Long): ZoneEntity?
-
     @Query("SELECT COUNT(*) FROM zones")
     suspend fun getZonesCount(): Int
 
@@ -27,7 +24,4 @@ interface ZoneDao {
 
     @Query("UPDATE zones SET fireRiskLevel = :fireRiskLevel, fireRiskTimestamp = :timestamp WHERE forestDistrict = :forestDistrict")
     suspend fun updateFireRisk(forestDistrict: String, fireRiskLevel: Int, timestamp: Long)
-
-    @Query("UPDATE zones SET fireRiskLevel = :fireRiskLevel, fireRiskTimestamp = :timestamp WHERE id = :zoneId")
-    suspend fun updateFireRiskById(zoneId: Long, fireRiskLevel: Int, timestamp: Long)
 }

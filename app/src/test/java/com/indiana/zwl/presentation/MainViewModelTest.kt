@@ -163,7 +163,7 @@ class MainViewModelTest {
             geometryWkt = "POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))"
         )
         coEvery { getFireRiskUseCase(any()) } returns Result.failure(java.net.UnknownHostException("offline"))
-        coEvery { zoneDao.getById(1L) } returns ZoneEntity(
+        coEvery { zoneDao.getByForestDistrict("Nadleśnictwo Test") } returns ZoneEntity(
             id = 1L,
             forestDistrict = "Nadleśnictwo Test",
             geometryWkt = "",
@@ -190,7 +190,7 @@ class MainViewModelTest {
                 "Observed: ${viewModel.selectedZoneDetails.value}, debugError: ${viewModel.debugError.value}",
             success
         )
-        coVerify(exactly = 1) { zoneDao.getById(1L) }
+        coVerify(exactly = 1) { zoneDao.getByForestDistrict("Nadleśnictwo Test") }
     }
 
     private suspend fun <T> waitForState(
