@@ -368,15 +368,17 @@ class MainViewModel @Inject constructor(
 
     private fun loadCachedForestStand(zone: Zone): com.indiana.zwl.domain.model.ForestStandSummary? {
         val json = zone.forestStandJson ?: return null
-        val timestamp = zone.forestStandTimestamp ?: return null
-        val now = System.currentTimeMillis()
-        if (now - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS) return null
         return try {
             Gson().fromJson(json, com.indiana.zwl.domain.model.ForestStandSummary::class.java)
         } catch (e: Exception) {
             e.printStackTrace()
             null
         }
+    }
+
+    private fun isForestStandCacheStale(zone: Zone): Boolean {
+        val timestamp = zone.forestStandTimestamp ?: return true
+        return System.currentTimeMillis() - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
     }
 
     private fun updateZoneForestStandInMemory(forestDistrict: String, json: String, timestamp: Long) {
@@ -464,13 +466,16 @@ class MainViewModel @Inject constructor(
                     }
                 }
 
+                val cachedForestStand = loadCachedForestStand(zone)
+                val needsForestStandRefresh = cachedForestStand == null || isForestStandCacheStale(zone)
+
                 _selectedZoneDetails.value = SelectedZoneDetails(
                     zone = zone,
                     distanceMeters = distance,
                     fireRiskLevel = -1,
                     isLoadingFireRisk = true,
-                    forestStand = loadCachedForestStand(zone),
-                    isLoadingForestStand = zone.forestStandJson == null
+                    forestStand = cachedForestStand,
+                    isLoadingForestStand = needsForestStandRefresh
                 )
 
                 val tempLoc = Location("").apply {
@@ -511,30 +516,32 @@ class MainViewModel @Inject constructor(
                     )
                 }
 
-                val forestStandResult = getForestStandUseCase(zone)
-                if (_selectedZoneDetails.value?.zone?.id == zone.id) {
-                    if (forestStandResult.isSuccess) {
-                        val summary = forestStandResult.getOrNull()
-                        if (summary != null) {
-                            val json = Gson().toJson(summary)
-                            val timestamp = System.currentTimeMillis()
-                            withContext(Dispatchers.IO) {
-                                zoneDao.updateForestStand(zone.forestDistrict, json, timestamp)
+                if (needsForestStandRefresh) {
+                    val forestStandResult = getForestStandUseCase(zone)
+                    if (_selectedZoneDetails.value?.zone?.id == zone.id) {
+                        if (forestStandResult.isSuccess) {
+                            val summary = forestStandResult.getOrNull()
+                            if (summary != null) {
+                                val json = Gson().toJson(summary)
+                                val timestamp = System.currentTimeMillis()
+                                withContext(Dispatchers.IO) {
+                                    zoneDao.updateForestStand(zone.forestDistrict, json, timestamp)
+                                }
+                                updateZoneForestStandInMemory(zone.forestDistrict, json, timestamp)
                             }
-                            updateZoneForestStandInMemory(zone.forestDistrict, json, timestamp)
+                            _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
+                                forestStand = summary,
+                                isLoadingForestStand = false
+                            )
+                        } else {
+                            val exception = forestStandResult.exceptionOrNull()
+                            if (!isNetworkException(exception)) {
+                                _debugError.value = "selectZone forest stand API error:\n" + exception?.stackTraceToString()
+                            }
+                            _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
+                                isLoadingForestStand = false
+                            )
                         }
-                        _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
-                            forestStand = summary,
-                            isLoadingForestStand = false
-                        )
-                    } else {
-                        val exception = forestStandResult.exceptionOrNull()
-                        if (!isNetworkException(exception)) {
-                            _debugError.value = "selectZone forest stand API error:\n" + exception?.stackTraceToString()
-                        }
-                        _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
-                            isLoadingForestStand = false
-                        )
                     }
                 }
             } catch (e: Throwable) {

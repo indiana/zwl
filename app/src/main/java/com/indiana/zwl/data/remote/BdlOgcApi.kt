@@ -12,7 +12,7 @@ interface BdlOgcApi {
         @Query("f") format: String = "json",
         @Query("bbox") bbox: String,
         @Query("limit") limit: Int = 500,
-        @Query("properties") properties: String = "species_cd,spec_age,sub_area,forest_fun,stand_stru,site_type,prot_categ,rotat_age,nazwa",
+        @Query("properties") properties: String = "species_cd,spec_age,sub_area,forest_fun,stand_stru,site_type,prot_categ,rotat_age",
         @Query("skipGeometry") skipGeometry: Boolean = true
     ): OgcFeatureCollection
 

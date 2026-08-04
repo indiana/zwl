@@ -25,8 +25,16 @@ object RdlpMapper {
         return regionCodeToCollection[regionCode]
     }
 
+    private fun normalize(code: String): String {
+        return code.uppercase()
+            .replace("Ś", "S").replace("Ź", "Z").replace("Ż", "Z")
+            .replace("Ą", "A").replace("Ć", "C").replace("Ę", "E")
+            .replace("Ł", "L").replace("Ń", "N").replace("Ó", "O")
+            .replace(" ", "").replace(".", "")
+    }
+
     fun speciesCodeToName(code: String): String {
-        return when (code.uppercase().replace(".", "").replace(" ", "")) {
+        return when (normalize(code)) {
             "SO", "SOS", "SOSZ" -> "Sosna"
             "SW", "SWY", "SWR" -> "Świerk"
             "DB", "DAB", "DBS" -> "Dąb"
@@ -47,39 +55,37 @@ object RdlpMapper {
             "MOD", "MD" -> "Modrzew"
             "DAG" -> "Daglezja"
             "TWR" -> "Tuja"
-            "JW" -> "Jodła wingska"
-            "DW" -> "Dąb bezszypułkowy"
             else -> code
         }
     }
 
     fun siteTypeCodeToName(code: String): String {
-        return when (code.uppercase().replace("Ś", "S").replace("Ł", "L").replace("Ń", "N")) {
-            "BMWC", "BWMC" -> "Bór wilgotny z traworoślnymi"
-            "BMPP", "BMP" -> "Bór bagienny"
-            "BMSW", "BMS" -> "Bór świeży"
-            "BMRC", "BMR" -> "Bórsuchy z wrzosem"
-            "LMSC", "LMS" -> "Las mieszany świeży"
-            "LMRC", "LMR" -> "Las mieszany suchy"
-            "LMWC", "LMW" -> "Las mieszany wilgotny"
-            "LMBC", "LMB" -> "Las mieszany bagienny"
-            "LSW", "LS" -> "Las świeży"
-            "LRC", "LR" -> "Las suchy"
-            "LWC", "LW" -> "Las wilgotny"
-            "LBC", "LB" -> "Las bagienny"
-            "OLSW", "OLS" -> "Olszyny wilgotne"
-            "OLBC", "OLB" -> "Olszyny bagienne"
+        return when (normalize(code)) {
+            "BMWC" -> "Bór wilgotny z traworoślnymi"
+            "BMPP" -> "Bór bagienny"
+            "BMSW" -> "Bór świeży"
+            "BMRC" -> "Bórsuchy z wrzosem"
+            "LMSC" -> "Las mieszany świeży"
+            "LMRC" -> "Las mieszany suchy"
+            "LMWC" -> "Las mieszany wilgotny"
+            "LMBC" -> "Las mieszany bagienny"
+            "LSW" -> "Las świeży"
+            "LRC" -> "Las suchy"
+            "LWC" -> "Las wilgotny"
+            "LBC" -> "Las bagienny"
+            "OLSW" -> "Olszyny wilgotne"
+            "OLBC" -> "Olszyny bagienne"
             else -> code
         }
     }
 
     fun forestFunCodeToName(code: String): String {
-        return when (code.uppercase()) {
+        return when (normalize(code)) {
             "GOSP" -> "Gospodarczy"
             "OCH" -> "Ochronny"
             "TOW" -> "Towarowy"
             "REK" -> "Rekreacyjny"
-            "URB", "URBNIZACYJNY" -> "Urbanizacyjny"
+            "URB" -> "Urbanizacyjny"
             "IZO" -> "Izolacyjny"
             "WKW" -> "Wodochronny"
             "TUR" -> "Turystyczny"
@@ -88,31 +94,25 @@ object RdlpMapper {
     }
 
     fun standStruCodeToName(code: String): String {
-        return when (code.uppercase()) {
+        return when (normalize(code)) {
             "JED" -> "Jednolity wiekowo"
             "RZW" -> "Różnowiekowy"
             "TRW" -> "Trójwarstwowy"
-            "DRZ", "DRZEWIASTY" -> "Drzewiasty"
+            "DRZ", "DRZEWIASTY", "DRZEW" -> "Drzewiasty"
             "GLO", "GLOWNY" -> "Główny"
-            "PL" -> "Płożący"
-            "BOR" -> "Borowy"
-            "OLS" -> "Olsowy"
-            "LSC" -> "Łęgowy"
-            "MCH" -> "Mechowiskowy"
-            "WRZ" -> "Wrzosowiskowy"
             else -> code
         }
     }
 
     fun protCategCodeToName(code: String): String {
-        return when (code.uppercase()) {
-            "OCH CENNE", "CENNE" -> "Ochrona czynna"
-            "OCH SCISLE", "SCISLE" -> "Ochrona ścisła"
-            "OCH PSTREFOWA", "PSTREFOWA" -> "Ochrona częściowa"
+        return when (normalize(code)) {
+            "OCHCENNE", "CENNE" -> "Ochrona czynna"
+            "OCHSCISLE", "SCISLE" -> "Ochrona ścisła"
+            "OCHPSTREFOWA", "PSTREFOWA" -> "Ochrona częściowa"
             "SPECJALNE" -> "Specjalne"
-            "OCH MIAST", "MIAST" -> "Ochrona urbanistyczna"
-            "OCH NADWODNA", "NADWODNA" -> "Ochrona nadwodna"
-            "OCH KRAJOBRAZOWA", "KRAJOBRAZOWA" -> "Ochrona krajobrazowa"
+            "OCHMIAST", "MIAST", "OCHMIASTOWA" -> "Ochrona urbanistyczna"
+            "OCHNADWODNA", "NADWODNA" -> "Ochrona nadwodna"
+            "OCHKRAJOBRAZOWA", "KRAJOBRAZOWA" -> "Ochrona krajobrazowa"
             else -> code
         }
     }

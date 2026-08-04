@@ -45,7 +45,6 @@ class GetForestStandUseCase @Inject constructor(
             val speciesAreaMap = mutableMapOf<String, Double>()
             val speciesAgeSumMap = mutableMapOf<String, Double>()
             val speciesAgeCountMap = mutableMapOf<String, Double>()
-            val speciesNazwaMap = mutableMapOf<String, String>()
             var forestFunction: String? = null
             var standStructure: String? = null
             var siteType: String? = null
@@ -65,10 +64,6 @@ class GetForestStandUseCase @Inject constructor(
                         if (age != null && age > 0) {
                             speciesAgeSumMap[speciesCode] = (speciesAgeSumMap[speciesCode] ?: 0.0) + age * area
                             speciesAgeCountMap[speciesCode] = (speciesAgeCountMap[speciesCode] ?: 0.0) + area
-                        }
-                        val nazwa = props.nazwa
-                        if (!nazwa.isNullOrBlank() && !speciesNazwaMap.containsKey(speciesCode)) {
-                            speciesNazwaMap[speciesCode] = nazwa
                         }
                     }
                 }
@@ -98,11 +93,9 @@ class GetForestStandUseCase @Inject constructor(
                         (speciesAgeSumMap[code] ?: 0.0) / speciesAgeCountMap[code]!!
                     } else null
                     val ageLabel = avgAge?.let { classifyAge(it) }
-                    val fullName = speciesNazwaMap[code]
-                        ?: RdlpMapper.speciesCodeToName(code)
                     SpeciesEntry(
                         speciesCode = code,
-                        speciesName = fullName,
+                        speciesName = RdlpMapper.speciesCodeToName(code),
                         percentage = Math.round(percentage * 10.0) / 10.0,
                         ageLabel = ageLabel
                     )

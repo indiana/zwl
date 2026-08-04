@@ -31,8 +31,7 @@ data class OgcStandProperties(
     val stand_stru: String?,
     val site_type: String?,
     val prot_categ: String?,
-    val rotat_age: Int?,
-    val nazwa: String?
+    val rotat_age: Int?
 )
 
 data class OgcLink(
