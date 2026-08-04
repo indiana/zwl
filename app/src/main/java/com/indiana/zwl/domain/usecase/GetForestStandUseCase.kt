@@ -92,7 +92,7 @@ class GetForestStandUseCase @Inject constructor(
                     val avgAge = if ((speciesAgeCountMap[code] ?: 0.0) > 0) {
                         (speciesAgeSumMap[code] ?: 0.0) / speciesAgeCountMap[code]!!
                     } else null
-                    val ageLabel = avgAge?.let { classifyAge(it) }
+                    val ageLabel = avgAge?.let { classifyAge(it, RdlpMapper.speciesCodeToName(code)) }
                     SpeciesEntry(
                         speciesCode = code,
                         speciesName = RdlpMapper.speciesCodeToName(code),
@@ -119,11 +119,12 @@ class GetForestStandUseCase @Inject constructor(
         }
     }
 
-    private fun classifyAge(ageYears: Double): String {
+    private fun classifyAge(ageYears: Double, speciesName: String): String {
+        val feminine = speciesName.endsWith("a")
         return when {
-            ageYears < 40 -> "młoda"
-            ageYears <= 80 -> "średnia"
-            else -> "stara"
+            ageYears < 40 -> if (feminine) "młoda" else "młody"
+            ageYears <= 80 -> if (feminine) "średnia" else "średni"
+            else -> if (feminine) "stara" else "stary"
         }
     }
 

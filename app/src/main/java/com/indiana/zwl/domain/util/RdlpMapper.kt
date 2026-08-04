@@ -55,6 +55,9 @@ object RdlpMapper {
             "MOD", "MD" -> "Modrzew"
             "DAG" -> "Daglezja"
             "TWR" -> "Tuja"
+            "JW" -> "Jodła wingska"
+            "DBC" -> "Dąb bezszypułkowy"
+            "GB" -> "Grab"
             else -> code
         }
     }
