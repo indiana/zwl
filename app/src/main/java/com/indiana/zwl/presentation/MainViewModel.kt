@@ -318,17 +318,12 @@ class MainViewModel @Inject constructor(
                 exception?.printStackTrace()
             }
             if (isNetworkException(exception)) {
-                var cachedRisk: Int? = null
-                if (district != null) {
-                    cachedRisk = withContext(Dispatchers.IO) {
-                        zoneDao.getAllZones().find { it.forestDistrict.equals(district, ignoreCase = true) }?.fireRiskLevel
-                    }
-                }
-                currentFireRisk = if (cachedRisk != null && cachedRisk in 0..3) {
-                    cachedRisk + 10
+                val cached = if (district != null) {
+                    withContext(Dispatchers.IO) { zoneDao.getByForestDistrict(district) }
                 } else {
-                    -2
+                    null
                 }
+                currentFireRisk = resolveCachedFireRisk(cached?.fireRiskLevel, cached?.fireRiskTimestamp)
             } else {
                 currentFireRisk = -1
             }
@@ -341,6 +336,17 @@ class MainViewModel @Inject constructor(
                e is java.net.SocketTimeoutException ||
                e is java.net.SocketException ||
                e is javax.net.ssl.SSLException
+    }
+
+    private fun resolveCachedFireRisk(level: Int?, timestamp: Long?): Int {
+        val now = System.currentTimeMillis()
+        return if (level != null && level in 0..3 &&
+            timestamp != null && now - timestamp < FIRE_RISK_CACHE_MAX_AGE_MS
+        ) {
+            level + 10
+        } else {
+            -2
+        }
     }
 
     override fun onCleared() {
@@ -446,12 +452,7 @@ class MainViewModel @Inject constructor(
                         exception?.printStackTrace()
                     }
                     if (isNetworkException(exception)) {
-                        val cachedRisk = zone.fireRiskLevel
-                        if (cachedRisk != null && cachedRisk in 0..3) {
-                            cachedRisk + 10
-                        } else {
-                            -2
-                        }
+                        resolveCachedFireRisk(zone.fireRiskLevel, zone.fireRiskTimestamp)
                     } else {
                         -1
                     }
@@ -518,6 +519,10 @@ class MainViewModel @Inject constructor(
 
     fun clearSelectedPoi() {
         _selectedPoiDetails.value = null
+    }
+
+    companion object {
+        private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
     }
 }
 
