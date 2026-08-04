@@ -13,6 +13,7 @@ import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.data.local.PoiDao
 import com.indiana.zwl.data.local.PoiEntity
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
+import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
@@ -51,7 +52,9 @@ data class SelectedZoneDetails(
     val zone: Zone,
     val distanceMeters: Double?,
     val fireRiskLevel: Int,
-    val isLoadingFireRisk: Boolean
+    val isLoadingFireRisk: Boolean,
+    val forestStand: com.indiana.zwl.domain.model.ForestStandSummary? = null,
+    val isLoadingForestStand: Boolean = false
 )
 
 data class SelectedPoiDetails(
@@ -68,6 +71,7 @@ class MainViewModel @Inject constructor(
     private val syncZonesUseCase: SyncZonesUseCase,
     private val syncPoiUseCase: SyncPoiUseCase,
     private val getFireRiskUseCase: GetFireRiskUseCase,
+    private val getForestStandUseCase: GetForestStandUseCase,
     private val getZonesUseCase: GetZonesUseCase,
     private val spatialEngine: SpatialEngine,
     private val okHttpClient: OkHttpClient,
@@ -440,13 +444,15 @@ class MainViewModel @Inject constructor(
                     zone = zone,
                     distanceMeters = distance,
                     fireRiskLevel = -1,
-                    isLoadingFireRisk = true
+                    isLoadingFireRisk = true,
+                    isLoadingForestStand = true
                 )
 
                 val tempLoc = Location("").apply {
                     latitude = clickLat
                     longitude = clickLon
                 }
+
                 val fireRiskResult = getFireRiskUseCase(tempLoc)
                 val riskCode = if (fireRiskResult.isSuccess) {
                     val code = fireRiskResult.getOrDefault(-1)
@@ -477,6 +483,14 @@ class MainViewModel @Inject constructor(
                     _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
                         fireRiskLevel = riskCode,
                         isLoadingFireRisk = false
+                    )
+                }
+
+                val forestStandResult = getForestStandUseCase(zone)
+                if (_selectedZoneDetails.value?.zone?.id == zone.id) {
+                    _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
+                        forestStand = forestStandResult.getOrNull(),
+                        isLoadingForestStand = false
                     )
                 }
             } catch (e: Throwable) {

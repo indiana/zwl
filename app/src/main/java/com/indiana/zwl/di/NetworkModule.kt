@@ -2,6 +2,7 @@ package com.indiana.zwl.di
 
 import com.indiana.zwl.data.remote.BdlArcgisApi
 import com.indiana.zwl.data.remote.BdlFireApi
+import com.indiana.zwl.data.remote.BdlOgcApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -10,6 +11,7 @@ import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Module
@@ -28,7 +30,8 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    @Named("bdlMapserver")
+    fun provideBdlMapserverRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
             .baseUrl("https://mapserver.bdl.lasy.gov.pl/")
             .client(okHttpClient)
@@ -38,13 +41,30 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideBdlFireApi(retrofit: Retrofit): BdlFireApi {
+    @Named("bdlOgc")
+    fun provideBdlOgcRetrofit(okHttpClient: OkHttpClient): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl("https://ogcapi.bdl.lasy.gov.pl/")
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideBdlFireApi(@Named("bdlMapserver") retrofit: Retrofit): BdlFireApi {
         return retrofit.create(BdlFireApi::class.java)
     }
 
     @Provides
     @Singleton
-    fun provideBdlArcgisApi(retrofit: Retrofit): BdlArcgisApi {
+    fun provideBdlArcgisApi(@Named("bdlMapserver") retrofit: Retrofit): BdlArcgisApi {
         return retrofit.create(BdlArcgisApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBdlOgcApi(@Named("bdlOgc") retrofit: Retrofit): BdlOgcApi {
+        return retrofit.create(BdlOgcApi::class.java)
     }
 }
