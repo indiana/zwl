@@ -113,6 +113,7 @@ object RdlpMapper {
             "OCHMIAST", "MIAST", "OCHMIASTOWA" -> "Ochrona urbanistyczna"
             "OCHNADWODNA", "NADWODNA" -> "Ochrona nadwodna"
             "OCHKRAJOBRAZOWA", "KRAJOBRAZOWA" -> "Ochrona krajobrazowa"
+            "OCHWOD", "WOD" -> "Ochrona wodna"
             else -> code
         }
     }
