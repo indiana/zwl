@@ -1,10 +1,12 @@
 package com.indiana.zwl.presentation.map
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.CancellationException
 import org.mapsforge.core.model.BoundingBox
 import org.mapsforge.core.model.Tile
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
@@ -25,6 +27,15 @@ sealed class DownloadStatus {
 }
 
 object OfflineMapDownloader {
+
+    private const val DOWNLOAD_CONCURRENCY = 4
+
+    private sealed class TileResult {
+        object Skipped : TileResult()
+        object Downloaded : TileResult()
+        object NotDownloaded : TileResult()
+        object NetworkError : TileResult()
+    }
 
     fun getTileX(lon: Double, zoom: Int): Int {
         return ((lon + 180.0) / 360.0 * (1 shl zoom)).toInt()
@@ -91,26 +102,68 @@ object OfflineMapDownloader {
         val tileSource = createOnlineTileSource()
 
         var successCount = 0
-        for ((index, tile) in tiles.withIndex()) {
-            val job = DownloadJob(tile, tileSource)
+        for (batchStart in 0 until total step DOWNLOAD_CONCURRENCY) {
+            val batchEnd = minOf(batchStart + DOWNLOAD_CONCURRENCY, total)
 
-            if (tileCache.containsKey(job)) {
-                successCount++
-                emit(DownloadStatus.Progress((index + 1).toFloat() / total, "Pomiń istniejący: ${index + 1} z $total..."))
-                continue
+            val results = coroutineScope {
+                (batchStart until batchEnd).map { index ->
+                    async(Dispatchers.IO) {
+                        downloadTile(tiles[index], tileSource, tileSize, tileCache, client)
+                    }
+                }.awaitAll()
             }
 
-            val url = tileSource.getTileUrl(tile)
-            val request = okhttp3.Request.Builder()
-                .url(url)
-                .header("User-Agent", "LegalnyBushcraft/1.0 (Android)")
-                .build()
-
-            try {
-                // Execute network call on Dispatchers.IO
-                val response = withContext(Dispatchers.IO) {
-                    client.newCall(request).execute()
+            var batchFailed = false
+            for ((batchOffset, result) in results.withIndex()) {
+                val index = batchStart + batchOffset
+                when (result) {
+                    TileResult.Skipped -> {
+                        successCount++
+                        emit(DownloadStatus.Progress((index + 1).toFloat() / total, "Pomiń istniejący: ${index + 1} z $total..."))
+                    }
+                    TileResult.Downloaded -> {
+                        successCount++
+                        emit(DownloadStatus.Progress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total..."))
+                    }
+                    TileResult.NotDownloaded -> {
+                        emit(DownloadStatus.Progress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total..."))
+                    }
+                    TileResult.NetworkError -> {
+                        batchFailed = true
+                    }
                 }
+            }
+
+            if (batchFailed) {
+                emit(DownloadStatus.Message("Błąd połączenia sieciowego podczas pobierania. Przerywam."))
+                return@flow
+            }
+        }
+
+        emit(DownloadStatus.Finished(successCount, total))
+    }
+
+    private suspend fun downloadTile(
+        tile: Tile,
+        tileSource: OnlineTileSource,
+        tileSize: Int,
+        tileCache: TileCache,
+        client: okhttp3.OkHttpClient
+    ): TileResult {
+        val job = DownloadJob(tile, tileSource)
+
+        if (tileCache.containsKey(job)) {
+            return TileResult.Skipped
+        }
+
+        val url = tileSource.getTileUrl(tile)
+        val request = okhttp3.Request.Builder()
+            .url(url)
+            .header("User-Agent", "LegalnyBushcraft/1.0 (Android)")
+            .build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
                     val bytes = response.body?.bytes()
                     if (bytes != null) {
@@ -121,20 +174,20 @@ object OfflineMapDownloader {
                             false
                         )
                         tileCache.put(job, bitmap)
-                        successCount++
+                        TileResult.Downloaded
+                    } else {
+                        TileResult.NotDownloaded
                     }
+                } else {
+                    TileResult.NotDownloaded
                 }
-            } catch (e: IOException) {
-                emit(DownloadStatus.Message("Błąd połączenia sieciowego podczas pobierania. Przerywam."))
-                break
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                e.printStackTrace()
             }
-
-            emit(DownloadStatus.Progress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total..."))
+        } catch (e: IOException) {
+            TileResult.NetworkError
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            e.printStackTrace()
+            TileResult.NotDownloaded
         }
-
-        emit(DownloadStatus.Finished(successCount, total))
     }
 }
