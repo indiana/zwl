@@ -24,4 +24,7 @@ interface ZoneDao {
 
     @Query("UPDATE zones SET fireRiskLevel = :fireRiskLevel, fireRiskTimestamp = :timestamp WHERE forestDistrict = :forestDistrict")
     suspend fun updateFireRisk(forestDistrict: String, fireRiskLevel: Int, timestamp: Long)
+
+    @Query("UPDATE zones SET forestStandJson = :json, forestStandTimestamp = :timestamp WHERE forestDistrict = :forestDistrict")
+    suspend fun updateForestStand(forestDistrict: String, json: String, timestamp: Long)
 }

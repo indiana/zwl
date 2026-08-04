@@ -1,15 +1,19 @@
 package com.indiana.zwl.presentation.map
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.indiana.zwl.domain.model.ForestStandSummary
 import com.indiana.zwl.presentation.SelectedZoneDetails
 import com.indiana.zwl.presentation.theme.*
 
@@ -22,7 +26,8 @@ fun ZoneDetailsCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(16.dp)
+            .heightIn(max = 400.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
         ),
@@ -32,6 +37,7 @@ fun ZoneDetailsCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             Row(
@@ -199,6 +205,179 @@ fun ZoneDetailsCard(
                             fontWeight = FontWeight.Bold,
                             color = permissionColor
                         )
+                    }
+                }
+            }
+
+            if (details.isLoadingForestStand || details.forestStand != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ForestStandSection(
+                    summary = details.forestStand,
+                    isLoading = details.isLoadingForestStand
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ForestStandSection(
+    summary: ForestStandSummary?,
+    isLoading: Boolean
+) {
+    var speciesExpanded by remember { mutableStateOf(false) }
+    val collapsedCount = 3
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = "DRZEWOSTAN",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            if (isLoading) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Pobieranie danych o drzewostanie...",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else if (summary == null) {
+                Text(
+                    text = "Brak danych",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                if (summary.speciesBreakdown.isNotEmpty()) {
+                    val visibleSpecies = if (speciesExpanded) {
+                        summary.speciesBreakdown
+                    } else {
+                        summary.speciesBreakdown.take(collapsedCount)
+                    }
+
+                    visibleSpecies.forEach { entry ->
+                        val displayName = if (entry.ageLabel != null) {
+                            "${entry.speciesName} ${entry.ageLabel}"
+                        } else {
+                            entry.speciesName
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = displayName,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${String.format(java.util.Locale.US, "%.1f", entry.percentage)}%",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    if (summary.speciesBreakdown.size > collapsedCount && !speciesExpanded) {
+                        val hiddenCount = summary.speciesBreakdown.size - collapsedCount
+                        Text(
+                            text = "Pokaż więcej ($hiddenCount)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clickable { speciesExpanded = true }
+                        )
+                    } else if (speciesExpanded && summary.speciesBreakdown.size > collapsedCount) {
+                        Text(
+                            text = "Zwiń",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clickable { speciesExpanded = false }
+                        )
+                    }
+
+                    if (summary.totalAreaHa > 0) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            thickness = 0.5.dp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Powierzchnia: ${String.format(java.util.Locale.US, "%.1f", summary.totalAreaHa)} ha",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Brak danych o gatunkach",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                val metadataItems = mutableListOf<Pair<String, String>>()
+                summary.forestFunction?.let { metadataItems.add("Funkcja lasu" to it) }
+                summary.standStructure?.let { metadataItems.add("Struktura" to it) }
+                summary.siteType?.let { metadataItems.add("Typ siedliskowy" to it) }
+                summary.protectionCategory?.let { metadataItems.add("Ochrona" to it) }
+                summary.rotationAge?.let { metadataItems.add("Wiek rębności" to "${it} lat") }
+
+                if (metadataItems.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        thickness = 0.5.dp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    metadataItems.forEach { (label, value) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 1.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = value,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 }
             }

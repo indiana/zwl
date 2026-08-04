@@ -9,7 +9,9 @@ fun ZoneEntity.toDomainModel(): Zone {
         forestDistrict = this.forestDistrict,
         geometryWkt = this.geometryWkt,
         fireRiskLevel = this.fireRiskLevel,
-        fireRiskTimestamp = this.fireRiskTimestamp
+        fireRiskTimestamp = this.fireRiskTimestamp,
+        forestStandJson = this.forestStandJson,
+        forestStandTimestamp = this.forestStandTimestamp
     )
 }
 
@@ -19,6 +21,8 @@ fun Zone.toEntity(): ZoneEntity {
         forestDistrict = this.forestDistrict,
         geometryWkt = this.geometryWkt,
         fireRiskLevel = this.fireRiskLevel,
-        fireRiskTimestamp = this.fireRiskTimestamp
+        fireRiskTimestamp = this.fireRiskTimestamp,
+        forestStandJson = this.forestStandJson,
+        forestStandTimestamp = this.forestStandTimestamp
     )
 }
