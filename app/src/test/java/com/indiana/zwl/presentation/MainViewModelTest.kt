@@ -6,9 +6,11 @@ import com.indiana.zwl.MainDispatcherRule
 import com.indiana.zwl.data.local.PoiDao
 import com.indiana.zwl.data.local.PoiEntity
 import com.indiana.zwl.data.local.ZoneDao
+import com.indiana.zwl.data.local.ZoneEntity
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
+import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
+import org.locationtech.jts.io.WKTReader
 import app.cash.turbine.test
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
@@ -149,6 +152,45 @@ class MainViewModelTest {
             val listAfterOthers = awaitItem()
             assertTrue(listAfterOthers.isEmpty())
         }
+    }
+
+    @Test
+    fun `selectZone offline should read fresh fire risk from database instead of stale in-memory zone`() = runBlocking {
+        // Arrange
+        val staleZone = Zone(
+            id = 1L,
+            forestDistrict = "Nadleśnictwo Test",
+            geometryWkt = "POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))"
+        )
+        coEvery { getFireRiskUseCase(any()) } returns Result.failure(java.net.UnknownHostException("offline"))
+        coEvery { zoneDao.getById(1L) } returns ZoneEntity(
+            id = 1L,
+            forestDistrict = "Nadleśnictwo Test",
+            geometryWkt = "",
+            fireRiskLevel = 1,
+            fireRiskTimestamp = System.currentTimeMillis()
+        )
+
+        val viewModel = MainViewModel(
+            zoneDao, poiDao, locationRepository, compassRepository,
+            syncZonesUseCase, syncPoiUseCase, getFireRiskUseCase,
+            getZonesUseCase, spatialEngine, okHttpClient, context
+        )
+
+        // Act
+        val polygon = WKTReader().read(staleZone.geometryWkt)
+        viewModel.selectZone(staleZone, polygon, 0.5, 0.5)
+
+        // Assert
+        val success = waitForState(viewModel.selectedZoneDetails, 5000) { details ->
+            details?.fireRiskLevel == 11 && details?.isLoadingFireRisk == false
+        }
+        assertTrue(
+            "Offline selection should resolve fresh cached risk (level + 10). " +
+                "Observed: ${viewModel.selectedZoneDetails.value}, debugError: ${viewModel.debugError.value}",
+            success
+        )
+        coVerify(exactly = 1) { zoneDao.getById(1L) }
     }
 
     private suspend fun <T> waitForState(

@@ -13,6 +13,12 @@ interface ZoneDao {
     @Query("SELECT * FROM zones")
     suspend fun getAllZones(): List<ZoneEntity>
 
+    @Query("SELECT * FROM zones WHERE forestDistrict = :forestDistrict COLLATE NOCASE LIMIT 1")
+    suspend fun getByForestDistrict(forestDistrict: String): ZoneEntity?
+
+    @Query("SELECT * FROM zones WHERE id = :zoneId LIMIT 1")
+    suspend fun getById(zoneId: Long): ZoneEntity?
+
     @Query("SELECT COUNT(*) FROM zones")
     suspend fun getZonesCount(): Int
 
