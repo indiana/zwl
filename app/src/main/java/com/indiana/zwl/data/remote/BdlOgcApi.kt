@@ -19,7 +19,7 @@ interface BdlOgcApi {
     @GET("collections/nadlesnictwa/items")
     suspend fun findNadlesnictwo(
         @Query("f") format: String = "json",
-        @Query("geom") geom: String,
+        @Query("bbox") bbox: String,
         @Query("limit") limit: Int = 1,
         @Query("properties") properties: String = "inspectorate_name,region_cd",
         @Query("skipGeometry") skipGeometry: Boolean = true

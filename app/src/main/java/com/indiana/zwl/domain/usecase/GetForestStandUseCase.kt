@@ -22,9 +22,10 @@ class GetForestStandUseCase @Inject constructor(
 
             val bbox = "${envelope.minX},${envelope.minY},${envelope.maxX},${envelope.maxY}"
             val centroid = geometry.centroid
-            val centroidGeom = "${centroid.x},${centroid.y}"
 
-            val regionResult = ogcApi.findNadlesnictwo(geom = centroidGeom)
+            val regionResult = ogcApi.findNadlesnictwo(
+                bbox = "${centroid.x - 0.01},${centroid.y - 0.01},${centroid.x + 0.01},${centroid.y + 0.01}"
+            )
             val regionCd = regionResult.features?.firstOrNull()?.properties?.get("region_cd") as? String
 
             if (regionCd == null) {
