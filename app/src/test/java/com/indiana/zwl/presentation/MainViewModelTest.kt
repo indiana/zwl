@@ -12,6 +12,7 @@ import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
+import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
@@ -47,6 +48,7 @@ class MainViewModelTest {
     private val syncZonesUseCase: SyncZonesUseCase = mockk()
     private val syncPoiUseCase: SyncPoiUseCase = mockk()
     private val getFireRiskUseCase: GetFireRiskUseCase = mockk()
+    private val getForestStandUseCase: GetForestStandUseCase = mockk()
     private val getZonesUseCase: GetZonesUseCase = mockk()
     private val spatialEngine: SpatialEngine = mockk(relaxed = true)
     private val okHttpClient: OkHttpClient = mockk()
@@ -81,7 +83,7 @@ class MainViewModelTest {
         val viewModel = MainViewModel(
             zoneDao, poiDao, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, getFireRiskUseCase,
-            getZonesUseCase, spatialEngine, okHttpClient, context
+            getForestStandUseCase, getZonesUseCase, spatialEngine, okHttpClient, context
         )
 
         // Assert
@@ -104,7 +106,7 @@ class MainViewModelTest {
         val viewModel = MainViewModel(
             zoneDao, poiDao, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, getFireRiskUseCase,
-            getZonesUseCase, spatialEngine, okHttpClient, context
+            getForestStandUseCase, getZonesUseCase, spatialEngine, okHttpClient, context
         )
 
         // Assert
@@ -127,7 +129,7 @@ class MainViewModelTest {
         val viewModel = MainViewModel(
             zoneDao, poiDao, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, getFireRiskUseCase,
-            getZonesUseCase, spatialEngine, okHttpClient, context
+            getForestStandUseCase, getZonesUseCase, spatialEngine, okHttpClient, context
         )
 
         viewModel.pois.test {
@@ -174,7 +176,7 @@ class MainViewModelTest {
         val viewModel = MainViewModel(
             zoneDao, poiDao, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, getFireRiskUseCase,
-            getZonesUseCase, spatialEngine, okHttpClient, context
+            getForestStandUseCase, getZonesUseCase, spatialEngine, okHttpClient, context
         )
 
         // Act
