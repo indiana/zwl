@@ -513,19 +513,29 @@ class MainViewModel @Inject constructor(
 
                 val forestStandResult = getForestStandUseCase(zone)
                 if (_selectedZoneDetails.value?.zone?.id == zone.id) {
-                    val summary = forestStandResult.getOrNull()
-                    if (summary != null) {
-                        val json = Gson().toJson(summary)
-                        val timestamp = System.currentTimeMillis()
-                        withContext(Dispatchers.IO) {
-                            zoneDao.updateForestStand(zone.forestDistrict, json, timestamp)
+                    if (forestStandResult.isSuccess) {
+                        val summary = forestStandResult.getOrNull()
+                        if (summary != null) {
+                            val json = Gson().toJson(summary)
+                            val timestamp = System.currentTimeMillis()
+                            withContext(Dispatchers.IO) {
+                                zoneDao.updateForestStand(zone.forestDistrict, json, timestamp)
+                            }
+                            updateZoneForestStandInMemory(zone.forestDistrict, json, timestamp)
                         }
-                        updateZoneForestStandInMemory(zone.forestDistrict, json, timestamp)
+                        _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
+                            forestStand = summary,
+                            isLoadingForestStand = false
+                        )
+                    } else {
+                        val exception = forestStandResult.exceptionOrNull()
+                        if (!isNetworkException(exception)) {
+                            _debugError.value = "selectZone forest stand API error:\n" + exception?.stackTraceToString()
+                        }
+                        _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
+                            isLoadingForestStand = false
+                        )
                     }
-                    _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
-                        forestStand = summary,
-                        isLoadingForestStand = false
-                    )
                 }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e

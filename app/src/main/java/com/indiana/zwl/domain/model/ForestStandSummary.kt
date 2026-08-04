@@ -14,12 +14,5 @@ data class SpeciesEntry(
     val speciesCode: String,
     val speciesName: String,
     val percentage: Double,
-    val ageClass: AgeClass
+    val ageLabel: String?
 )
-
-enum class AgeClass(val labelPl: String) {
-    MLODY("młody"),
-    DOJRZALY("dojrzały"),
-    STARY("stary"),
-    BRAK_DANYCH("brak danych")
-}

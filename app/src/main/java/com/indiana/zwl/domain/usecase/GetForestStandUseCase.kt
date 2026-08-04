@@ -1,7 +1,6 @@
 package com.indiana.zwl.domain.usecase
 
 import com.indiana.zwl.data.remote.BdlOgcApi
-import com.indiana.zwl.domain.model.AgeClass
 import com.indiana.zwl.domain.model.ForestStandSummary
 import com.indiana.zwl.domain.model.SpeciesEntry
 import com.indiana.zwl.domain.model.Zone
@@ -44,6 +43,9 @@ class GetForestStandUseCase @Inject constructor(
 
             var totalArea = 0.0
             val speciesAreaMap = mutableMapOf<String, Double>()
+            val speciesAgeSumMap = mutableMapOf<String, Double>()
+            val speciesAgeCountMap = mutableMapOf<String, Double>()
+            val speciesNazwaMap = mutableMapOf<String, String>()
             var forestFunction: String? = null
             var standStructure: String? = null
             var siteType: String? = null
@@ -59,6 +61,15 @@ class GetForestStandUseCase @Inject constructor(
                     val speciesCode = props.species_cd
                     if (!speciesCode.isNullOrBlank()) {
                         speciesAreaMap[speciesCode] = (speciesAreaMap[speciesCode] ?: 0.0) + area
+                        val age = props.spec_age
+                        if (age != null && age > 0) {
+                            speciesAgeSumMap[speciesCode] = (speciesAgeSumMap[speciesCode] ?: 0.0) + age * area
+                            speciesAgeCountMap[speciesCode] = (speciesAgeCountMap[speciesCode] ?: 0.0) + area
+                        }
+                        val nazwa = props.nazwa
+                        if (!nazwa.isNullOrBlank() && !speciesNazwaMap.containsKey(speciesCode)) {
+                            speciesNazwaMap[speciesCode] = nazwa
+                        }
                     }
                 }
 
@@ -83,11 +94,17 @@ class GetForestStandUseCase @Inject constructor(
                 .sortedByDescending { it.value }
                 .map { (code, area) ->
                     val percentage = if (totalArea > 0) (area / totalArea) * 100.0 else 0.0
+                    val avgAge = if ((speciesAgeCountMap[code] ?: 0.0) > 0) {
+                        (speciesAgeSumMap[code] ?: 0.0) / speciesAgeCountMap[code]!!
+                    } else null
+                    val ageLabel = avgAge?.let { classifyAge(it) }
+                    val fullName = speciesNazwaMap[code]
+                        ?: RdlpMapper.speciesCodeToName(code)
                     SpeciesEntry(
                         speciesCode = code,
-                        speciesName = RdlpMapper.speciesCodeToName(code),
+                        speciesName = fullName,
                         percentage = Math.round(percentage * 10.0) / 10.0,
-                        ageClass = AgeClass.BRAK_DANYCH
+                        ageLabel = ageLabel
                     )
                 }
 
@@ -106,6 +123,14 @@ class GetForestStandUseCase @Inject constructor(
             if (e is CancellationException) throw e
             e.printStackTrace()
             Result.failure(e)
+        }
+    }
+
+    private fun classifyAge(ageYears: Double): String {
+        return when {
+            ageYears < 40 -> "młoda"
+            ageYears <= 80 -> "średnia"
+            else -> "stara"
         }
     }
 

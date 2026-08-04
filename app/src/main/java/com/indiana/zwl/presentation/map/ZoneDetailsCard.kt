@@ -1,11 +1,12 @@
 package com.indiana.zwl.presentation.map
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -225,6 +226,9 @@ private fun ForestStandSection(
     summary: ForestStandSummary?,
     isLoading: Boolean
 ) {
+    var speciesExpanded by remember { mutableStateOf(false) }
+    val collapsedCount = 3
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -263,7 +267,18 @@ private fun ForestStandSection(
                 )
             } else {
                 if (summary.speciesBreakdown.isNotEmpty()) {
-                    summary.speciesBreakdown.forEach { entry ->
+                    val visibleSpecies = if (speciesExpanded) {
+                        summary.speciesBreakdown
+                    } else {
+                        summary.speciesBreakdown.take(collapsedCount)
+                    }
+
+                    visibleSpecies.forEach { entry ->
+                        val displayName = if (entry.ageLabel != null) {
+                            "${entry.speciesName} ${entry.ageLabel}"
+                        } else {
+                            entry.speciesName
+                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -271,7 +286,7 @@ private fun ForestStandSection(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = entry.speciesName,
+                                text = displayName,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -283,6 +298,29 @@ private fun ForestStandSection(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
+                    }
+
+                    if (summary.speciesBreakdown.size > collapsedCount && !speciesExpanded) {
+                        val hiddenCount = summary.speciesBreakdown.size - collapsedCount
+                        Text(
+                            text = "Pokaż więcej ($hiddenCount)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clickable { speciesExpanded = true }
+                        )
+                    } else if (speciesExpanded && summary.speciesBreakdown.size > collapsedCount) {
+                        Text(
+                            text = "Zwiń",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clickable { speciesExpanded = false }
+                        )
                     }
 
                     if (summary.totalAreaHa > 0) {
