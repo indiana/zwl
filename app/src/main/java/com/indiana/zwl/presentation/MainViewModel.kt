@@ -306,9 +306,11 @@ class MainViewModel @Inject constructor(
             currentFireRisk = code
             lastFireRiskLocation = location
             if (district != null && code in 0..3) {
+                val timestamp = System.currentTimeMillis()
                 withContext(Dispatchers.IO) {
-                    zoneDao.updateFireRisk(district, code, System.currentTimeMillis())
+                    zoneDao.updateFireRisk(district, code, timestamp)
                 }
+                updateZoneFireRiskInMemory(district, code, timestamp)
             }
         } else {
             val exception = result.exceptionOrNull()
@@ -346,6 +348,16 @@ class MainViewModel @Inject constructor(
             level + 10
         } else {
             -2
+        }
+    }
+
+    private fun updateZoneFireRiskInMemory(forestDistrict: String, level: Int, timestamp: Long) {
+        zones = zones.map { zone ->
+            if (zone.forestDistrict.equals(forestDistrict, ignoreCase = true)) {
+                zone.copy(fireRiskLevel = level, fireRiskTimestamp = timestamp)
+            } else {
+                zone
+            }
         }
     }
 
@@ -439,9 +451,11 @@ class MainViewModel @Inject constructor(
                 val riskCode = if (fireRiskResult.isSuccess) {
                     val code = fireRiskResult.getOrDefault(-1)
                     if (code in 0..3) {
+                        val timestamp = System.currentTimeMillis()
                         withContext(Dispatchers.IO) {
-                            zoneDao.updateFireRiskById(zone.id, code, System.currentTimeMillis())
+                            zoneDao.updateFireRiskById(zone.id, code, timestamp)
                         }
+                        updateZoneFireRiskInMemory(zone.forestDistrict, code, timestamp)
                     }
                     code
                 } else {
@@ -452,7 +466,8 @@ class MainViewModel @Inject constructor(
                         exception?.printStackTrace()
                     }
                     if (isNetworkException(exception)) {
-                        resolveCachedFireRisk(zone.fireRiskLevel, zone.fireRiskTimestamp)
+                        val freshZone = withContext(Dispatchers.IO) { zoneDao.getById(zone.id) }
+                        resolveCachedFireRisk(freshZone?.fireRiskLevel, freshZone?.fireRiskTimestamp)
                     } else {
                         -1
                     }
