@@ -10,7 +10,6 @@ sealed class MainUiState {
     data class Success(
         val locationStatus: LocationStatus,
         val fireRiskLevel: Int,
-        val azimuth: Float,
         val latitude: Double?,
         val longitude: Double?
     ) : MainUiState()

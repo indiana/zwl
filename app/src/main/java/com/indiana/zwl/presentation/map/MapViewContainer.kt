@@ -217,6 +217,15 @@ fun MapViewContainer(
 
     var userMarker by remember { mutableStateOf<RotatingMarker?>(null) }
 
+    LaunchedEffect(viewModel) {
+        viewModel.azimuth.collect { azimuth ->
+            userMarker?.let { marker ->
+                marker.azimuth = azimuth
+                marker.requestRedraw()
+            }
+        }
+    }
+
     val isOnlineState by rememberIsOnline()
 
     val isInZone = (uiState as? MainUiState.Success)?.locationStatus is LocationStatus.InZone
@@ -298,7 +307,6 @@ fun MapViewContainer(
                         val userPos = LatLong(lat, lon)
                         userMarker?.let { marker ->
                             marker.latLong = userPos
-                            marker.azimuth = state.azimuth
                             marker.requestRedraw()
                             if (!mapView.layerManager.layers.contains(marker)) {
                                 mapView.layerManager.layers.add(marker)
