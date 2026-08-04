@@ -11,9 +11,17 @@ data class OgcFeatureCollection(
 data class OgcFeature(
     val type: String,
     val id: Int?,
-    val properties: OgcStandProperties?,
+    val properties: Map<String, Any?>?,
     val geometry: GeoJsonGeometry?
-)
+) {
+    val standProperties: OgcStandProperties?
+        get() = properties?.let {
+            com.google.gson.Gson().fromJson(
+                com.google.gson.Gson().toJson(it),
+                OgcStandProperties::class.java
+            )
+        }
+}
 
 data class OgcStandProperties(
     val species_cd: String?,

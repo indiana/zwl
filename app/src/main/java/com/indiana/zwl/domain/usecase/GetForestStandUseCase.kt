@@ -50,7 +50,7 @@ class GetForestStandUseCase @Inject constructor(
             var rotationAge: Int? = null
 
             for (feature in features) {
-                val props = feature.properties ?: continue
+                val props = feature.standProperties ?: continue
                 val area = props.sub_area ?: 0.0
 
                 if (area > 0) {
