@@ -453,7 +453,7 @@ class MainViewModel @Inject constructor(
                     if (code in 0..3) {
                         val timestamp = System.currentTimeMillis()
                         withContext(Dispatchers.IO) {
-                            zoneDao.updateFireRiskById(zone.id, code, timestamp)
+                            zoneDao.updateFireRisk(zone.forestDistrict, code, timestamp)
                         }
                         updateZoneFireRiskInMemory(zone.forestDistrict, code, timestamp)
                     }
@@ -466,7 +466,7 @@ class MainViewModel @Inject constructor(
                         exception?.printStackTrace()
                     }
                     if (isNetworkException(exception)) {
-                        val freshZone = withContext(Dispatchers.IO) { zoneDao.getById(zone.id) }
+                        val freshZone = withContext(Dispatchers.IO) { zoneDao.getByForestDistrict(zone.forestDistrict) }
                         resolveCachedFireRisk(freshZone?.fireRiskLevel, freshZone?.fireRiskTimestamp)
                     } else {
                         -1
