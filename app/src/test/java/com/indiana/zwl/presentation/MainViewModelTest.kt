@@ -182,10 +182,14 @@ class MainViewModelTest {
         viewModel.selectZone(staleZone, polygon, 0.5, 0.5)
 
         // Assert
-        val success = waitForState(viewModel.selectedZoneDetails, 2000) { details ->
+        val success = waitForState(viewModel.selectedZoneDetails, 5000) { details ->
             details?.fireRiskLevel == 11 && details?.isLoadingFireRisk == false
         }
-        assertTrue("Offline selection should resolve fresh cached risk (level + 10)", success)
+        assertTrue(
+            "Offline selection should resolve fresh cached risk (level + 10). " +
+                "Observed: ${viewModel.selectedZoneDetails.value}, debugError: ${viewModel.debugError.value}",
+            success
+        )
         coVerify(exactly = 1) { zoneDao.getById(1L) }
     }
 

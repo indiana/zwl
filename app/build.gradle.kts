@@ -117,5 +117,9 @@ dependencies {
 tasks.withType<Test> {
     testLogging {
         events("passed", "skipped", "failed")
+        showStackTraces = true
+        showExceptions = true
+        showCauses = true
+        showStandardStreams = true
     }
 }
