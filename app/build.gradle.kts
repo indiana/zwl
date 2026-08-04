@@ -53,6 +53,11 @@ android {
             excludes += "META-INF/DEPENDENCIES"
         }
     }
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -117,9 +122,5 @@ dependencies {
 tasks.withType<Test> {
     testLogging {
         events("passed", "skipped", "failed")
-        showStackTraces = true
-        showExceptions = true
-        showCauses = true
-        showStandardStreams = true
     }
 }
