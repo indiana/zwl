@@ -9,6 +9,8 @@ import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 @HiltWorker
 class SyncWorker @AssistedInject constructor(
@@ -20,9 +22,12 @@ class SyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         return try {
-            val zonesResult = syncZonesUseCase()
-            val poiResult = syncPoiUseCase()
-            
+            val (zonesResult, poiResult) = coroutineScope {
+                val zonesDeferred = async { syncZonesUseCase() }
+                val poiDeferred = async { syncPoiUseCase() }
+                zonesDeferred.await() to poiDeferred.await()
+            }
+
             if (zonesResult.isSuccess && poiResult.isSuccess) {
                 Result.success()
             } else {
