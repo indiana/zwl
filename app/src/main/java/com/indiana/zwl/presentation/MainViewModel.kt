@@ -17,6 +17,7 @@ import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
+import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
@@ -365,6 +366,29 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    private fun loadCachedForestStand(zone: Zone): com.indiana.zwl.domain.model.ForestStandSummary? {
+        val json = zone.forestStandJson ?: return null
+        val timestamp = zone.forestStandTimestamp ?: return null
+        val now = System.currentTimeMillis()
+        if (now - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS) return null
+        return try {
+            Gson().fromJson(json, com.indiana.zwl.domain.model.ForestStandSummary::class.java)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private fun updateZoneForestStandInMemory(forestDistrict: String, json: String, timestamp: Long) {
+        zones = zones.map { zone ->
+            if (zone.forestDistrict.equals(forestDistrict, ignoreCase = true)) {
+                zone.copy(forestStandJson = json, forestStandTimestamp = timestamp)
+            } else {
+                zone
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopTracking()
@@ -445,7 +469,8 @@ class MainViewModel @Inject constructor(
                     distanceMeters = distance,
                     fireRiskLevel = -1,
                     isLoadingFireRisk = true,
-                    isLoadingForestStand = true
+                    forestStand = loadCachedForestStand(zone),
+                    isLoadingForestStand = zone.forestStandJson == null
                 )
 
                 val tempLoc = Location("").apply {
@@ -488,8 +513,17 @@ class MainViewModel @Inject constructor(
 
                 val forestStandResult = getForestStandUseCase(zone)
                 if (_selectedZoneDetails.value?.zone?.id == zone.id) {
+                    val summary = forestStandResult.getOrNull()
+                    if (summary != null) {
+                        val json = Gson().toJson(summary)
+                        val timestamp = System.currentTimeMillis()
+                        withContext(Dispatchers.IO) {
+                            zoneDao.updateForestStand(zone.forestDistrict, json, timestamp)
+                        }
+                        updateZoneForestStandInMemory(zone.forestDistrict, json, timestamp)
+                    }
                     _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
-                        forestStand = forestStandResult.getOrNull(),
+                        forestStand = summary,
                         isLoadingForestStand = false
                     )
                 }
@@ -552,6 +586,7 @@ class MainViewModel @Inject constructor(
 
     companion object {
         private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
+        private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
     }
 }
 

@@ -9,5 +9,7 @@ data class ZoneEntity(
     val forestDistrict: String,
     val geometryWkt: String,
     val fireRiskLevel: Int? = null,
-    val fireRiskTimestamp: Long? = null
+    val fireRiskTimestamp: Long? = null,
+    val forestStandJson: String? = null,
+    val forestStandTimestamp: Long? = null
 )
