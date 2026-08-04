@@ -24,8 +24,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.combine
@@ -74,6 +76,9 @@ class MainViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
     val uiState: StateFlow<MainUiState> = _uiState
+
+    private val _azimuth = MutableStateFlow(0f)
+    val azimuth: StateFlow<Float> = _azimuth.asStateFlow()
 
     private val _isDownloadingArea = MutableStateFlow(false)
     val isDownloadingArea: StateFlow<Boolean> = _isDownloadingArea
@@ -249,32 +254,35 @@ class MainViewModel @Inject constructor(
             }
 
         trackingJob = viewModelScope.launch {
-            combine(
-                locationWithStatusFlow,
-                compassRepository.azimuthFlow
-            ) { (location, status, fireRisk), azimuth ->
-                // Aktualizujemy odległość do wybranego POI na żywo w tle
-                if (location != null) {
-                    _selectedPoiDetails.value?.let { currentPoiDetails ->
-                        val results = FloatArray(1)
-                        Location.distanceBetween(
-                            location.latitude, location.longitude,
-                            currentPoiDetails.poi.latitude, currentPoiDetails.poi.longitude,
-                            results
+            coroutineScope {
+                launch {
+                    locationWithStatusFlow.collect { (location, status, fireRisk) ->
+                        // Aktualizujemy odległość do wybranego POI na żywo w tle
+                        if (location != null) {
+                            _selectedPoiDetails.value?.let { currentPoiDetails ->
+                                val results = FloatArray(1)
+                                Location.distanceBetween(
+                                    location.latitude, location.longitude,
+                                    currentPoiDetails.poi.latitude, currentPoiDetails.poi.longitude,
+                                    results
+                                )
+                                _selectedPoiDetails.value = currentPoiDetails.copy(distanceMeters = results[0].toDouble())
+                            }
+                        }
+
+                        _uiState.value = MainUiState.Success(
+                            locationStatus = status,
+                            fireRiskLevel = fireRisk,
+                            latitude = location?.latitude,
+                            longitude = location?.longitude
                         )
-                        _selectedPoiDetails.value = currentPoiDetails.copy(distanceMeters = results[0].toDouble())
                     }
                 }
-
-                MainUiState.Success(
-                    locationStatus = status,
-                    fireRiskLevel = fireRisk,
-                    azimuth = azimuth,
-                    latitude = location?.latitude,
-                    longitude = location?.longitude
-                )
-            }.collect { state ->
-                _uiState.value = state
+                launch {
+                    compassRepository.azimuthFlow.collect { azimuth ->
+                        _azimuth.value = azimuth
+                    }
+                }
             }
         }
     }

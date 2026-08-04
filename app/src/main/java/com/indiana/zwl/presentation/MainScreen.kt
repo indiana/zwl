@@ -44,6 +44,7 @@ fun MainScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val debugError by viewModel.debugError.collectAsStateWithLifecycle()
+    val azimuth by viewModel.azimuth.collectAsStateWithLifecycle()
 
     debugError?.let { errorMsg ->
         AlertDialog(
@@ -274,7 +275,7 @@ fun MainScreen(
                                         nearestDistrict = status.nearestDistrict,
                                         distanceMeters = status.distanceMeters,
                                         bearingDegrees = status.bearingDegrees,
-                                        azimuth = state.azimuth
+                                        azimuth = azimuth
                                     )
                                 }
 
