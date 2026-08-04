@@ -6,7 +6,6 @@ import androidx.work.WorkerParameters
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
-import io.mockk.coAnswers
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.delay
