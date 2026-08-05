@@ -237,6 +237,7 @@ fun InZoneContent(
         }
     }
     }
+}
 
 internal fun fireRiskStatusText(level: Int): String = when (level) {
     0 -> "STOPNIEŃ 0 (Brak zagrożenia)"
