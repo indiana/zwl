@@ -43,6 +43,7 @@ import javax.inject.Inject
 import com.indiana.zwl.presentation.map.OfflineMapDownloader
 import com.indiana.zwl.presentation.map.DownloadStatus
 import org.mapsforge.core.model.BoundingBox
+import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.layer.cache.TileCache
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -163,6 +164,16 @@ class MainViewModel @Inject constructor(
     private var lastFireRiskLocation: Location? = null
     var zones: List<Zone> = emptyList()
         private set
+
+    var savedMapCenter: LatLong? = null
+        private set
+    var savedMapZoom: Byte? = null
+        private set
+
+    fun saveMapState(center: LatLong?, zoom: Byte?) {
+        if (center != null) savedMapCenter = center
+        if (zoom != null) savedMapZoom = zoom
+    }
 
     init {
         loadZonesAndInitializeEngine()
@@ -376,6 +387,15 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    private fun initialZoneDetails(zone: Zone) = SelectedZoneDetails(
+        zone = zone,
+        distanceMeters = null,
+        fireRiskLevel = -1,
+        isLoadingFireRisk = true,
+        forestStand = null,
+        isLoadingForestStand = true
+    )
+
     private fun isForestStandCacheStale(zone: Zone): Boolean {
         val timestamp = zone.forestStandTimestamp ?: return true
         return System.currentTimeMillis() - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
@@ -426,6 +446,7 @@ class MainViewModel @Inject constructor(
     }
 
     fun selectZone(zone: Zone, jtsPolygon: org.locationtech.jts.geom.Geometry, clickLat: Double, clickLon: Double) {
+        _selectedZoneDetails.value = initialZoneDetails(zone)
         viewModelScope.launch {
             try {
                 _selectedPoiDetails.value = null
@@ -469,14 +490,13 @@ class MainViewModel @Inject constructor(
                 val cachedForestStand = loadCachedForestStand(zone)
                 val needsForestStandRefresh = cachedForestStand == null || isForestStandCacheStale(zone)
 
-                _selectedZoneDetails.value = SelectedZoneDetails(
-                    zone = zone,
-                    distanceMeters = distance,
-                    fireRiskLevel = -1,
-                    isLoadingFireRisk = true,
-                    forestStand = cachedForestStand,
-                    isLoadingForestStand = needsForestStandRefresh
-                )
+                if (_selectedZoneDetails.value?.zone?.id == zone.id) {
+                    _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
+                        distanceMeters = distance,
+                        forestStand = cachedForestStand,
+                        isLoadingForestStand = needsForestStandRefresh
+                    )
+                }
 
                 val tempLoc = Location("").apply {
                     latitude = clickLat
@@ -548,6 +568,28 @@ class MainViewModel @Inject constructor(
                 if (e is CancellationException) throw e
                 e.printStackTrace()
                 _debugError.value = "selectZone coroutine error:\n" + e.stackTraceToString()
+            }
+        }
+    }
+
+    fun selectZoneByDistrict(districtName: String) {
+        val zone = zones.firstOrNull { it.forestDistrict.equals(districtName, ignoreCase = true) } ?: return
+        _selectedZoneDetails.value = initialZoneDetails(zone)
+        viewModelScope.launch {
+            try {
+                val (jtsPolygon, lat, lon) = withContext(Dispatchers.Default) {
+                    val polygon = WKTReader().read(zone.geometryWkt)
+                    val centroid = polygon.centroid
+                    val successState = uiState.value as? MainUiState.Success
+                    val useLat = successState?.latitude ?: centroid.y
+                    val useLon = successState?.longitude ?: centroid.x
+                    Triple(polygon, useLat, useLon)
+                }
+                selectZone(zone, jtsPolygon, lat, lon)
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                e.printStackTrace()
+                _debugError.value = "selectZoneByDistrict error:\n" + e.stackTraceToString()
             }
         }
     }

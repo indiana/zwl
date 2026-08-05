@@ -92,17 +92,29 @@ fun MapViewContainer(
     val showShelters by viewModel.showShelters.collectAsState()
     val showOthers by viewModel.showOthers.collectAsState()
 
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.clearSelectedZone()
-            viewModel.clearSelectedPoi()
-        }
-    }
-
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(mapViewInstance, isActive, uiState) {
+        val mv = mapViewInstance ?: return@LaunchedEffect
+        if (!isActive || hasCenteredOnStartup) return@LaunchedEffect
+        if (viewModel.savedMapCenter != null) {
+            hasCenteredOnStartup = true
+            return@LaunchedEffect
+        }
+        val state = uiState
+        if (state is MainUiState.Success) {
+            val lat = state.latitude
+            val lon = state.longitude
+            if (lat != null && lon != null) {
+                mv.setCenter(LatLong(lat, lon))
+                mv.setZoomLevel(15)
+                hasCenteredOnStartup = true
+            }
+        }
+    }
 
     var downloadLayerInstance by remember { mutableStateOf<TileDownloadLayer?>(null) }
     var poiFolderOverlay by remember { mutableStateOf<org.mapsforge.map.layer.GroupLayer?>(null) }
@@ -270,8 +282,14 @@ fun MapViewContainer(
                         viewModel.clearSelectedPoi()
                     })
 
-                    this.setCenter(LatLong(52.23, 21.01))
-                    this.setZoomLevel(15)
+                    val savedCenter = viewModel.savedMapCenter
+                    if (savedCenter != null) {
+                        this.setCenter(savedCenter)
+                        viewModel.savedMapZoom?.let { this.setZoomLevel(it) }
+                    } else {
+                        this.setCenter(LatLong(52.23, 21.01))
+                        this.setZoomLevel(15)
+                    }
 
                     drawZonePolygons(
                         context = ctx,
@@ -304,18 +322,12 @@ fun MapViewContainer(
                     val lat = state.latitude
                     val lon = state.longitude
                     if (lat != null && lon != null) {
-                        val userPos = LatLong(lat, lon)
                         userMarker?.let { marker ->
-                            marker.latLong = userPos
+                            marker.latLong = LatLong(lat, lon)
                             marker.requestRedraw()
                             if (!mapView.layerManager.layers.contains(marker)) {
                                 mapView.layerManager.layers.add(marker)
                             }
-                        }
-                        if (!hasCenteredOnStartup) {
-                            mapView.setCenter(userPos)
-                            mapView.setZoomLevel(15)
-                            hasCenteredOnStartup = true
                         }
                     } else {
                         userMarker?.let { marker ->
@@ -327,6 +339,8 @@ fun MapViewContainer(
                 }
             },
             onRelease = { mapView ->
+                val position = mapView.model.mapViewPosition
+                viewModel.saveMapState(position.center, position.zoomLevel)
                 mapView.destroyAll()
                 tileCacheInstance?.destroy()
                 tileCacheInstance = null
@@ -632,21 +646,6 @@ fun MapViewContainer(
                         )
                     }
                 }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = selectedZone != null,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { height -> height / 2 }),
-            exit = fadeOut() + slideOutVertically(targetOffsetY = { height -> height / 2 }),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            selectedZone?.let { details ->
-                ZoneDetailsCard(
-                    details = details,
-                    onClose = { viewModel.clearSelectedZone() },
-                    modifier = Modifier.padding(bottom = 88.dp)
-                )
             }
         }
 

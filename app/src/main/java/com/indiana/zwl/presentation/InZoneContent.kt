@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,7 +30,8 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun InZoneContent(
     forestDistrict: String,
-    fireRiskLevel: Int
+    fireRiskLevel: Int,
+    onViewDetailsClick: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -65,13 +68,32 @@ fun InZoneContent(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = forestDistrict,
-                fontSize = 18.sp,
-                color = ForestGreenText,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center
-            )
+            Surface(
+                onClick = { onViewDetailsClick?.invoke() },
+                color = GreenPrimary.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, ForestGreenAccent)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = forestDistrict,
+                        fontSize = 18.sp,
+                        color = ForestGreenText,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Szczegóły strefy",
+                        tint = ForestGreenAccent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
         
         Spacer(modifier = Modifier.height(24.dp))

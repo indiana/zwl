@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,7 +27,8 @@ fun OutsideZoneContent(
     nearestDistrict: String,
     distanceMeters: Double,
     bearingDegrees: Float,
-    azimuth: Float
+    azimuth: Float,
+    onViewDetailsClick: (() -> Unit)? = null
 ) {
     var accumulatedAzimuth by remember { mutableStateOf(azimuth) }
     LaunchedEffect(azimuth) {
@@ -115,6 +118,7 @@ fun OutsideZoneContent(
         }
 
         Card(
+            onClick = { onViewDetailsClick?.invoke() },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
@@ -135,13 +139,25 @@ fun OutsideZoneContent(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                Text(
-                    text = nearestDistrict,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    textAlign = TextAlign.Center
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = nearestDistrict,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Szczegóły strefy",
+                        tint = YellowPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
