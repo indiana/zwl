@@ -217,6 +217,7 @@ fun MainScreen(
 
         is MainUiState.Success -> {
             val isInZone = state.locationStatus is LocationStatus.InZone
+            val selectedZoneDetails by viewModel.selectedZoneDetails.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
 
             ZwlTheme(isInZone = isInZone) {
@@ -266,7 +267,10 @@ fun MainScreen(
                                 is LocationStatus.InZone -> {
                                     InZoneContent(
                                         forestDistrict = status.forestDistrict,
-                                        fireRiskLevel = state.fireRiskLevel
+                                        fireRiskLevel = state.fireRiskLevel,
+                                        onViewDetailsClick = {
+                                            viewModel.selectZoneByDistrict(status.forestDistrict)
+                                        }
                                     )
                                 }
 
@@ -275,7 +279,10 @@ fun MainScreen(
                                         nearestDistrict = status.nearestDistrict,
                                         distanceMeters = status.distanceMeters,
                                         bearingDegrees = status.bearingDegrees,
-                                        azimuth = azimuth
+                                        azimuth = azimuth,
+                                        onViewDetailsClick = {
+                                            viewModel.selectZoneByDistrict(status.nearestDistrict)
+                                        }
                                     )
                                 }
 
@@ -328,6 +335,13 @@ fun MainScreen(
                                 viewModel = viewModel,
                                 zones = viewModel.zones,
                                 isActive = selectedTab == 1
+                            )
+                        }
+
+                        selectedZoneDetails?.let { details ->
+                            ZoneDetailsScreen(
+                                details = details,
+                                onClose = { viewModel.clearSelectedZone() }
                             )
                         }
                     }

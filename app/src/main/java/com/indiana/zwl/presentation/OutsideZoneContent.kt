@@ -25,7 +25,8 @@ fun OutsideZoneContent(
     nearestDistrict: String,
     distanceMeters: Double,
     bearingDegrees: Float,
-    azimuth: Float
+    azimuth: Float,
+    onViewDetailsClick: (() -> Unit)? = null
 ) {
     var accumulatedAzimuth by remember { mutableStateOf(azimuth) }
     LaunchedEffect(azimuth) {
@@ -161,6 +162,23 @@ fun OutsideZoneContent(
                     color = Color.LightGray,
                     textAlign = TextAlign.Center
                 )
+
+                if (onViewDetailsClick != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { onViewDetailsClick.invoke() },
+                        colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Szczegóły najbliższej strefy",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
             }
         }
     }

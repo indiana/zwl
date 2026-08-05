@@ -552,6 +552,20 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    fun selectZoneByDistrict(districtName: String) {
+        val zone = zones.firstOrNull { it.forestDistrict.equals(districtName, ignoreCase = true) } ?: return
+        try {
+            val jtsPolygon = WKTReader().read(zone.geometryWkt)
+            val centroid = jtsPolygon.centroid
+            val successState = uiState.value as? MainUiState.Success
+            val lat = successState?.latitude ?: centroid.y
+            val lon = successState?.longitude ?: centroid.x
+            selectZone(zone, jtsPolygon, lat, lon)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+    }
+
     fun setDebugError(msg: String) {
         _debugError.value = msg
     }

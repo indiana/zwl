@@ -636,21 +636,6 @@ fun MapViewContainer(
         }
 
         AnimatedVisibility(
-            visible = selectedZone != null,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { height -> height / 2 }),
-            exit = fadeOut() + slideOutVertically(targetOffsetY = { height -> height / 2 }),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            selectedZone?.let { details ->
-                ZoneDetailsCard(
-                    details = details,
-                    onClose = { viewModel.clearSelectedZone() },
-                    modifier = Modifier.padding(bottom = 88.dp)
-                )
-            }
-        }
-
-        AnimatedVisibility(
             visible = selectedPoi != null,
             enter = fadeIn() + slideInVertically(initialOffsetY = { height -> height / 2 }),
             exit = fadeOut() + slideOutVertically(targetOffsetY = { height -> height / 2 }),

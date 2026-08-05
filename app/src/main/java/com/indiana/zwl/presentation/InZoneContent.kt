@@ -28,7 +28,8 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun InZoneContent(
     forestDistrict: String,
-    fireRiskLevel: Int
+    fireRiskLevel: Int,
+    onViewDetailsClick: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -237,6 +238,23 @@ fun InZoneContent(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                             )
                         }
+                    }
+                }
+
+                if (onViewDetailsClick != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { onViewDetailsClick.invoke() },
+                        colors = ButtonDefaults.buttonColors(containerColor = ForestGreenAccent),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Zobacz pełne dane strefy",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
                     }
                 }
             }
