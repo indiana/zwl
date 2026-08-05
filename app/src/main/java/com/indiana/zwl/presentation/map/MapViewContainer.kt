@@ -92,13 +92,6 @@ fun MapViewContainer(
     val showShelters by viewModel.showShelters.collectAsState()
     val showOthers by viewModel.showOthers.collectAsState()
 
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.clearSelectedZone()
-            viewModel.clearSelectedPoi()
-        }
-    }
-
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
@@ -107,6 +100,10 @@ fun MapViewContainer(
     LaunchedEffect(mapViewInstance, isActive, uiState) {
         val mv = mapViewInstance ?: return@LaunchedEffect
         if (!isActive || hasCenteredOnStartup) return@LaunchedEffect
+        if (viewModel.savedMapCenter != null) {
+            hasCenteredOnStartup = true
+            return@LaunchedEffect
+        }
         val state = uiState
         if (state is MainUiState.Success) {
             val lat = state.latitude
@@ -285,8 +282,14 @@ fun MapViewContainer(
                         viewModel.clearSelectedPoi()
                     })
 
-                    this.setCenter(LatLong(52.23, 21.01))
-                    this.setZoomLevel(15)
+                    val savedCenter = viewModel.savedMapCenter
+                    if (savedCenter != null) {
+                        this.setCenter(savedCenter)
+                        viewModel.savedMapZoom?.let { this.setZoomLevel(it) }
+                    } else {
+                        this.setCenter(LatLong(52.23, 21.01))
+                        this.setZoomLevel(15)
+                    }
 
                     drawZonePolygons(
                         context = ctx,
@@ -336,6 +339,8 @@ fun MapViewContainer(
                 }
             },
             onRelease = { mapView ->
+                val position = mapView.model.mapViewPosition
+                viewModel.saveMapState(position.center, position.zoomLevel)
                 mapView.destroyAll()
                 tileCacheInstance?.destroy()
                 tileCacheInstance = null

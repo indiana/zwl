@@ -43,6 +43,7 @@ import javax.inject.Inject
 import com.indiana.zwl.presentation.map.OfflineMapDownloader
 import com.indiana.zwl.presentation.map.DownloadStatus
 import org.mapsforge.core.model.BoundingBox
+import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.layer.cache.TileCache
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -163,6 +164,16 @@ class MainViewModel @Inject constructor(
     private var lastFireRiskLocation: Location? = null
     var zones: List<Zone> = emptyList()
         private set
+
+    var savedMapCenter: LatLong? = null
+        private set
+    var savedMapZoom: Byte? = null
+        private set
+
+    fun saveMapState(center: LatLong?, zoom: Byte?) {
+        if (center != null) savedMapCenter = center
+        if (zoom != null) savedMapZoom = zoom
+    }
 
     init {
         loadZonesAndInitializeEngine()
