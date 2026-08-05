@@ -8,7 +8,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
@@ -49,14 +51,25 @@ fun OutsideZoneContent(
         label = "AnimatedBearing"
     )
 
-    Column(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
     ) {
+        val compassSize = minOf(220.dp, maxHeight / 2f)
+        val compassRadius = compassSize / 2
+        val needleSize = minOf(80.dp, compassSize * 0.36f)
+        val innerPadding = minOf(12.dp, compassSize * 0.06f)
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(top = 40.dp)
@@ -88,17 +101,17 @@ fun OutsideZoneContent(
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(vertical = 16.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(220.dp)
+                    .size(compassSize)
                     .rotate(-animatedAzimuth)
-                    .border(2.dp, Color.DarkGray, RoundedCornerShape(110.dp)),
+                    .border(2.dp, Color.DarkGray, RoundedCornerShape(compassRadius)),
                 contentAlignment = Alignment.Center
             ) {
-                Box(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+                Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                     Text("N", modifier = Modifier.align(Alignment.TopCenter), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Text("S", modifier = Modifier.align(Alignment.BottomCenter), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Text("W", modifier = Modifier.align(Alignment.CenterStart), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -107,7 +120,7 @@ fun OutsideZoneContent(
 
                 Canvas(
                     modifier = Modifier
-                        .size(80.dp)
+                        .size(needleSize)
                         .rotate(animatedBearing)
                 ) {
                     val path = Path().apply {
@@ -184,6 +197,7 @@ fun OutsideZoneContent(
                 )
             }
         }
+    }
     }
 }
 

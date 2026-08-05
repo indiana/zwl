@@ -2,6 +2,7 @@ package com.indiana.zwl.presentation
 
 import com.indiana.zwl.presentation.theme.*
 
+import android.provider.Settings
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -13,7 +14,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
@@ -22,10 +25,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -34,16 +38,25 @@ fun InZoneContent(
     forestDistrict: String,
     fireRiskLevel: Int,
     onViewDetailsClick: (() -> Unit)? = null,
-    onDebugToggle: (() -> Unit)? = null
+    onDebugToggle: (() -> Unit)? = null,
+    isActive: Boolean = true
 ) {
-    Column(
+    // Unbounded-constraint assumption: the host (Scaffold content Box with fillMaxSize) always
+    // provides finite maxHeight, including the hidden tab (size(0.dp) -> maxHeight = 0.dp).
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(top = 16.dp)
@@ -127,18 +140,7 @@ fun InZoneContent(
                     textAlign = TextAlign.Center
                 )
                 
-                val riskText = when (fireRiskLevel) {
-                    0 -> "STOPNIEŃ 0 (Brak zagrożenia)"
-                    1 -> "STOPNIEŃ 1 (Niskie zagrożenie)"
-                    2 -> "STOPNIEŃ 2 (Średnie zagrożenie)"
-                    3 -> "STOPNIEŃ 3 (BARDZO WYSOKIE)"
-                    10 -> "STOPNIEŃ 0 (Brak - archiwalne offline)"
-                    11 -> "STOPNIEŃ 1 (Niskie - archiwalne offline)"
-                    12 -> "STOPNIEŃ 2 (Średnie - archiwalne offline)"
-                    13 -> "STOPNIEŃ 3 (WYSOKIE - archiwalne offline)"
-                    -2 -> "Status pożarowy: Nieznany (brak sieci)"
-                    else -> "Status pożarowy: Brak danych"
-                }
+                val riskText = fireRiskStatusText(fireRiskLevel)
                 
                 val riskColor = when (fireRiskLevel) {
                     0, 10 -> RiskLevelNone
@@ -202,70 +204,29 @@ fun InZoneContent(
                         }
                     }
                     3 -> {
-                        val infiniteTransition = rememberInfiniteTransition(label = " Stove Warning Pulse")
-                        val pulseAlpha by infiniteTransition.animateFloat(
-                            initialValue = 0.4f,
-                            targetValue = 1.0f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(800, easing = LinearEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "PulseAlpha"
+                        PulsingBanBadge(
+                            text = "BEZWZGLĘDNY ZAKAZ",
+                            isActive = isActive
                         )
-
-                        Surface(
-                            color = ErrorRedButton.copy(alpha = 0.2f * pulseAlpha),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(2.dp, ErrorRedButton.copy(alpha = pulseAlpha)),
-                            modifier = Modifier.alpha(pulseAlpha)
-                        ) {
-                            Text(
-                                text = "BEZWZGLĘDNY ZAKAZ",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = ErrorRedAccent,
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
-                            )
-                        }
                     }
                     13 -> {
-                        val infiniteTransition = rememberInfiniteTransition(label = " Stove Warning Pulse Offline")
-                        val pulseAlpha by infiniteTransition.animateFloat(
-                            initialValue = 0.4f,
-                            targetValue = 1.0f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(800, easing = LinearEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "PulseAlpha"
+                        PulsingBanBadge(
+                            text = "BEZWZGLĘDNY ZAKAZ (dane archiwalne)",
+                            fontSize = 16.sp,
+                            isActive = isActive
                         )
-
-                        Surface(
-                            color = ErrorRedButton.copy(alpha = 0.2f * pulseAlpha),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(2.dp, ErrorRedButton.copy(alpha = pulseAlpha)),
-                            modifier = Modifier.alpha(pulseAlpha)
-                        ) {
-                            Text(
-                                text = "BEZWZGLĘDNY ZAKAZ (dane archiwalne)",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = ErrorRedAccent,
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
-                            )
-                        }
                     }
                     else -> {
                         Surface(
-                            color = YellowSecondary.copy(alpha = 0.15f),
+                            color = ErrorRedButton.copy(alpha = 0.15f),
                             shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, YellowSecondary)
+                            border = BorderStroke(1.dp, ErrorRedButton)
                         ) {
                             Text(
-                                text = "WARUNKOWO DOZWOLONE\n(brak aktualnych danych pożarowych)",
+                                text = "BRAK DANYCH\nnie używaj kuchenek gazowych\nsprawdź komunikat w nadleśnictwie",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = RiskLevelLow,
+                                color = ErrorRedAccent,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                             )
@@ -274,5 +235,65 @@ fun InZoneContent(
                 }
             }
         }
+    }
+    }
+
+internal fun fireRiskStatusText(level: Int): String = when (level) {
+    0 -> "STOPNIEŃ 0 (Brak zagrożenia)"
+    1 -> "STOPNIEŃ 1 (Niskie zagrożenie)"
+    2 -> "STOPNIEŃ 2 (Średnie zagrożenie)"
+    3 -> "STOPNIEŃ 3 (BARDZO WYSOKIE)"
+    10 -> "STOPNIEŃ 0 (Brak - archiwalne offline)"
+    11 -> "STOPNIEŃ 1 (Niskie - archiwalne offline)"
+    12 -> "STOPNIEŃ 2 (Średnie - archiwalne offline)"
+    13 -> "STOPNIEŃ 3 (WYSOKIE - archiwalne offline)"
+    else -> "Status pożarowy: Brak danych"   // UNIFIED: covers -2 and any unknown level
+}
+
+internal fun shouldPulse(isActive: Boolean, animatorDurationScale: Float): Boolean =
+    isActive && animatorDurationScale > 0f
+
+@Composable
+internal fun PulsingBanBadge(
+    text: String,
+    modifier: Modifier = Modifier,
+    fontSize: TextUnit = 18.sp,
+    isActive: Boolean = true
+) {
+    val context = LocalContext.current
+    val animatorScale = Settings.Global.getFloat(
+        context.contentResolver,
+        Settings.Global.ANIMATOR_DURATION_SCALE,
+        1f
+    )
+    val pulseAlpha = if (shouldPulse(isActive, animatorScale)) {
+        val infiniteTransition = rememberInfiniteTransition(label = "BanBadgePulse")
+        val alpha by infiniteTransition.animateFloat(
+            initialValue = 0.6f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "PulseAlpha"
+        )
+        alpha
+    } else {
+        1f
+    }
+
+    Surface(
+        modifier = modifier,
+        color = ErrorRedButton.copy(alpha = 0.2f * pulseAlpha),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(2.dp, ErrorRedButton.copy(alpha = pulseAlpha))
+    ) {
+        Text(
+            text = text,
+            fontSize = fontSize,
+            fontWeight = FontWeight.Bold,
+            color = ErrorRedAccent,                       // ALWAYS full alpha — never fades
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
+        )
     }
 }
