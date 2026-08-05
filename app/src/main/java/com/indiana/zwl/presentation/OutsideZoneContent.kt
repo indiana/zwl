@@ -116,6 +116,7 @@ fun OutsideZoneContent(
         }
 
         Card(
+            onClick = { onViewDetailsClick?.invoke() },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
@@ -136,13 +137,25 @@ fun OutsideZoneContent(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                Text(
-                    text = nearestDistrict,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    textAlign = TextAlign.Center
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = nearestDistrict,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.Info,
+                        contentDescription = "Szczegóły strefy",
+                        tint = YellowPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -162,23 +175,6 @@ fun OutsideZoneContent(
                     color = Color.LightGray,
                     textAlign = TextAlign.Center
                 )
-
-                if (onViewDetailsClick != null) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { onViewDetailsClick.invoke() },
-                        colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Szczegóły najbliższej strefy",
-                            color = Color.Black,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
             }
         }
     }

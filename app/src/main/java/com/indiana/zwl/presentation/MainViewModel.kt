@@ -554,15 +554,22 @@ class MainViewModel @Inject constructor(
 
     fun selectZoneByDistrict(districtName: String) {
         val zone = zones.firstOrNull { it.forestDistrict.equals(districtName, ignoreCase = true) } ?: return
-        try {
-            val jtsPolygon = WKTReader().read(zone.geometryWkt)
-            val centroid = jtsPolygon.centroid
-            val successState = uiState.value as? MainUiState.Success
-            val lat = successState?.latitude ?: centroid.y
-            val lon = successState?.longitude ?: centroid.x
-            selectZone(zone, jtsPolygon, lat, lon)
-        } catch (e: Throwable) {
-            e.printStackTrace()
+        viewModelScope.launch {
+            try {
+                val (jtsPolygon, lat, lon) = withContext(Dispatchers.Default) {
+                    val polygon = WKTReader().read(zone.geometryWkt)
+                    val centroid = polygon.centroid
+                    val successState = uiState.value as? MainUiState.Success
+                    val useLat = successState?.latitude ?: centroid.y
+                    val useLon = successState?.longitude ?: centroid.x
+                    Triple(polygon, useLat, useLon)
+                }
+                selectZone(zone, jtsPolygon, lat, lon)
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                e.printStackTrace()
+                _debugError.value = "selectZoneByDistrict error:\n" + e.stackTraceToString()
+            }
         }
     }
 

@@ -66,13 +66,32 @@ fun InZoneContent(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = forestDistrict,
-                fontSize = 18.sp,
-                color = ForestGreenText,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center
-            )
+            Surface(
+                onClick = { onViewDetailsClick?.invoke() },
+                color = GreenPrimary.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, ForestGreenAccent)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = forestDistrict,
+                        fontSize = 18.sp,
+                        color = ForestGreenText,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.Info,
+                        contentDescription = "Szczegóły strefy",
+                        tint = ForestGreenAccent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
         
         Spacer(modifier = Modifier.height(24.dp))
@@ -238,23 +257,6 @@ fun InZoneContent(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                             )
                         }
-                    }
-                }
-
-                if (onViewDetailsClick != null) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { onViewDetailsClick.invoke() },
-                        colors = ButtonDefaults.buttonColors(containerColor = ForestGreenAccent),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Zobacz pełne dane strefy",
-                            color = Color.Black,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
                     }
                 }
             }
