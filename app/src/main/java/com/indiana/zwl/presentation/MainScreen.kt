@@ -287,7 +287,8 @@ fun MainScreen(
                                         onViewDetailsClick = {
                                             viewModel.selectZoneByDistrict(status.forestDistrict)
                                         },
-                                        onDebugToggle = if (isDebug) viewModel::toggleDebugInvertZone else null
+                                        onDebugToggle = if (isDebug) viewModel::toggleDebugInvertZone else null,
+                                        isActive = selectedTab == 0
                                     )
                                 }
 
