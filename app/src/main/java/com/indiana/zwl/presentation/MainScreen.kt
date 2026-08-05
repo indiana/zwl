@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.alpha
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.indiana.zwl.BuildConfig
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.presentation.theme.ZwlTheme
 import com.indiana.zwl.presentation.theme.DarkForestBackground
@@ -216,9 +217,24 @@ fun MainScreen(
         }
 
         is MainUiState.Success -> {
-            val isInZone = state.locationStatus is LocationStatus.InZone
             val selectedZoneDetails by viewModel.selectedZoneDetails.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
+
+            val isDebug = BuildConfig.DEBUG
+            val debugInvertZone by viewModel.debugInvertZone.collectAsStateWithLifecycle()
+            val actualStatus = state.locationStatus
+            val displayStatus = when {
+                isDebug && debugInvertZone && actualStatus is LocationStatus.InZone ->
+                    LocationStatus.OutsideZone(
+                        nearestDistrict = actualStatus.forestDistrict,
+                        distanceMeters = 8500.0,
+                        bearingDegrees = 0f
+                    )
+                isDebug && debugInvertZone && actualStatus is LocationStatus.OutsideZone ->
+                    LocationStatus.InZone(actualStatus.nearestDistrict)
+                else -> actualStatus
+            }
+            val isInZone = displayStatus is LocationStatus.InZone
 
             ZwlTheme(isInZone = isInZone) {
                 Scaffold(
@@ -263,14 +279,15 @@ fun MainScreen(
                                 .alpha(if (selectedTab == 0) 1f else 0f)
                                 .then(if (selectedTab == 0) Modifier else Modifier.size(0.dp))
                         ) {
-                            when (val status = state.locationStatus) {
+                            when (val status = displayStatus) {
                                 is LocationStatus.InZone -> {
                                     InZoneContent(
                                         forestDistrict = status.forestDistrict,
                                         fireRiskLevel = state.fireRiskLevel,
                                         onViewDetailsClick = {
                                             viewModel.selectZoneByDistrict(status.forestDistrict)
-                                        }
+                                        },
+                                        onDebugToggle = if (isDebug) viewModel::toggleDebugInvertZone else null
                                     )
                                 }
 
@@ -282,7 +299,8 @@ fun MainScreen(
                                         azimuth = azimuth,
                                         onViewDetailsClick = {
                                             viewModel.selectZoneByDistrict(status.nearestDistrict)
-                                        }
+                                        },
+                                        onDebugToggle = if (isDebug) viewModel::toggleDebugInvertZone else null
                                     )
                                 }
 

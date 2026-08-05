@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,7 +29,8 @@ fun OutsideZoneContent(
     distanceMeters: Double,
     bearingDegrees: Float,
     azimuth: Float,
-    onViewDetailsClick: (() -> Unit)? = null
+    onViewDetailsClick: (() -> Unit)? = null,
+    onDebugToggle: (() -> Unit)? = null
 ) {
     var accumulatedAzimuth by remember { mutableStateOf(azimuth) }
     LaunchedEffect(azimuth) {
@@ -63,7 +65,10 @@ fun OutsideZoneContent(
                 modifier = Modifier
                     .size(100.dp)
                     .background(AmberAccent.copy(alpha = 0.1f), RoundedCornerShape(50.dp))
-                    .border(3.dp, YellowPrimary, RoundedCornerShape(50.dp)),
+                    .border(3.dp, YellowPrimary, RoundedCornerShape(50.dp))
+                    .clickable(enabled = onDebugToggle != null) {
+                        onDebugToggle?.invoke()
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Text("!", fontSize = 48.sp, fontWeight = FontWeight.Black, color = YellowPrimary)
