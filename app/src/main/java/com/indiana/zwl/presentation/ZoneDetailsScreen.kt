@@ -127,10 +127,9 @@ fun ZoneDetailsScreen(
                     )
 
                     // Fire Risk Level
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
                             text = "Stopień zagrożenia pożarowego:",
@@ -139,11 +138,22 @@ fun ZoneDetailsScreen(
                         )
 
                         if (details.isLoadingFireRisk) {
-                            CircularProgressIndicator(
-                                strokeWidth = 2.dp,
-                                color = ForestGreenAccent,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    color = ForestGreenAccent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Pobieranie aktualnych danych...",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         } else {
                             val riskText = when (details.fireRiskLevel) {
                                 0 -> "STOPIEŃ 0 (Brak)"
@@ -164,12 +174,19 @@ fun ZoneDetailsScreen(
                                 3, 13 -> RiskLevelHigh
                                 else -> RiskLevelUnknown
                             }
-                            Text(
-                                text = riskText,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = riskColor
-                            )
+                            Surface(
+                                color = riskColor.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, riskColor)
+                            ) {
+                                Text(
+                                    text = riskText,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = riskColor,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
                         }
                     }
 

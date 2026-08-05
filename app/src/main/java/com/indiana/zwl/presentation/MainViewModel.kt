@@ -376,6 +376,15 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    private fun initialZoneDetails(zone: Zone) = SelectedZoneDetails(
+        zone = zone,
+        distanceMeters = null,
+        fireRiskLevel = -1,
+        isLoadingFireRisk = true,
+        forestStand = null,
+        isLoadingForestStand = true
+    )
+
     private fun isForestStandCacheStale(zone: Zone): Boolean {
         val timestamp = zone.forestStandTimestamp ?: return true
         return System.currentTimeMillis() - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
@@ -426,6 +435,7 @@ class MainViewModel @Inject constructor(
     }
 
     fun selectZone(zone: Zone, jtsPolygon: org.locationtech.jts.geom.Geometry, clickLat: Double, clickLon: Double) {
+        _selectedZoneDetails.value = initialZoneDetails(zone)
         viewModelScope.launch {
             try {
                 _selectedPoiDetails.value = null
@@ -469,14 +479,13 @@ class MainViewModel @Inject constructor(
                 val cachedForestStand = loadCachedForestStand(zone)
                 val needsForestStandRefresh = cachedForestStand == null || isForestStandCacheStale(zone)
 
-                _selectedZoneDetails.value = SelectedZoneDetails(
-                    zone = zone,
-                    distanceMeters = distance,
-                    fireRiskLevel = -1,
-                    isLoadingFireRisk = true,
-                    forestStand = cachedForestStand,
-                    isLoadingForestStand = needsForestStandRefresh
-                )
+                if (_selectedZoneDetails.value?.zone?.id == zone.id) {
+                    _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
+                        distanceMeters = distance,
+                        forestStand = cachedForestStand,
+                        isLoadingForestStand = needsForestStandRefresh
+                    )
+                }
 
                 val tempLoc = Location("").apply {
                     latitude = clickLat
@@ -554,6 +563,7 @@ class MainViewModel @Inject constructor(
 
     fun selectZoneByDistrict(districtName: String) {
         val zone = zones.firstOrNull { it.forestDistrict.equals(districtName, ignoreCase = true) } ?: return
+        _selectedZoneDetails.value = initialZoneDetails(zone)
         viewModelScope.launch {
             try {
                 val (jtsPolygon, lat, lon) = withContext(Dispatchers.Default) {

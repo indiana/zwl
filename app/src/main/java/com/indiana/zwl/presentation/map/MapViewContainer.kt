@@ -104,6 +104,21 @@ fun MapViewContainer(
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
 
+    LaunchedEffect(mapViewInstance, isActive, uiState) {
+        val mv = mapViewInstance ?: return@LaunchedEffect
+        if (!isActive || hasCenteredOnStartup) return@LaunchedEffect
+        val state = uiState
+        if (state is MainUiState.Success) {
+            val lat = state.latitude
+            val lon = state.longitude
+            if (lat != null && lon != null) {
+                mv.setCenter(LatLong(lat, lon))
+                mv.setZoomLevel(15)
+                hasCenteredOnStartup = true
+            }
+        }
+    }
+
     var downloadLayerInstance by remember { mutableStateOf<TileDownloadLayer?>(null) }
     var poiFolderOverlay by remember { mutableStateOf<org.mapsforge.map.layer.GroupLayer?>(null) }
 
@@ -304,18 +319,12 @@ fun MapViewContainer(
                     val lat = state.latitude
                     val lon = state.longitude
                     if (lat != null && lon != null) {
-                        val userPos = LatLong(lat, lon)
                         userMarker?.let { marker ->
-                            marker.latLong = userPos
+                            marker.latLong = LatLong(lat, lon)
                             marker.requestRedraw()
                             if (!mapView.layerManager.layers.contains(marker)) {
                                 mapView.layerManager.layers.add(marker)
                             }
-                        }
-                        if (!hasCenteredOnStartup) {
-                            mapView.setCenter(userPos)
-                            mapView.setZoomLevel(15)
-                            hasCenteredOnStartup = true
                         }
                     } else {
                         userMarker?.let { marker ->
