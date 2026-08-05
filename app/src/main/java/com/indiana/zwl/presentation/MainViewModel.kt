@@ -104,6 +104,14 @@ class MainViewModel @Inject constructor(
     private val _selectedPoiDetails = MutableStateFlow<SelectedPoiDetails?>(null)
     val selectedPoiDetails: StateFlow<SelectedPoiDetails?> = _selectedPoiDetails
 
+    private val _debugInvertZone = MutableStateFlow(false)
+    val debugInvertZone: StateFlow<Boolean> = _debugInvertZone.asStateFlow()
+
+    fun toggleDebugInvertZone() {
+        if (!com.indiana.zwl.BuildConfig.DEBUG) return
+        _debugInvertZone.value = !_debugInvertZone.value
+    }
+
     private val sharedPrefs = context.getSharedPreferences("zwl_map_settings", Context.MODE_PRIVATE)
 
     private val _showFireplaces = MutableStateFlow(sharedPrefs.getBoolean("show_fireplaces", true))

@@ -11,9 +11,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -31,7 +33,8 @@ import androidx.compose.ui.unit.sp
 fun InZoneContent(
     forestDistrict: String,
     fireRiskLevel: Int,
-    onViewDetailsClick: (() -> Unit)? = null
+    onViewDetailsClick: (() -> Unit)? = null,
+    onDebugToggle: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -49,10 +52,18 @@ fun InZoneContent(
                 modifier = Modifier
                     .size(100.dp)
                     .background(GreenPrimary.copy(alpha = 0.2f), RoundedCornerShape(50.dp))
-                    .border(3.dp, ForestGreenAccent, RoundedCornerShape(50.dp)),
+                    .border(3.dp, ForestGreenAccent, RoundedCornerShape(50.dp))
+                    .clickable(enabled = onDebugToggle != null) {
+                        onDebugToggle?.invoke()
+                    },
                 contentAlignment = Alignment.Center
             ) {
-                Text("LB", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = ForestGreenAccent)
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = ForestGreenAccent,
+                    modifier = Modifier.size(56.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
