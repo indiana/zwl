@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.presentation.theme.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -497,6 +499,7 @@ private fun openWikipedia(context: Context, articleTitle: String) {
 @Composable
 private fun MetadataValueWithTooltip(value: String, tooltip: String) {
     val tooltipState = rememberTooltipState(isPersistent = true)
+    val scope = rememberCoroutineScope()
     TooltipBox(
         tooltip = {
             PlainTooltip {
@@ -509,7 +512,10 @@ private fun MetadataValueWithTooltip(value: String, tooltip: String) {
         state = tooltipState,
         positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider()
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.clickable { scope.launch { tooltipState.show() } },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 text = value,
                 fontSize = 13.sp,
