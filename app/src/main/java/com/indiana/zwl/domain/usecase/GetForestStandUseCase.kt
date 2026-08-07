@@ -3,6 +3,7 @@ package com.indiana.zwl.domain.usecase
 import com.indiana.zwl.data.remote.BdlOgcApi
 import com.indiana.zwl.domain.model.ForestStandSummary
 import com.indiana.zwl.domain.model.SpeciesEntry
+import com.indiana.zwl.domain.model.TranslatedCode
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.util.RdlpMapper
 import kotlinx.coroutines.CancellationException
@@ -45,10 +46,10 @@ class GetForestStandUseCase @Inject constructor(
             val speciesAreaMap = mutableMapOf<String, Double>()
             val speciesAgeSumMap = mutableMapOf<String, Double>()
             val speciesAgeCountMap = mutableMapOf<String, Double>()
-            var forestFunction: String? = null
-            var standStructure: String? = null
-            var siteType: String? = null
-            var protectionCategory: String? = null
+            var forestFunction: TranslatedCode? = null
+            var standStructure: TranslatedCode? = null
+            var siteType: TranslatedCode? = null
+            var protectionCategory: TranslatedCode? = null
             var rotationAge: Int? = null
 
             for (feature in features) {
@@ -69,16 +70,16 @@ class GetForestStandUseCase @Inject constructor(
                 }
 
                 if (forestFunction == null && props.forest_fun != null) {
-                    forestFunction = RdlpMapper.forestFunCodeToName(props.forest_fun)
+                    forestFunction = RdlpMapper.forestFunCodeToValue(props.forest_fun)
                 }
                 if (standStructure == null && props.stand_stru != null) {
-                    standStructure = RdlpMapper.standStruCodeToName(props.stand_stru)
+                    standStructure = RdlpMapper.standStruCodeToValue(props.stand_stru)
                 }
                 if (siteType == null && props.site_type != null) {
-                    siteType = RdlpMapper.siteTypeCodeToName(props.site_type)
+                    siteType = RdlpMapper.siteTypeCodeToValue(props.site_type)
                 }
                 if (protectionCategory == null && props.prot_categ != null) {
-                    protectionCategory = RdlpMapper.protCategCodeToName(props.prot_categ)
+                    protectionCategory = RdlpMapper.protCategCodeToValue(props.prot_categ)
                 }
                 if (rotationAge == null && props.rotat_age != null && props.rotat_age > 0) {
                     rotationAge = props.rotat_age
