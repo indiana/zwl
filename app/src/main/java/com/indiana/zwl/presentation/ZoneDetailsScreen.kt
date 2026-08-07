@@ -1,5 +1,8 @@
 package com.indiana.zwl.presentation
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -7,12 +10,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,9 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,6 +40,7 @@ fun ZoneDetailsScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -347,6 +356,7 @@ fun ZoneDetailsScreen(
                                 } else {
                                     entry.speciesName
                                 }
+                                val wikipediaTitle = BdlInfo.wikipediaTitleForSpecies(entry.speciesCode)
                                 Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -356,7 +366,21 @@ fun ZoneDetailsScreen(
                                             text = displayName,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = if (wikipediaTitle != null) {
+                                                ForestGreenAccent
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            },
+                                            textDecoration = if (wikipediaTitle != null) TextDecoration.Underline else TextDecoration.None,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .then(
+                                                    if (wikipediaTitle != null) {
+                                                        Modifier.clickable { openWikipedia(context, wikipediaTitle) }
+                                                    } else {
+                                                        Modifier
+                                                    }
+                                                )
                                         )
                                         Text(
                                             text = "${String.format(java.util.Locale.US, "%.1f", entry.percentage)}%",
@@ -378,12 +402,22 @@ fun ZoneDetailsScreen(
                             }
                         }
 
-                        val metadataItems = mutableListOf<Pair<String, String>>()
-                        summary.forestFunction?.let { metadataItems.add("Funkcja lasu" to it) }
-                        summary.standStructure?.let { metadataItems.add("Struktura drzewostanu" to it) }
-                        summary.siteType?.let { metadataItems.add("Typ siedliskowy lasu" to it) }
-                        summary.protectionCategory?.let { metadataItems.add("Kategoria ochrony" to it) }
-                        summary.rotationAge?.let { metadataItems.add("Wiek rębności" to "${it} lat") }
+                        val metadataItems = mutableListOf<MetadataItem>()
+                        summary.forestFunction?.let {
+                            metadataItems.add(MetadataItem("Funkcja lasu", it.name, BdlInfo.tooltipForForestFun(it.code)))
+                        }
+                        summary.standStructure?.let {
+                            metadataItems.add(MetadataItem("Struktura drzewostanu", it.name, BdlInfo.tooltipForStandStru(it.code)))
+                        }
+                        summary.siteType?.let {
+                            metadataItems.add(MetadataItem("Typ siedliskowy lasu", it.name, BdlInfo.tooltipForSiteType(it.code)))
+                        }
+                        summary.protectionCategory?.let {
+                            metadataItems.add(MetadataItem("Kategoria ochrony", it.name, BdlInfo.tooltipForProtCateg(it.code)))
+                        }
+                        summary.rotationAge?.let {
+                            metadataItems.add(MetadataItem("Wiek rębności", "${it} lat", BdlInfo.rotationAgeTooltip))
+                        }
 
                         if (metadataItems.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(8.dp))
@@ -400,7 +434,7 @@ fun ZoneDetailsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
-                            metadataItems.forEach { (label, value) ->
+                            metadataItems.forEach { item ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -408,16 +442,20 @@ fun ZoneDetailsScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = label,
+                                        text = item.label,
                                         fontSize = 13.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Text(
-                                        text = value,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    if (item.tooltip == null) {
+                                        Text(
+                                            text = item.value,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    } else {
+                                        MetadataValueWithTooltip(value = item.value, tooltip = item.tooltip)
+                                    }
                                 }
                             }
                         }
@@ -434,5 +472,57 @@ private fun formatDistance(meters: Double): String {
     } else {
         val km = meters / 1000.0
         String.format(java.util.Locale.US, "%.1f km", km)
+    }
+}
+
+private data class MetadataItem(
+    val label: String,
+    val value: String,
+    val tooltip: String?
+)
+
+private fun openWikipedia(context: Context, articleTitle: String) {
+    val uri = Uri.Builder()
+        .scheme("https")
+        .authority("pl.wikipedia.org")
+        .appendPath("wiki")
+        .appendPath(articleTitle)
+        .build()
+    val intent = Intent(Intent.ACTION_VIEW, uri)
+    runCatching { context.startActivity(intent) }
+        .onFailure { /* no browser / no handler: silently ignore; the app stays usable */ }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MetadataValueWithTooltip(value: String, tooltip: String) {
+    val tooltipState = rememberTooltipState(isPersistent = true)
+    TooltipBox(
+        tooltip = {
+            PlainTooltip {
+                Text(
+                    text = tooltip,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        state = tooltipState,
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider()
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = value,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = "Pokaż wyjaśnienie",
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
