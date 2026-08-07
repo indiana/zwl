@@ -1,5 +1,7 @@
 package com.indiana.zwl.domain.util
 
+import com.indiana.zwl.domain.model.TranslatedCode
+
 object RdlpMapper {
 
     private val regionCodeToCollection: Map<String, String> = mapOf(
@@ -16,8 +18,9 @@ object RdlpMapper {
         "11" to "RDLP_Szczecinek_wydzielenia",
         "12" to "RDLP_Torun_wydzielenia",
         "13" to "RDLP_Wroclaw_wydzielenia",
-        "14" to "RDLP_ZielonaGora_wydzielenia",
+        "14" to "RDLP_Zielona_Gora_wydzielenia",
         "15" to "RDLP_Gdansk_wydzielenia",
+        "16" to "RDLP_Radom_wydzielenia",
         "17" to "RDLP_Warszawa_wydzielenia"
     )
 
@@ -25,7 +28,7 @@ object RdlpMapper {
         return regionCodeToCollection[regionCode]
     }
 
-    private fun normalize(code: String): String {
+    internal fun normalize(code: String): String {
         return code.uppercase()
             .replace("Ś", "S").replace("Ź", "Z").replace("Ż", "Z")
             .replace("Ą", "A").replace("Ć", "C").replace("Ę", "E")
@@ -35,56 +38,85 @@ object RdlpMapper {
 
     fun speciesCodeToName(code: String): String {
         return when (normalize(code)) {
-            "SO", "SOS", "SOSZ" -> "Sosna"
-            "SW", "SWY", "SWR" -> "Świerk"
-            "DB", "DAB", "DBS" -> "Dąb"
-            "BK", "BUK" -> "Buk"
-            "BR", "BRZ" -> "Brzoza"
+            // ---- BDL species_cd (47 authoritative values) ----
+            "BK" -> "Buk"
+            "BRZ" -> "Brzoza"
+            "DB" -> "Dąb"
+            "DBS" -> "Dąb szypułkowy"               // DB.S
+            "DBB" -> "Dąb bezszypułkowy"            // DB.B
+            "DBC" -> "Dąb czerwony"                 // DB.C
+            "GB" -> "Grab"
+            "JS" -> "Jesion"
+            "KL" -> "Klon"
+            "KLP" -> "Klon polny"                   // KL.P
+            "MD" -> "Modrzew"
+            "OL" -> "Olcha"
+            "OLS" -> "Olcha szara"                  // OL.S
+            "OS" -> "Osika"
+            "SO" -> "Sosna"
+            "SOS" -> "Sosna smołowa"                // SO.S
+            "SW" -> "Świerk"                        // ŚW
+            "AK" -> "Akacja (robinia akacjowa)"
+            "BRZO" -> "Brzoza omszona"              // BRZ.O
+            "CZR" -> "Czereśnia"
+            "CZRP" -> "Czereśnia ptasia"            // CZR.P
+            "DG" -> "Daglezja"
+            "GR" -> "Grusza pospolita"
+            "IWA" -> "Wierzba iwa"
+            "JD" -> "Jodła"
+            "JDJ" -> "Jodła jednobarwna"            // JD.J
+            "JDO" -> "Jodła olbrzymia"              // JD.O
+            "JKL" -> "Klon jesionolistny"
+            "JRZ" -> "Jarząb pospolity"
+            "JRZB" -> "Jarząb brekinia"             // JRZ.B
+            "JSA" -> "Jesion amerykański"           // JS.A
+            "JSP" -> "Jesion pensylwański"          // JS.P
+            "LP" -> "Lipa"
+            "ORZC" -> "Orzech czarny"               // ORZ.C
+            "SOB" -> "Sosna banksa"                 // SO.B
+            "SOC" -> "Sosna czarna"                 // SO.C
+            "SOK" -> "Sosna kosodrzewina"           // SO.K
+            "SOWE" -> "Sosna wejmutka"              // SO.WE
+            "TP" -> "Topola"
+            "TPM" -> "Topola mieszańcowa"           // TP.M
+            "WB" -> "Wierzba"
+            "WZ" -> "Wiąz"
+            "WZS" -> "Wiąz szypułkowy"              // WZ.S
+            "SWKB" -> "Świerk kaukaski"             // ŚW.KB
+            "SWSR" -> "Świerk srebrzysty"           // ŚW.SR
+            "ZYWO" -> "Żywotnik olbrzymi"           // ŻYW.O
+            "JW" -> "Jawor (klon jawor)"
+            // ---- legacy aliases (non-colliding, kept for safety) ----
+            "SOSZ" -> "Sosna"
+            "SWY", "SWR" -> "Świerk"
+            "DAB" -> "Dąb"
+            "BUK" -> "Buk"
+            "BR" -> "Brzoza"
             "JK", "JOD" -> "Jodła"
-            "OL", "OLS" -> "Olcha"
-            "OS", "OSI" -> "Osika"
-            "WB", "WBR" -> "Wiąz"
-            "JS", "JES" -> "Jesion"
-            "KL", "KLP" -> "Klon"
+            "OSI" -> "Osika"
+            "WBR" -> "Wiąz"
+            "JES" -> "Jesion"
             "SWK" -> "Świerk kraiński"
             "LSC" -> "Leszczyna"
             "TM", "TOP" -> "Topola"
             "LB" -> "Lipa"
             "CIS" -> "Cis"
             "CHJ", "CHO" -> "Choina"
-            "MOD", "MD" -> "Modrzew"
+            "MOD" -> "Modrzew"
             "DAG" -> "Daglezja"
             "TWR" -> "Tuja"
-            "JW" -> "Jodła wingska"
-            "DBC" -> "Dąb bezszypułkowy"
-            "GB" -> "Grab"
             else -> code
         }
     }
 
-    fun siteTypeCodeToName(code: String): String {
-        return when (normalize(code)) {
-            "BMWC" -> "Bór wilgotny z traworoślnymi"
-            "BMPP" -> "Bór bagienny"
-            "BMSW" -> "Bór świeży"
-            "BMRC" -> "Bórsuchy z wrzosem"
-            "LMSC" -> "Las mieszany świeży"
-            "LMRC" -> "Las mieszany suchy"
-            "LMWC" -> "Las mieszany wilgotny"
-            "LMBC" -> "Las mieszany bagienny"
-            "LSW" -> "Las świeży"
-            "LRC" -> "Las suchy"
-            "LWC" -> "Las wilgotny"
-            "LBC" -> "Las bagienny"
-            "OLSW" -> "Olszyny wilgotne"
-            "OLBC" -> "Olszyny bagienne"
-            else -> code
-        }
-    }
-
-    fun forestFunCodeToName(code: String): String {
-        return when (normalize(code)) {
+    fun forestFunCodeToValue(code: String): TranslatedCode {
+        val name = when (normalize(code)) {
             "GOSP" -> "Gospodarczy"
+            "OSPO" -> "Lasy szczególnie chronione (ochronne)"   // O SPO
+            "REZ" -> "Rezerwatowy"
+            "REZCZ" -> "Rezerwat częściowy"                     // REZ CZ
+            "REZS" -> "Rezerwat ścisły"                         // REZ Ś
+            // legacy aliases (different code system, kept for safety)
             "OCH" -> "Ochronny"
             "TOW" -> "Towarowy"
             "REK" -> "Rekreacyjny"
@@ -94,30 +126,96 @@ object RdlpMapper {
             "TUR" -> "Turystyczny"
             else -> code
         }
+        return TranslatedCode(code = code, name = name)
     }
 
-    fun standStruCodeToName(code: String): String {
-        return when (normalize(code)) {
+    fun standStruCodeToValue(code: String): TranslatedCode {
+        val name = when (normalize(code)) {
+            "2PIET" -> "Dwupiętrowy"                            // 2 PIĘT
+            "DRZ", "DRZEWIASTY", "DRZEW" -> "Drzewostan (jednopiętrowy)"
+            "KDO" -> "W klasie do odnowienia"
+            "KO" -> "W klasie odnowienia"
+            "SP" -> "O budowie przerębowej"
+            "WPIET" -> "Wielopiętrowy"                          // W PIĘT
+            // legacy aliases ("cecha drzewostanu" - a different field, kept for safety)
             "JED" -> "Jednolity wiekowo"
             "RZW" -> "Różnowiekowy"
             "TRW" -> "Trójwarstwowy"
-            "DRZ", "DRZEWIASTY", "DRZEW" -> "Drzewiasty"
             "GLO", "GLOWNY" -> "Główny"
             else -> code
         }
+        return TranslatedCode(code = code, name = name)
     }
 
-    fun protCategCodeToName(code: String): String {
-        return when (normalize(code)) {
-            "OCHCENNE", "CENNE" -> "Ochrona czynna"
+    fun siteTypeCodeToValue(code: String): TranslatedCode {
+        val name = when (normalize(code)) {
+            "BB" -> "Bór bagienny"
+            "BGB" -> "Bór górski bagienny"
+            "BGSW" -> "Bór górski świeży"                        // BGŚW
+            "BGW" -> "Bór górski wilgotny"
+            "BMB" -> "Bór mieszany bagienny"
+            "BMGB" -> "Bór mieszany górski bagienny"
+            "BMGSW" -> "Bór mieszany górski świeży"              // BMGŚW
+            "BMGW" -> "Bór mieszany górski wilgotny"
+            "BMSW" -> "Bór mieszany świeży"                      // BMŚW
+            "BMW" -> "Bór mieszany wilgotny"
+            "BMWYZ" -> "Bór mieszany wyżynny świeży"             // BMWYŻ
+            "BMWYZW" -> "Bór mieszany wyżynny wilgotny"          // BMWYŻW
+            "BS" -> "Bór suchy"
+            "BSW" -> "Bór świeży"                                // BŚW
+            "BW" -> "Bór wilgotny"
+            "BWG" -> "Bór wysokogórski"
+            "LGSW" -> "Las górski świeży"                        // LGŚW
+            "LGW" -> "Las górski wilgotny"
+            "LMB" -> "Las mieszany bagienny"
+            "LMG" -> "Las mieszany górski świeży"
+            "LMGSW" -> "Las mieszany górski świeży"              // LMGŚW
+            "LMGW" -> "Las mieszany górski wilgotny"
+            "LMSW" -> "Las mieszany świeży"                      // LMŚW
+            "LMW" -> "Las mieszany wilgotny"
+            "LMWYZ" -> "Las mieszany wyżynny świeży"             // LMWYŻ
+            "LMWYZW" -> "Las mieszany wyżynny wilgotny"          // LMWYŻW
+            "LSW" -> "Las świeży"                                // LŚW
+            "LW" -> "Las wilgotny"
+            "LWYZ" -> "Las wyżynny świeży"                       // LWYŻ
+            "LWYZS" -> "Las wyżynny świeży"                      // LWYŻŚ
+            "LWYZW" -> "Las wyżynny wilgotny"                    // LWYŻW
+            "LL" -> "Las łęgowy"                                 // LŁ
+            "LLG" -> "Las łęgowy górski"                         // LŁG
+            "LLWYZ" -> "Las łęgowy wyżynny"                      // LŁWYŻ
+            "OL" -> "Ols"
+            "OLJ" -> "Ols jesionowy"
+            "OLJG" -> "Ols jesionowy górski"
+            "OLJWYZ" -> "Ols jesionowy wyżynny"                  // OLJWYŻ
+            // full-form variants occasionally emitted by the API (simplified forms above)
+            "BMWYZSW" -> "Bór mieszany wyżynny świeży"           // BMWYŻŚW
+            "LMWYZSW" -> "Las mieszany wyżynny świeży"           // LMWYŻŚW
+            "LWYZSW" -> "Las wyżynny świeży"                     // LWYŻŚW
+            else -> code
+        }
+        return TranslatedCode(code = code, name = name)
+    }
+
+    fun protCategCodeToValue(code: String): TranslatedCode {
+        val name = when (normalize(code)) {
+            "OCHBADAW" -> "Powierzchnie badawczo-doświadczalne"  // OCH BADAW
+            "OCHCENNE", "CENNE" -> "Cenne fragmenty przyrody"    // OCH CENNE
+            "OCHGLEB" -> "Glebochronne"                          // OCH GLEB
+            "OCHMIAST", "MIAST", "OCHMIASTOWA" -> "Lasy w granicach miast" // OCH MIAST
+            "OCHNAS" -> "Nasienne"                               // OCH NAS
+            "OCHOBR" -> "Obronne"                                // OCH OBR
+            "OCHOSTOJ" -> "Ostoje zwierząt"                      // OCH OSTOJ
+            "OCHUSZK" -> "Trwale uszkodzone (przez przemysł)"    // OCH USZK
+            "OCHUZDR" -> "Uzdrowiskowe"                          // OCH UZDR
+            "OCHWOD", "WOD" -> "Wodochronne"                     // OCH WOD
+            // legacy aliases (kept for safety)
             "OCHSCISLE", "SCISLE" -> "Ochrona ścisła"
             "OCHPSTREFOWA", "PSTREFOWA" -> "Ochrona częściowa"
             "SPECJALNE" -> "Specjalne"
-            "OCHMIAST", "MIAST", "OCHMIASTOWA" -> "Ochrona urbanistyczna"
             "OCHNADWODNA", "NADWODNA" -> "Ochrona nadwodna"
             "OCHKRAJOBRAZOWA", "KRAJOBRAZOWA" -> "Ochrona krajobrazowa"
-            "OCHWOD", "WOD" -> "Ochrona wodna"
             else -> code
         }
+        return TranslatedCode(code = code, name = name)
     }
 }
