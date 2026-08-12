@@ -718,7 +718,14 @@ private fun drawZonePolygons(
 
     for (zone in zones) {
         try {
-            val geom = wktReader.read(zone.geometryWkt)
+            var geom = wktReader.read(zone.geometryWkt)
+            if (!geom.isValid) {
+                try {
+                    geom = geom.buffer(0.0)
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                }
+            }
             val numGeoms = geom.numGeometries
             for (g in 0 until numGeoms) {
                 val subGeom = geom.getGeometryN(g)
@@ -766,7 +773,15 @@ class ClickablePolygon(
             }
             val gf = org.locationtech.jts.geom.GeometryFactory()
             val clickedPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(tapLatLong.longitude, tapLatLong.latitude))
-            val contains = jtsPolygon.contains(clickedPoint)
+            val contains = try {
+                jtsPolygon.contains(clickedPoint)
+            } catch (e: Throwable) {
+                try {
+                    jtsPolygon.buffer(0.0).contains(clickedPoint)
+                } catch (e2: Throwable) {
+                    false
+                }
+            }
 
             if (contains) {
                 android.os.Handler(android.os.Looper.getMainLooper()).post {

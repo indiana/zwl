@@ -476,7 +476,10 @@ class MainViewModel @Inject constructor(
                         try {
                             val gf = org.locationtech.jts.geom.GeometryFactory()
                             val userPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(loc.longitude, loc.latitude))
-                            val distanceOp = DistanceOp(jtsPolygon, userPoint)
+                            val targetGeom = if (!jtsPolygon.isValid) {
+                                try { jtsPolygon.buffer(0.0) } catch (_: Throwable) { jtsPolygon }
+                            } else jtsPolygon
+                            val distanceOp = DistanceOp(targetGeom, userPoint)
                             val nearestCoords = distanceOp.nearestPoints()
                             val targetCoord = nearestCoords[0]
                             val results = FloatArray(1)

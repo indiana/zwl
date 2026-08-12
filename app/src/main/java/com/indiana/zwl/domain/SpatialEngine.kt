@@ -39,7 +39,14 @@ class SpatialEngine {
 
         for (zone in zones) {
             try {
-                val geom = wktReader.read(zone.geometryWkt)
+                var geom = wktReader.read(zone.geometryWkt)
+                if (!geom.isValid) {
+                    try {
+                        geom = geom.buffer(0.0)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
                 val parsed = ParsedZone(zone.forestDistrict, geom)
                 newParsedZones.add(parsed)
                 newStrTree.insert(geom.envelopeInternal, parsed)
@@ -67,7 +74,16 @@ class SpatialEngine {
 
         // Dokładny test Point-in-Polygon
         for (candidate in exactCandidates) {
-            if (candidate.geometry.contains(userPoint)) {
+            val containsPoint = try {
+                candidate.geometry.contains(userPoint)
+            } catch (e: Throwable) {
+                try {
+                    candidate.geometry.buffer(0.0).contains(userPoint)
+                } catch (e2: Throwable) {
+                    false
+                }
+            }
+            if (containsPoint) {
                 return LocationStatus.InZone(candidate.forestDistrict)
             }
         }
@@ -103,7 +119,15 @@ class SpatialEngine {
         } else {
             var closestDistanceDeg = Double.MAX_VALUE
             for (zone in distanceCandidates) {
-                val distDeg = zone.geometry.distance(userPoint)
+                val distDeg = try {
+                    zone.geometry.distance(userPoint)
+                } catch (e: Throwable) {
+                    try {
+                        zone.geometry.buffer(0.0).distance(userPoint)
+                    } catch (e2: Throwable) {
+                        zone.geometry.envelopeInternal.distance(searchEnvelope)
+                    }
+                }
                 if (distDeg < closestDistanceDeg) {
                     closestDistanceDeg = distDeg
                     nearestZone = zone
@@ -111,9 +135,21 @@ class SpatialEngine {
             }
 
             nearestZone?.let { zone ->
-                val distanceOp = DistanceOp(zone.geometry, userPoint)
-                val nearestCoords = distanceOp.nearestPoints()
-                targetCoord = nearestCoords[0]
+                try {
+                    val distanceOp = DistanceOp(zone.geometry, userPoint)
+                    val nearestCoords = distanceOp.nearestPoints()
+                    targetCoord = nearestCoords[0]
+                } catch (e: Throwable) {
+                    try {
+                        val cleanGeom = zone.geometry.buffer(0.0)
+                        val distanceOp = DistanceOp(cleanGeom, userPoint)
+                        val nearestCoords = distanceOp.nearestPoints()
+                        targetCoord = nearestCoords[0]
+                    } catch (e2: Throwable) {
+                        val env = zone.geometry.envelopeInternal
+                        targetCoord = Coordinate(env.centre().x, env.centre().y)
+                    }
+                }
                 minDistanceMeters = calculateHaversineDistance(
                     latitude, longitude,
                     targetCoord!!.y, targetCoord!!.x

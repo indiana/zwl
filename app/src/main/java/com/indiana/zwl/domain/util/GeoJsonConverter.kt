@@ -194,7 +194,7 @@ object GeoJsonConverter {
     }
 
     private fun createGeometry(type: String, coordinatesData: Any): Geometry? {
-        return when (type.lowercase()) {
+        val geom = when (type.lowercase()) {
             "polygon" -> {
                 @Suppress("UNCHECKED_CAST")
                 val rings = coordinatesData as? List<List<Coordinate>> ?: return null
@@ -207,6 +207,11 @@ object GeoJsonConverter {
                 if (polygons.isEmpty()) null else geometryFactory.createMultiPolygon(polygons.toTypedArray())
             }
             else -> null
+        }
+        return if (geom != null && !geom.isValid) {
+            try { geom.buffer(0.0) } catch (_: Throwable) { geom }
+        } else {
+            geom
         }
     }
 
