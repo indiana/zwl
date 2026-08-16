@@ -132,7 +132,7 @@ object RdlpMapper {
     fun standStruCodeToValue(code: String): TranslatedCode {
         val name = when (normalize(code)) {
             "2PIET" -> "Dwupiętrowy"                            // 2 PIĘT
-            "DRZ", "DRZEWIASTY", "DRZEW" -> "Drzewostan (jednopiętrowy)"
+            "DRZ", "DRZEWIASTY", "DRZEW" -> "Jednopiętrowy"
             "KDO" -> "W klasie do odnowienia"
             "KO" -> "W klasie odnowienia"
             "SP" -> "O budowie przerębowej"
