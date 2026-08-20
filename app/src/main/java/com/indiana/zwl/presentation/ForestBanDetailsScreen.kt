@@ -2,6 +2,7 @@ package com.indiana.zwl.presentation
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +29,7 @@ import com.indiana.zwl.presentation.theme.*
 fun ForestBanDetailsScreen(
     ban: ForestBan,
     onClose: () -> Unit,
+    onBanIconClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -89,7 +91,8 @@ fun ForestBanDetailsScreen(
                     Box(
                         modifier = Modifier
                             .size(56.dp)
-                            .background(ErrorRedButton.copy(alpha = 0.25f), RoundedCornerShape(28.dp)),
+                            .background(ErrorRedButton.copy(alpha = 0.25f), RoundedCornerShape(28.dp))
+                            .then(if (onBanIconClick != null) Modifier.clickable { onBanIconClick() } else Modifier),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

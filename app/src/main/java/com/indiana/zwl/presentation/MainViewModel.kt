@@ -135,6 +135,30 @@ class MainViewModel @Inject constructor(
         _debugInvertZone.value = !_debugInvertZone.value
     }
 
+    private val _debugForestBanOverride = MutableStateFlow<DebugLocationOverride?>(null)
+    val debugForestBanOverride: StateFlow<DebugLocationOverride?> = _debugForestBanOverride.asStateFlow()
+
+    fun debugOverrideLocationToBan(ban: ForestBan) {
+        if (!com.indiana.zwl.BuildConfig.DEBUG) return
+        viewModelScope.launch(Dispatchers.Default) {
+            val geom = org.locationtech.jts.io.WKTReader().read(ban.geometryWkt)
+            val centroid = geom.centroid
+            val lat = centroid.y
+            val lon = centroid.x
+            val status = spatialEngine.checkLocation(lat, lon)
+            _debugForestBanOverride.value = DebugLocationOverride(
+                locationStatus = status,
+                forestBan = ban,
+                latitude = lat,
+                longitude = lon
+            )
+        }
+    }
+
+    fun debugClearBanOverride() {
+        _debugForestBanOverride.value = null
+    }
+
     private val sharedPrefs = context.getSharedPreferences("zwl_map_settings", Context.MODE_PRIVATE)
 
     private val _showForestBans = MutableStateFlow(sharedPrefs.getBoolean("show_forest_bans", true))

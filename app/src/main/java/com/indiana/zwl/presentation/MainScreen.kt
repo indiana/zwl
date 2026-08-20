@@ -223,8 +223,10 @@ fun MainScreen(
 
             val isDebug = BuildConfig.DEBUG
             val debugInvertZone by viewModel.debugInvertZone.collectAsStateWithLifecycle()
+            val debugBanOverride by viewModel.debugForestBanOverride.collectAsStateWithLifecycle()
             val actualStatus = state.locationStatus
             val displayStatus = when {
+                isDebug && debugBanOverride != null -> debugBanOverride!!.locationStatus
                 isDebug && debugInvertZone && actualStatus is LocationStatus.InZone ->
                     LocationStatus.OutsideZone(
                         nearestDistrict = actualStatus.forestDistrict,
@@ -236,6 +238,7 @@ fun MainScreen(
                 else -> actualStatus
             }
             val isInZone = displayStatus is LocationStatus.InZone
+            val displayForestBan = debugBanOverride?.forestBan ?: state.currentForestBan
 
             ZwlTheme(isInZone = isInZone) {
                 Scaffold(
@@ -285,12 +288,12 @@ fun MainScreen(
                                     InZoneContent(
                                         forestDistrict = status.forestDistrict,
                                         fireRiskLevel = state.fireRiskLevel,
-                                        currentForestBan = state.currentForestBan,
+                                        currentForestBan = displayForestBan,
                                         onViewDetailsClick = {
                                             viewModel.selectZoneByDistrict(status.forestDistrict)
                                         },
                                         onBanDetailsClick = {
-                                            state.currentForestBan?.let { viewModel.selectForestBan(it) }
+                                            displayForestBan?.let { viewModel.selectForestBan(it) }
                                         },
                                         onDebugToggle = if (isDebug) viewModel::toggleDebugInvertZone else null,
                                         isActive = selectedTab == 0
@@ -303,12 +306,12 @@ fun MainScreen(
                                         distanceMeters = status.distanceMeters,
                                         bearingDegrees = status.bearingDegrees,
                                         azimuth = azimuth,
-                                        currentForestBan = state.currentForestBan,
+                                        currentForestBan = displayForestBan,
                                         onViewDetailsClick = {
                                             viewModel.selectZoneByDistrict(status.nearestDistrict)
                                         },
                                         onBanDetailsClick = {
-                                            state.currentForestBan?.let { viewModel.selectForestBan(it) }
+                                            displayForestBan?.let { viewModel.selectForestBan(it) }
                                         },
                                         onDebugToggle = if (isDebug) viewModel::toggleDebugInvertZone else null
                                     )
@@ -373,7 +376,14 @@ fun MainScreen(
                         selectedForestBan?.let { ban ->
                             ForestBanDetailsScreen(
                                 ban = ban,
-                                onClose = { viewModel.clearSelectedForestBan() }
+                                onClose = { viewModel.clearSelectedForestBan() },
+                                onBanIconClick = if (isDebug) {
+                                    {
+                                        viewModel.debugOverrideLocationToBan(ban)
+                                        viewModel.clearSelectedForestBan()
+                                        selectedTab = 0
+                                    }
+                                } else null
                             )
                         }
                     }
