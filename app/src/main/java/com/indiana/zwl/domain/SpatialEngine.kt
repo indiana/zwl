@@ -1,5 +1,6 @@
 package com.indiana.zwl.domain
 
+import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.Zone
 import org.locationtech.jts.geom.Coordinate
@@ -22,6 +23,9 @@ class SpatialEngine {
     @Volatile
     private var engineState: EngineState? = null
 
+    @Volatile
+    private var banEngineState: BanEngineState? = null
+
     data class ParsedZone(
         val forestDistrict: String,
         val geometry: Geometry
@@ -31,6 +35,70 @@ class SpatialEngine {
         val strTree: STRtree,
         val parsedZones: List<ParsedZone>
     )
+
+    data class ParsedBan(
+        val forestBan: ForestBan,
+        val geometry: Geometry
+    )
+
+    class BanEngineState(
+        val strTree: STRtree,
+        val parsedBans: List<ParsedBan>
+    )
+
+    fun initializeBans(bans: List<ForestBan>) {
+        val wktReader = WKTReader(geometryFactory)
+        val newParsedBans = ArrayList<ParsedBan>()
+        val newStrTree = STRtree()
+
+        for (ban in bans) {
+            try {
+                var geom = wktReader.read(ban.geometryWkt)
+                if (!geom.isValid) {
+                    try {
+                        geom = geom.buffer(0.0)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                val parsed = ParsedBan(ban, geom)
+                newParsedBans.add(parsed)
+                newStrTree.insert(geom.envelopeInternal, parsed)
+            } catch (e: Exception) {
+                // Ignoruj błędne geometrie
+            }
+        }
+        newStrTree.build()
+        banEngineState = BanEngineState(newStrTree, newParsedBans)
+    }
+
+    fun checkForestBan(latitude: Double, longitude: Double): ForestBan? {
+        val state = banEngineState ?: return null
+        if (state.parsedBans.isEmpty()) return null
+
+        val userCoord = Coordinate(longitude, latitude)
+        val userPoint = geometryFactory.createPoint(userCoord)
+
+        val searchEnvelope = Envelope(userCoord)
+        @Suppress("UNCHECKED_CAST")
+        val candidates = state.strTree.query(searchEnvelope) as List<ParsedBan>
+
+        for (candidate in candidates) {
+            val containsPoint = try {
+                candidate.geometry.contains(userPoint)
+            } catch (e: Throwable) {
+                try {
+                    candidate.geometry.buffer(0.0).contains(userPoint)
+                } catch (e2: Throwable) {
+                    false
+                }
+            }
+            if (containsPoint) {
+                return candidate.forestBan
+            }
+        }
+        return null
+    }
 
     fun initialize(zones: List<Zone>) {
         val wktReader = WKTReader(geometryFactory)

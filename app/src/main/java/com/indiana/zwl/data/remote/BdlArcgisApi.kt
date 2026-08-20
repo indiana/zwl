@@ -23,4 +23,11 @@ interface BdlArcgisApi {
         @Query("resultRecordCount") resultRecordCount: Int = 2000,
         @Query("f") format: String = "geojson"
     ): GeoJsonCollection
+
+    @GET("arcgis/rest/services/WMS_zakazy_wstepu_do_lasu/MapServer/0/query")
+    suspend fun getForestBans(
+        @Query("where") where: String = "1=1",
+        @Query("outFields") outFields: String = "*",
+        @Query("f") format: String = "geojson"
+    ): okhttp3.ResponseBody
 }

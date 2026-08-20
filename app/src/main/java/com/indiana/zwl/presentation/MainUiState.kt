@@ -1,6 +1,14 @@
 package com.indiana.zwl.presentation
 
+import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.LocationStatus
+
+data class DebugLocationOverride(
+    val locationStatus: LocationStatus,
+    val forestBan: ForestBan?,
+    val latitude: Double,
+    val longitude: Double
+)
 
 sealed class MainUiState {
     object Loading : MainUiState()
@@ -11,6 +19,8 @@ sealed class MainUiState {
         val locationStatus: LocationStatus,
         val fireRiskLevel: Int,
         val latitude: Double?,
-        val longitude: Double?
+        val longitude: Double?,
+        val currentForestBan: ForestBan? = null,
+        val debugForestBanOverride: DebugLocationOverride? = null
     ) : MainUiState()
 }

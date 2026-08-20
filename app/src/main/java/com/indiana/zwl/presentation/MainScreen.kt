@@ -218,12 +218,15 @@ fun MainScreen(
 
         is MainUiState.Success -> {
             val selectedZoneDetails by viewModel.selectedZoneDetails.collectAsStateWithLifecycle()
+            val selectedForestBan by viewModel.selectedForestBan.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
 
             val isDebug = BuildConfig.DEBUG
             val debugInvertZone by viewModel.debugInvertZone.collectAsStateWithLifecycle()
+            val debugBanOverride by viewModel.debugForestBanOverride.collectAsStateWithLifecycle()
             val actualStatus = state.locationStatus
             val displayStatus = when {
+                isDebug && debugBanOverride != null -> debugBanOverride!!.locationStatus
                 isDebug && debugInvertZone && actualStatus is LocationStatus.InZone ->
                     LocationStatus.OutsideZone(
                         nearestDistrict = actualStatus.forestDistrict,
@@ -235,6 +238,7 @@ fun MainScreen(
                 else -> actualStatus
             }
             val isInZone = displayStatus is LocationStatus.InZone
+            val displayForestBan = debugBanOverride?.forestBan ?: state.currentForestBan
 
             ZwlTheme(isInZone = isInZone) {
                 Scaffold(
@@ -284,8 +288,12 @@ fun MainScreen(
                                     InZoneContent(
                                         forestDistrict = status.forestDistrict,
                                         fireRiskLevel = state.fireRiskLevel,
+                                        currentForestBan = displayForestBan,
                                         onViewDetailsClick = {
                                             viewModel.selectZoneByDistrict(status.forestDistrict)
+                                        },
+                                        onBanDetailsClick = {
+                                            displayForestBan?.let { viewModel.selectForestBan(it) }
                                         },
                                         onDebugToggle = if (isDebug) viewModel::toggleDebugInvertZone else null,
                                         isActive = selectedTab == 0
@@ -298,8 +306,12 @@ fun MainScreen(
                                         distanceMeters = status.distanceMeters,
                                         bearingDegrees = status.bearingDegrees,
                                         azimuth = azimuth,
+                                        currentForestBan = displayForestBan,
                                         onViewDetailsClick = {
                                             viewModel.selectZoneByDistrict(status.nearestDistrict)
+                                        },
+                                        onBanDetailsClick = {
+                                            displayForestBan?.let { viewModel.selectForestBan(it) }
                                         },
                                         onDebugToggle = if (isDebug) viewModel::toggleDebugInvertZone else null
                                     )
@@ -358,6 +370,20 @@ fun MainScreen(
                             ZoneDetailsScreen(
                                 details = details,
                                 onClose = { viewModel.clearSelectedZone() }
+                            )
+                        }
+
+                        selectedForestBan?.let { ban ->
+                            ForestBanDetailsScreen(
+                                ban = ban,
+                                onClose = { viewModel.clearSelectedForestBan() },
+                                onBanIconClick = if (isDebug) {
+                                    {
+                                        viewModel.debugOverrideLocationToBan(ban)
+                                        viewModel.clearSelectedForestBan()
+                                        selectedTab = 0
+                                    }
+                                } else null
                             )
                         }
                     }
