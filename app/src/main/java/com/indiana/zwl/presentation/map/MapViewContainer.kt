@@ -976,6 +976,7 @@ private fun createForestBanPolygons(
                         onError = onError
                     )
                     clickablePolygon.setPoints(mfPoints)
+                    clickablePolygon.setDisplayModel(mapView.model.displayModel)
                     resultLayers.add(clickablePolygon)
                 }
             }
