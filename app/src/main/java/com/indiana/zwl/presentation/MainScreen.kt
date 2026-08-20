@@ -218,6 +218,7 @@ fun MainScreen(
 
         is MainUiState.Success -> {
             val selectedZoneDetails by viewModel.selectedZoneDetails.collectAsStateWithLifecycle()
+            val selectedForestBan by viewModel.selectedForestBan.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
 
             val isDebug = BuildConfig.DEBUG
@@ -284,8 +285,12 @@ fun MainScreen(
                                     InZoneContent(
                                         forestDistrict = status.forestDistrict,
                                         fireRiskLevel = state.fireRiskLevel,
+                                        currentForestBan = state.currentForestBan,
                                         onViewDetailsClick = {
                                             viewModel.selectZoneByDistrict(status.forestDistrict)
+                                        },
+                                        onBanDetailsClick = {
+                                            state.currentForestBan?.let { viewModel.selectForestBan(it) }
                                         },
                                         onDebugToggle = if (isDebug) viewModel::toggleDebugInvertZone else null,
                                         isActive = selectedTab == 0
@@ -298,8 +303,12 @@ fun MainScreen(
                                         distanceMeters = status.distanceMeters,
                                         bearingDegrees = status.bearingDegrees,
                                         azimuth = azimuth,
+                                        currentForestBan = state.currentForestBan,
                                         onViewDetailsClick = {
                                             viewModel.selectZoneByDistrict(status.nearestDistrict)
+                                        },
+                                        onBanDetailsClick = {
+                                            state.currentForestBan?.let { viewModel.selectForestBan(it) }
                                         },
                                         onDebugToggle = if (isDebug) viewModel::toggleDebugInvertZone else null
                                     )
@@ -358,6 +367,13 @@ fun MainScreen(
                             ZoneDetailsScreen(
                                 details = details,
                                 onClose = { viewModel.clearSelectedZone() }
+                            )
+                        }
+
+                        selectedForestBan?.let { ban ->
+                            ForestBanDetailsScreen(
+                                ban = ban,
+                                onClose = { viewModel.clearSelectedForestBan() }
                             )
                         }
                     }

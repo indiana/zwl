@@ -130,10 +130,12 @@ object GeoJsonConverter {
         reader.beginObject()
         while (reader.hasNext()) {
             val key = reader.nextName()
-            if (reader.peek() == com.google.gson.stream.JsonToken.NULL) {
-                reader.nextNull()
-            } else {
-                props[key] = reader.nextString()
+            when (reader.peek()) {
+                com.google.gson.stream.JsonToken.NULL -> reader.nextNull()
+                com.google.gson.stream.JsonToken.BOOLEAN -> props[key] = reader.nextBoolean().toString()
+                com.google.gson.stream.JsonToken.NUMBER,
+                com.google.gson.stream.JsonToken.STRING -> props[key] = reader.nextString()
+                else -> reader.skipValue()
             }
         }
         reader.endObject()

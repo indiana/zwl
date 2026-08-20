@@ -50,6 +50,10 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import org.locationtech.jts.io.WKTReader
 import org.locationtech.jts.operation.distance.DistanceOp
 
+import com.indiana.zwl.domain.model.ForestBan
+import com.indiana.zwl.domain.usecase.GetForestBansUseCase
+import com.indiana.zwl.domain.usecase.SyncForestBansUseCase
+
 data class SelectedZoneDetails(
     val zone: Zone,
     val distanceMeters: Double?,
@@ -72,6 +76,8 @@ class MainViewModel @Inject constructor(
     private val compassRepository: CompassRepository,
     private val syncZonesUseCase: SyncZonesUseCase,
     private val syncPoiUseCase: SyncPoiUseCase,
+    private val syncForestBansUseCase: SyncForestBansUseCase,
+    private val getForestBansUseCase: GetForestBansUseCase,
     private val getFireRiskUseCase: GetFireRiskUseCase,
     private val getForestStandUseCase: GetForestStandUseCase,
     private val getZonesUseCase: GetZonesUseCase,
@@ -104,6 +110,23 @@ class MainViewModel @Inject constructor(
     private val _selectedPoiDetails = MutableStateFlow<SelectedPoiDetails?>(null)
     val selectedPoiDetails: StateFlow<SelectedPoiDetails?> = _selectedPoiDetails
 
+    private val _selectedForestBan = MutableStateFlow<ForestBan?>(null)
+    val selectedForestBan: StateFlow<ForestBan?> = _selectedForestBan
+
+    fun selectForestBan(ban: ForestBan) {
+        _selectedForestBan.value = ban
+    }
+
+    fun clearSelectedForestBan() {
+        _selectedForestBan.value = null
+    }
+
+    val forestBans: StateFlow<List<ForestBan>> = getForestBansUseCase.asFlow().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     private val _debugInvertZone = MutableStateFlow(false)
     val debugInvertZone: StateFlow<Boolean> = _debugInvertZone.asStateFlow()
 
@@ -113,6 +136,14 @@ class MainViewModel @Inject constructor(
     }
 
     private val sharedPrefs = context.getSharedPreferences("zwl_map_settings", Context.MODE_PRIVATE)
+
+    private val _showForestBans = MutableStateFlow(sharedPrefs.getBoolean("show_forest_bans", true))
+    val showForestBans: StateFlow<Boolean> = _showForestBans
+
+    fun setShowForestBans(show: Boolean) {
+        _showForestBans.value = show
+        sharedPrefs.edit().putBoolean("show_forest_bans", show).apply()
+    }
 
     private val _showFireplaces = MutableStateFlow(sharedPrefs.getBoolean("show_fireplaces", true))
     val showFireplaces: StateFlow<Boolean> = _showFireplaces
@@ -214,6 +245,24 @@ class MainViewModel @Inject constructor(
                 }
             }
 
+            // Asynchroniczne ładowanie i pobieranie zakazów wstępu do lasu w tle
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val localBans = getForestBansUseCase()
+                    withContext(Dispatchers.Default) {
+                        spatialEngine.initializeBans(localBans)
+                    }
+                    syncForestBansUseCase()
+                    val updatedBans = getForestBansUseCase()
+                    withContext(Dispatchers.Default) {
+                        spatialEngine.initializeBans(updatedBans)
+                    }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    e.printStackTrace()
+                }
+            }
+
             try {
                 val count = withContext(Dispatchers.IO) { zoneDao.getZonesCount() }
                 if (count == 0) {
@@ -264,25 +313,29 @@ class MainViewModel @Inject constructor(
             .onStart { emit(null) }
             .mapLatest { location ->
                 if (location != null) {
-                    val status = withContext(Dispatchers.Default) {
-                        spatialEngine.checkLocation(location.latitude, location.longitude)
+                    val (status, ban) = withContext(Dispatchers.Default) {
+                        val st = spatialEngine.checkLocation(location.latitude, location.longitude)
+                        val bn = spatialEngine.checkForestBan(location.latitude, location.longitude)
+                        st to bn
                     }
                     val lastLoc = lastFireRiskLocation
                     if (lastLoc == null || location.distanceTo(lastLoc) > 1000f) {
                         fetchFireHazard(location, status)
                     }
-                    Triple(location, status, currentFireRisk)
+                    data class LocationData(val location: Location, val status: LocationStatus, val fireRisk: Int, val ban: ForestBan?)
+                    LocationData(location, status, currentFireRisk, ban)
                 } else {
-                    Triple(null, LocationStatus.EmptyData, -1)
+                    null
                 }
             }
 
         trackingJob = viewModelScope.launch {
             coroutineScope {
                 launch {
-                    locationWithStatusFlow.collect { (location, status, fireRisk) ->
-                        // Aktualizujemy odległość do wybranego POI na żywo w tle
-                        if (location != null) {
+                    locationWithStatusFlow.collect { data ->
+                        if (data != null) {
+                            val location = data.location
+                            // Aktualizujemy odległość do wybranego POI na żywo w tle
                             _selectedPoiDetails.value?.let { currentPoiDetails ->
                                 val results = FloatArray(1)
                                 Location.distanceBetween(
@@ -292,14 +345,23 @@ class MainViewModel @Inject constructor(
                                 )
                                 _selectedPoiDetails.value = currentPoiDetails.copy(distanceMeters = results[0].toDouble())
                             }
-                        }
 
-                        _uiState.value = MainUiState.Success(
-                            locationStatus = status,
-                            fireRiskLevel = fireRisk,
-                            latitude = location?.latitude,
-                            longitude = location?.longitude
-                        )
+                            _uiState.value = MainUiState.Success(
+                                locationStatus = data.status,
+                                fireRiskLevel = data.fireRisk,
+                                latitude = location.latitude,
+                                longitude = location.longitude,
+                                currentForestBan = data.ban
+                            )
+                        } else {
+                            _uiState.value = MainUiState.Success(
+                                locationStatus = LocationStatus.EmptyData,
+                                fireRiskLevel = -1,
+                                latitude = null,
+                                longitude = null,
+                                currentForestBan = null
+                            )
+                        }
                     }
                 }
                 launch {

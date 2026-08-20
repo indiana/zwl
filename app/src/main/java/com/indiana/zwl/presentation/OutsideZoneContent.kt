@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.indiana.zwl.domain.model.ForestBan
 
 @Composable
 fun OutsideZoneContent(
@@ -31,7 +32,9 @@ fun OutsideZoneContent(
     distanceMeters: Double,
     bearingDegrees: Float,
     azimuth: Float,
+    currentForestBan: ForestBan? = null,
     onViewDetailsClick: (() -> Unit)? = null,
+    onBanDetailsClick: (() -> Unit)? = null,
     onDebugToggle: (() -> Unit)? = null
 ) {
     var accumulatedAzimuth by remember { mutableStateOf(azimuth) }
@@ -70,9 +73,17 @@ fun OutsideZoneContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+        if (currentForestBan != null && onBanDetailsClick != null) {
+            ForestBanAlertBanner(
+                forestBan = currentForestBan,
+                onBanDetailsClick = onBanDetailsClick,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(top = 40.dp)
+            modifier = Modifier.padding(top = 24.dp)
         ) {
             Box(
                 modifier = Modifier

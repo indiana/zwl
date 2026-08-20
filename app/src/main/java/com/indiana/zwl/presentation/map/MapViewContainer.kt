@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.presentation.MainUiState
@@ -91,6 +92,8 @@ fun MapViewContainer(
     val showFireplaces by viewModel.showFireplaces.collectAsState()
     val showShelters by viewModel.showShelters.collectAsState()
     val showOthers by viewModel.showOthers.collectAsState()
+    val showForestBans by viewModel.showForestBans.collectAsState()
+    val forestBans by viewModel.forestBans.collectAsState()
 
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
@@ -118,6 +121,7 @@ fun MapViewContainer(
 
     var downloadLayerInstance by remember { mutableStateOf<TileDownloadLayer?>(null) }
     var poiFolderOverlay by remember { mutableStateOf<org.mapsforge.map.layer.GroupLayer?>(null) }
+    var banFolderOverlay by remember { mutableStateOf<org.mapsforge.map.layer.GroupLayer?>(null) }
 
     LaunchedEffect(isActive, downloadLayerInstance) {
         downloadLayerInstance?.let { layer ->
@@ -127,6 +131,39 @@ fun MapViewContainer(
                 layer.onPause()
             }
         }
+    }
+
+    LaunchedEffect(forestBans, showForestBans, banFolderOverlay, mapViewInstance) {
+        val folder = banFolderOverlay ?: return@LaunchedEffect
+        val mv = mapViewInstance ?: return@LaunchedEffect
+
+        if (!showForestBans || forestBans.isEmpty()) {
+            synchronized(folder) {
+                folder.layers.clear()
+            }
+            folder.requestRedraw()
+            return@LaunchedEffect
+        }
+
+        val newLayers = withContext(Dispatchers.Default) {
+            createForestBanPolygons(
+                context = context,
+                mapView = mv,
+                bans = forestBans,
+                onBanClick = { ban ->
+                    viewModel.selectForestBan(ban)
+                },
+                onError = { errorMsg ->
+                    viewModel.setDebugError(errorMsg)
+                }
+            )
+        }
+
+        synchronized(folder) {
+            folder.layers.clear()
+            folder.layers.addAll(newLayers)
+        }
+        folder.requestRedraw()
     }
 
     LaunchedEffect(pois, poiFolderOverlay, mapViewInstance) {
@@ -280,6 +317,7 @@ fun MapViewContainer(
                     this.layerManager.layers.add(MapTapInterceptor(ctx) {
                         viewModel.clearSelectedZone()
                         viewModel.clearSelectedPoi()
+                        viewModel.clearSelectedForestBan()
                     })
 
                     val savedCenter = viewModel.savedMapCenter
@@ -302,6 +340,10 @@ fun MapViewContainer(
                             viewModel.setDebugError(errorMsg)
                         }
                     )
+
+                    val banFolder = org.mapsforge.map.layer.GroupLayer()
+                    this.layerManager.layers.add(banFolder)
+                    banFolderOverlay = banFolder
 
                     val poiFolder = org.mapsforge.map.layer.GroupLayer()
                     this.layerManager.layers.add(poiFolder)
@@ -464,6 +506,22 @@ fun MapViewContainer(
                             )
 
                             Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = showForestBans,
+                                        onCheckedChange = { viewModel.setShowForestBans(it) },
+                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.error)
+                                    )
+                                    Text(
+                                        text = "Zakazy wstępu do lasu",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.fillMaxWidth()
@@ -863,3 +921,113 @@ private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.Whit
         )
     }
 }
+
+private fun createForestBanPolygons(
+    context: Context,
+    mapView: MapView,
+    bans: List<ForestBan>,
+    onBanClick: (ForestBan) -> Unit,
+    onError: (String) -> Unit
+): List<org.mapsforge.map.layer.Layer> {
+    val graphicFactory = AndroidGraphicFactory.INSTANCE
+    val wktReader = WKTReader()
+
+    val fillPaint = graphicFactory.createPaint().apply {
+        color = graphicFactory.createColor(0x4D, 0xD3, 0x2F, 0x2F) // Semi-transparent Red
+        setStyle(Style.FILL)
+    }
+
+    val strokePaint = graphicFactory.createPaint().apply {
+        color = graphicFactory.createColor(0xFF, 0xB7, 0x1C, 0x1C) // Deep Red 900
+        setStyle(Style.STROKE)
+        strokeWidth = 2f * context.resources.displayMetrics.density
+    }
+
+    val resultLayers = mutableListOf<org.mapsforge.map.layer.Layer>()
+
+    for (ban in bans) {
+        try {
+            var geom = wktReader.read(ban.geometryWkt)
+            if (!geom.isValid) {
+                try {
+                    geom = geom.buffer(0.0)
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                }
+            }
+            val numGeoms = geom.numGeometries
+            for (g in 0 until numGeoms) {
+                val subGeom = geom.getGeometryN(g)
+                if (subGeom is org.locationtech.jts.geom.Polygon) {
+                    val shell = subGeom.exteriorRing
+                    val mfPoints = ArrayList<LatLong>()
+                    for (c in shell.coordinates) {
+                        mfPoints.add(LatLong(c.y, c.x))
+                    }
+
+                    val clickablePolygon = ClickableBanPolygon(
+                        mapView = mapView,
+                        ban = ban,
+                        jtsPolygon = subGeom,
+                        fillPaint = fillPaint,
+                        strokePaint = strokePaint,
+                        graphicFactory = graphicFactory,
+                        onClick = onBanClick,
+                        onError = onError
+                    )
+                    clickablePolygon.setPoints(mfPoints)
+                    resultLayers.add(clickablePolygon)
+                }
+            }
+        } catch (e: Throwable) {
+            onError("createForestBanPolygons error:\n" + e.stackTraceToString())
+        }
+    }
+    return resultLayers
+}
+
+class ClickableBanPolygon(
+    private val mapView: MapView,
+    private val ban: ForestBan,
+    private val jtsPolygon: org.locationtech.jts.geom.Polygon,
+    fillPaint: org.mapsforge.core.graphics.Paint,
+    strokePaint: org.mapsforge.core.graphics.Paint,
+    graphicFactory: org.mapsforge.core.graphics.GraphicFactory,
+    private val onClick: (ForestBan) -> Unit,
+    private val onError: (String) -> Unit
+) : SafePolygon(fillPaint, strokePaint, graphicFactory) {
+    override fun safeOnTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
+        try {
+            if (tapLatLong == null) {
+                return false
+            }
+            val gf = org.locationtech.jts.geom.GeometryFactory()
+            val clickedPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(tapLatLong.longitude, tapLatLong.latitude))
+            val contains = try {
+                jtsPolygon.contains(clickedPoint)
+            } catch (e: Throwable) {
+                try {
+                    jtsPolygon.buffer(0.0).contains(clickedPoint)
+                } catch (e2: Throwable) {
+                    false
+                }
+            }
+
+            if (contains) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    try {
+                        onClick(ban)
+                    } catch (e: Throwable) {
+                        e.printStackTrace()
+                        onError("onClick posted execution error:\n" + e.stackTraceToString())
+                    }
+                }
+                return true
+            }
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+        return false
+    }
+}
+

@@ -1,5 +1,6 @@
 package com.indiana.zwl.presentation
 
+import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.LocationStatus
 
 sealed class MainUiState {
@@ -11,6 +12,7 @@ sealed class MainUiState {
         val locationStatus: LocationStatus,
         val fireRiskLevel: Int,
         val latitude: Double?,
-        val longitude: Double?
+        val longitude: Double?,
+        val currentForestBan: ForestBan? = null
     ) : MainUiState()
 }

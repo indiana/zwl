@@ -33,11 +33,16 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import com.indiana.zwl.domain.model.ForestBan
+import androidx.compose.material.icons.filled.Warning
+
 @Composable
 fun InZoneContent(
     forestDistrict: String,
     fireRiskLevel: Int,
+    currentForestBan: ForestBan? = null,
     onViewDetailsClick: (() -> Unit)? = null,
+    onBanDetailsClick: (() -> Unit)? = null,
     onDebugToggle: (() -> Unit)? = null,
     isActive: Boolean = true
 ) {
@@ -57,6 +62,14 @@ fun InZoneContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+        if (currentForestBan != null && onBanDetailsClick != null) {
+            ForestBanAlertBanner(
+                forestBan = currentForestBan,
+                onBanDetailsClick = onBanDetailsClick,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(top = 16.dp)
@@ -298,3 +311,70 @@ internal fun PulsingBanBadge(
         )
     }
 }
+
+@Composable
+fun ForestBanAlertBanner(
+    forestBan: ForestBan,
+    onBanDetailsClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onBanDetailsClick,
+        color = ErrorDarkBackground,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.5.dp, ErrorRedAccent),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(ErrorRedButton.copy(alpha = 0.3f), RoundedCornerShape(20.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = ErrorRedAccent,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "ZAKAZ WSTĘPU DO LASU",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ErrorRedAccent
+                )
+                Text(
+                    text = "${banReasonText(forestBan.reason)} (${forestBan.forestDistrictName})",
+                    fontSize = 12.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            IconButton(onClick = onBanDetailsClick) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Szczegóły zakazu",
+                    tint = ErrorRedAccent,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun banReasonText(reason: String): String {
+    return reason.replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }
+}
+
