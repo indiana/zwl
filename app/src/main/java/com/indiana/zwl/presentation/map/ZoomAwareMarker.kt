@@ -12,7 +12,7 @@ import org.mapsforge.core.util.MercatorProjection
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.layer.overlay.Marker
 
-class ZoomAwareMarker(
+open class ZoomAwareMarker(
     latLong: LatLong,
     bitmap: org.mapsforge.core.graphics.Bitmap,
     horizontalOffset: Int,
