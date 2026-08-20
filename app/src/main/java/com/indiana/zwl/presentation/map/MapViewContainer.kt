@@ -204,12 +204,22 @@ fun MapViewContainer(
             } else {
                 genericBitmap
             }
+
+            val dotColor = if (isWiata) {
+                android.graphics.Color.parseColor("#4E342E")
+            } else if (isFireplace) {
+                android.graphics.Color.parseColor("#E65100")
+            } else {
+                android.graphics.Color.parseColor("#1976D2")
+            }
+
             if (bitmap != null) {
-                val marker = object : Marker(
+                val marker = object : ZoomAwareMarker(
                     LatLong(poi.latitude, poi.longitude),
                     bitmap,
                     0,
-                    0
+                    0,
+                    dotColor
                 ) {
                     override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
                         if (tapXY != null) {
