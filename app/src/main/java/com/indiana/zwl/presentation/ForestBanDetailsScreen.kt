@@ -1,7 +1,5 @@
 package com.indiana.zwl.presentation
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,14 +11,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,8 +30,6 @@ fun ForestBanDetailsScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -90,7 +83,7 @@ fun ForestBanDetailsScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
@@ -203,7 +196,7 @@ fun ForestBanDetailsScreen(
                                 text = end,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = ErrorRedAccent
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -352,35 +345,6 @@ fun ForestBanDetailsScreen(
                 }
             }
 
-            // Card 4: Official BDL Link Button
-            OutlinedButton(
-                onClick = {
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://zakazywstepu.bdl.lasy.gov.pl/zakazy/"))
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                },
-                shape = RoundedCornerShape(8.dp),
-                border = BorderStroke(1.dp, ForestGreenAccent),
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(vertical = 12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.OpenInNew,
-                    contentDescription = null,
-                    tint = ForestGreenAccent,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Otwórz mapę zakazów BDL",
-                    color = ForestGreenAccent,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
         }
     }
 }
