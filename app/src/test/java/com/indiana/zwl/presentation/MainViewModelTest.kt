@@ -12,8 +12,10 @@ import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
+import com.indiana.zwl.domain.usecase.GetForestBansUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
+import com.indiana.zwl.domain.usecase.SyncForestBansUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import io.mockk.coEvery
@@ -47,6 +49,8 @@ class MainViewModelTest {
     private val compassRepository: CompassRepository = mockk(relaxed = true)
     private val syncZonesUseCase: SyncZonesUseCase = mockk()
     private val syncPoiUseCase: SyncPoiUseCase = mockk()
+    private val syncForestBansUseCase: SyncForestBansUseCase = mockk()
+    private val getForestBansUseCase: GetForestBansUseCase = mockk()
     private val getFireRiskUseCase: GetFireRiskUseCase = mockk()
     private val getForestStandUseCase: GetForestStandUseCase = mockk()
     private val getZonesUseCase: GetZonesUseCase = mockk()
@@ -64,11 +68,14 @@ class MainViewModelTest {
         every { sharedPreferences.getBoolean("show_fireplaces", true) } returns true
         every { sharedPreferences.getBoolean("show_shelters", true) } returns true
         every { sharedPreferences.getBoolean("show_others", true) } returns true
+        every { sharedPreferences.getBoolean("show_forest_bans", true) } returns true
         every { sharedPreferences.edit() } returns sharedPreferencesEditor
         every { sharedPreferencesEditor.putBoolean(any(), any()) } returns sharedPreferencesEditor
 
         every { poiDao.getAllPois() } returns allPoisFlow
         coEvery { syncPoiUseCase() } returns Result.success(Unit)
+        coEvery { syncForestBansUseCase() } returns Result.success(Unit)
+        coEvery { getForestBansUseCase() } returns emptyList()
         coEvery { zoneDao.getZonesCount() } returns 10
         coEvery { getZonesUseCase() } returns emptyList()
     }
@@ -82,8 +89,9 @@ class MainViewModelTest {
         // Act
         val viewModel = MainViewModel(
             zoneDao, poiDao, locationRepository, compassRepository,
-            syncZonesUseCase, syncPoiUseCase, getFireRiskUseCase,
-            getForestStandUseCase, getZonesUseCase, spatialEngine, okHttpClient, context
+            syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
+            getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
+            getZonesUseCase, spatialEngine, okHttpClient, context
         )
 
         // Assert
@@ -105,8 +113,9 @@ class MainViewModelTest {
         // Act
         val viewModel = MainViewModel(
             zoneDao, poiDao, locationRepository, compassRepository,
-            syncZonesUseCase, syncPoiUseCase, getFireRiskUseCase,
-            getForestStandUseCase, getZonesUseCase, spatialEngine, okHttpClient, context
+            syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
+            getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
+            getZonesUseCase, spatialEngine, okHttpClient, context
         )
 
         // Assert
@@ -128,8 +137,9 @@ class MainViewModelTest {
 
         val viewModel = MainViewModel(
             zoneDao, poiDao, locationRepository, compassRepository,
-            syncZonesUseCase, syncPoiUseCase, getFireRiskUseCase,
-            getForestStandUseCase, getZonesUseCase, spatialEngine, okHttpClient, context
+            syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
+            getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
+            getZonesUseCase, spatialEngine, okHttpClient, context
         )
 
         viewModel.pois.test {
@@ -175,8 +185,9 @@ class MainViewModelTest {
 
         val viewModel = MainViewModel(
             zoneDao, poiDao, locationRepository, compassRepository,
-            syncZonesUseCase, syncPoiUseCase, getFireRiskUseCase,
-            getForestStandUseCase, getZonesUseCase, spatialEngine, okHttpClient, context
+            syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
+            getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
+            getZonesUseCase, spatialEngine, okHttpClient, context
         )
 
         // Act
