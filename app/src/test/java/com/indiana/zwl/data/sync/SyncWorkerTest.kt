@@ -3,6 +3,7 @@ package com.indiana.zwl.data.sync
 import android.content.Context
 import androidx.work.ListenableWorker.Result as WorkResult
 import androidx.work.WorkerParameters
+import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.usecase.SyncForestBansUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
@@ -37,7 +38,7 @@ class SyncWorkerTest {
         }
         coEvery { syncForestBansUseCase() } coAnswers {
             delay(500)
-            Result.success(Unit)
+            Result.success(emptyList<ForestBan>())
         }
 
         val start = System.nanoTime()
@@ -55,7 +56,7 @@ class SyncWorkerTest {
     fun `doWork returns success when all syncs succeed`() = runBlocking {
         coEvery { syncZonesUseCase() } returns Result.success(emptyList<Zone>())
         coEvery { syncPoiUseCase() } returns Result.success(Unit)
-        coEvery { syncForestBansUseCase() } returns Result.success(Unit)
+        coEvery { syncForestBansUseCase() } returns Result.success(emptyList<ForestBan>())
 
         assertEquals(WorkResult.success(), createWorker().doWork())
     }
@@ -64,7 +65,7 @@ class SyncWorkerTest {
     fun `doWork returns retry when a sync fails`() = runBlocking {
         coEvery { syncZonesUseCase() } returns Result.failure(Exception("zones sync failed"))
         coEvery { syncPoiUseCase() } returns Result.success(Unit)
-        coEvery { syncForestBansUseCase() } returns Result.success(Unit)
+        coEvery { syncForestBansUseCase() } returns Result.success(emptyList<ForestBan>())
 
         assertEquals(WorkResult.retry(), createWorker().doWork())
     }

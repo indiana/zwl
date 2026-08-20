@@ -10,6 +10,7 @@ import com.indiana.zwl.data.local.ZoneEntity
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
+import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestBansUseCase
@@ -74,8 +75,9 @@ class MainViewModelTest {
 
         every { poiDao.getAllPois() } returns allPoisFlow
         coEvery { syncPoiUseCase() } returns Result.success(Unit)
-        coEvery { syncForestBansUseCase() } returns Result.success(Unit)
+        coEvery { syncForestBansUseCase() } returns Result.success(emptyList<ForestBan>())
         coEvery { getForestBansUseCase() } returns emptyList()
+        every { getForestBansUseCase.asFlow() } returns flowOf(emptyList())
         coEvery { zoneDao.getZonesCount() } returns 10
         coEvery { getZonesUseCase() } returns emptyList()
     }
