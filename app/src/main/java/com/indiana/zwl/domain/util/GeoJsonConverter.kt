@@ -264,4 +264,24 @@ object GeoJsonConverter {
         }
         return "Nadleśnictwo (Nieznane)"
     }
+
+    fun extractWebsiteUrl(properties: Map<String, String>): String? {
+        val linkValue = properties["link"]
+        if (!linkValue.isNullOrBlank()) {
+            try {
+                val urlStr = if (!linkValue.startsWith("http://") && !linkValue.startsWith("https://")) {
+                    "https://$linkValue"
+                } else {
+                    linkValue
+                }
+                val uri = java.net.URI(urlStr)
+                val host = uri.host ?: return null
+                if (host.isBlank()) return null
+                return "https://$host"
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        return null
+    }
 }

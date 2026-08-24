@@ -11,5 +11,6 @@ data class ZoneEntity(
     val fireRiskLevel: Int? = null,
     val fireRiskTimestamp: Long? = null,
     val forestStandJson: String? = null,
-    val forestStandTimestamp: Long? = null
+    val forestStandTimestamp: Long? = null,
+    val websiteUrl: String? = null
 )

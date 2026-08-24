@@ -26,10 +26,12 @@ class SyncZonesUseCase @Inject constructor(
                 GeoJsonConverter.parseFeatureCollectionStream(body.charStream()) { properties, geometry ->
                     val wkt = wktWriter.write(geometry)
                     val forestDistrict = GeoJsonConverter.extractForestDistrict(properties)
+                    val websiteUrl = GeoJsonConverter.extractWebsiteUrl(properties)
                     entities.add(
                         ZoneEntity(
                             forestDistrict = forestDistrict,
-                            geometryWkt = wkt
+                            geometryWkt = wkt,
+                            websiteUrl = websiteUrl
                         )
                     )
                 }

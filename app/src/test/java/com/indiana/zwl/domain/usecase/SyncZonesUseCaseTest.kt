@@ -79,6 +79,7 @@ class SyncZonesUseCaseTest {
         assertEquals(1, insertedList.size)
         assertEquals("Nadleśnictwo Kudypy", insertedList[0].forestDistrict)
         assertTrue(insertedList[0].geometryWkt.contains("POLYGON"))
+        assertEquals("https://kudypy.szczecinek.lasy.gov.pl", insertedList[0].websiteUrl)
     }
 
     @Test
