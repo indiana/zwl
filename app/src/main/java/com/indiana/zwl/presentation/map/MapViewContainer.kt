@@ -27,6 +27,7 @@ import com.indiana.zwl.presentation.SelectedZoneDetails
 import com.indiana.zwl.presentation.SelectedPoiDetails
 import com.indiana.zwl.data.local.PoiEntity
 import com.indiana.zwl.presentation.theme.ZwlTheme
+import com.indiana.zwl.presentation.theme.ForestGreenAccent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,7 +36,6 @@ import org.mapsforge.core.graphics.Style
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.core.model.Tile
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
-import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
 import org.mapsforge.map.layer.cache.TileCache
 import org.mapsforge.map.layer.download.DownloadJob
@@ -96,7 +96,9 @@ fun MapViewContainer(
     val forestBans by viewModel.forestBans.collectAsState()
 
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
-    var tileCacheInstance by remember { mutableStateOf<TileCache?>(null) }
+    val tileCache by produceState<TileCache?>(initialValue = null, context) {
+        value = MapTileCacheProvider.getOrCreate(context)
+    }
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
 
@@ -291,6 +293,15 @@ fun MapViewContainer(
 
     ZwlTheme(isInZone = isInZone) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        val readyCache = tileCache
+        if (readyCache == null) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = ForestGreenAccent)
+            }
+        } else {
         AndroidView(
             factory = { ctx ->
                 MapView(ctx).apply {
@@ -298,15 +309,7 @@ fun MapViewContainer(
                     getMapScaleBar().isVisible = true
                     setBuiltInZoomControls(true)
 
-                    val tileCache = AndroidUtil.createTileCache(
-                        ctx,
-                        "mapcache",
-                        this.model.displayModel.tileSize,
-                        1f,
-                        this.model.frameBufferModel.overdrawFactor,
-                        true
-                    )
-                    tileCacheInstance = tileCache
+                    this.model.frameBufferModel.overdrawFactor = MapTileCacheProvider.OVERDRAW_FACTOR
 
                     this.mapZoomControls.setZoomLevelMin(8)
                     this.mapZoomControls.setZoomLevelMax(20)
@@ -314,7 +317,7 @@ fun MapViewContainer(
                     val tileSource = OfflineMapDownloader.createOnlineTileSource()
 
                     val downloadLayer = TileDownloadLayer(
-                        tileCache,
+                        readyCache,
                         this.model.mapViewPosition,
                         tileSource,
                         AndroidGraphicFactory.INSTANCE
@@ -394,10 +397,9 @@ fun MapViewContainer(
                 val position = mapView.model.mapViewPosition
                 viewModel.saveMapState(position.center, position.zoomLevel)
                 mapView.destroyAll()
-                tileCacheInstance?.destroy()
-                tileCacheInstance = null
             }
         )
+        }
 
         // Top-right UI controls (Download button / Offline status badge)
         Box(
@@ -592,7 +594,7 @@ fun MapViewContainer(
                                             return@Button
                                         }
                                         val mv = mapViewInstance
-                                        val tc = tileCacheInstance
+                                        val tc = tileCache
                                         if (mv != null && tc != null) {
                                             val bbox = mv.boundingBox
                                             if (bbox != null) {

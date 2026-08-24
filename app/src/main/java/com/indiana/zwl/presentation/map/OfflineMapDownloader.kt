@@ -29,6 +29,33 @@ sealed class DownloadStatus {
 object OfflineMapDownloader {
 
     private const val DOWNLOAD_CONCURRENCY = 4
+    internal const val MAX_TILES = 500
+
+    /**
+     * Tile index bounds for one zoom level. Materializing these is cheap and bounded
+     * by the number of zoom levels; the tiles themselves are only created after the
+     * total count has been validated (OOM guard).
+     */
+    internal data class TileRange(val zoom: Int, val minX: Int, val maxX: Int, val startY: Int, val endY: Int)
+
+    internal fun tileRanges(bbox: BoundingBox, zoomLevels: IntRange): List<TileRange> {
+        return zoomLevels.map { z ->
+            val startX = getTileX(bbox.minLongitude, z)
+            val endX = getTileX(bbox.maxLongitude, z)
+            val y1 = getTileY(bbox.maxLatitude, z)
+            val y2 = getTileY(bbox.minLatitude, z)
+            val startY = minOf(y1, y2)
+            val endY = maxOf(y1, y2)
+
+            val minX = minOf(startX, endX)
+            val maxX = maxOf(startX, endX)
+
+            TileRange(z, minX, maxX, startY, endY)
+        }
+    }
+
+    internal fun countTiles(ranges: List<TileRange>): Long =
+        ranges.sumOf { r -> (r.maxX - r.minX + 1).toLong() * (r.endY - r.startY + 1) }
 
     private sealed class TileResult {
         object Skipped : TileResult()
@@ -67,34 +94,33 @@ object OfflineMapDownloader {
         client: okhttp3.OkHttpClient
     ): Flow<DownloadStatus> = flow {
         val zoomLevels = 10..16
-        val tiles = mutableListOf<Tile>()
-        for (z in zoomLevels) {
-            val startX = getTileX(bbox.minLongitude, z)
-            val endX = getTileX(bbox.maxLongitude, z)
-            val y1 = getTileY(bbox.maxLatitude, z)
-            val y2 = getTileY(bbox.minLatitude, z)
-            val startY = minOf(y1, y2)
-            val endY = maxOf(y1, y2)
 
-            val minX = minOf(startX, endX)
-            val maxX = maxOf(startX, endX)
+        // Pass 1: validate the area size arithmetically before allocating any tiles.
+        val ranges = tileRanges(bbox, zoomLevels)
+        val totalLong = countTiles(ranges)
 
-            for (x in minX..maxX) {
-                for (y in startY..endY) {
-                    tiles.add(Tile(x, y, z.toByte(), tileSize))
-                }
-            }
+        if (totalLong > MAX_TILES) {
+            emit(DownloadStatus.Message("Obszar jest zbyt duży! Przybliż mapę, aby pobrać mniejszy wycinek (maksymalnie 500 kafelków, aktualnie: $totalLong)."))
+            return@flow
         }
 
-        val total = tiles.size
-        if (total == 0) {
+        if (totalLong == 0L) {
             emit(DownloadStatus.Message("Obszar nie zawiera żadnych kafelków."))
             return@flow
         }
 
-        if (total > 500) {
-            emit(DownloadStatus.Message("Obszar jest zbyt duży! Przybliż mapę, aby pobrać mniejszy wycinek (maksymalnie 500 kafelków, aktualnie: $total)."))
-            return@flow
+        val total = totalLong.toInt()
+
+        // Pass 2: bounded materialization (guaranteed <= MAX_TILES entries).
+        val tileSizeInt = tileSize
+        val tiles = ranges.flatMap { r ->
+            ArrayList<Tile>((r.maxX - r.minX + 1) * (r.endY - r.startY + 1)).apply {
+                for (x in r.minX..r.maxX) {
+                    for (y in r.startY..r.endY) {
+                        add(Tile(x, y, r.zoom.toByte(), tileSizeInt))
+                    }
+                }
+            }
         }
 
         emit(DownloadStatus.Start(total))
