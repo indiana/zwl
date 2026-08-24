@@ -97,7 +97,11 @@ fun MapViewContainer(
 
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     val tileCache by produceState<TileCache?>(initialValue = null, context) {
-        value = MapTileCacheProvider.getOrCreate(context)
+        val cache = MapTileCache.create(context)
+        value = cache
+        awaitDispose {
+            runCatching { cache.destroy() }
+        }
     }
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
@@ -309,7 +313,7 @@ fun MapViewContainer(
                     getMapScaleBar().isVisible = true
                     setBuiltInZoomControls(true)
 
-                    this.model.frameBufferModel.overdrawFactor = MapTileCacheProvider.OVERDRAW_FACTOR
+                    this.model.frameBufferModel.overdrawFactor = MapTileCache.OVERDRAW_FACTOR
 
                     this.mapZoomControls.setZoomLevelMin(8)
                     this.mapZoomControls.setZoomLevelMax(20)
