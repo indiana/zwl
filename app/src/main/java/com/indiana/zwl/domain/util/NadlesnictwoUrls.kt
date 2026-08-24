@@ -56,10 +56,13 @@ object NadlesnictwoUrls {
         val district = stripDistrictPrefix(districtName ?: return null)
         if (district.isBlank()) return null
 
-        val city = rdlpCity(rdlpName) ?: return null
+        val overrideHost = HOST_OVERRIDES[normalize(district)]
+        if (overrideHost != null) {
+            return "https://$overrideHost.$HOST_SUFFIX"
+        }
 
-        val hostPart = HOST_OVERRIDES[normalize(district)] ?: district.slug()
-        return "https://$hostPart.$city.$HOST_SUFFIX"
+        val city = rdlpCity(rdlpName) ?: return null
+        return "https://${district.slug()}.$city.$HOST_SUFFIX"
     }
 
     fun displayHost(url: String?): String? {
@@ -79,7 +82,7 @@ object NadlesnictwoUrls {
 
     private fun rdlpCity(rdlpName: String?): String? {
         if (rdlpName == null) return null
-        val withoutPrefix = rdlpName.trim().replace(Regex("^RDLP\\s+", RegexOption.IGNORE_CASE), "")
+        val withoutPrefix = rdlpName.trim().replace(Regex("^RDLP\\s*", RegexOption.IGNORE_CASE), "")
         if (withoutPrefix.isBlank()) return null
         return normalize(withoutPrefix).replace(" ", "").lowercase()
     }
