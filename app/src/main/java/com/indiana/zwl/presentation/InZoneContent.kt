@@ -246,11 +246,24 @@ fun InZoneContent(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = GAS_STOVE_STATUS_DISCLAIMER,
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 15.sp
+                )
             }
         }
     }
     }
 }
+
+internal const val GAS_STOVE_STATUS_DISCLAIMER =
+    "Status kuchenek wyznaczany jest wyłącznie na podstawie stopnia zagrożenia pożarowego. Aby mieć absolutną pewność, sprawdź stronę swojego nadleśnictwa."
 
 internal fun fireRiskStatusText(level: Int): String = when (level) {
     0 -> "STOPNIEŃ 0 (Brak zagrożenia)"

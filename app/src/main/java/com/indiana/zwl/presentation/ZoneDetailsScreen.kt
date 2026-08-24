@@ -86,6 +86,30 @@ fun ZoneDetailsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Card 0: Nadleśnictwo Website
+            details.zone.websiteUrl?.let { websiteUrl ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "STRONA NADLEŚNICTWA",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        WebsiteLinkRow(url = websiteUrl)
+                    }
+                }
+            }
+
             // Card 1: Distance & Location Status
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -284,6 +308,13 @@ fun ZoneDetailsScreen(
                                 }
                             }
                         }
+
+                        Text(
+                            text = GAS_STOVE_STATUS_DISCLAIMER,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 15.sp
+                        )
                     }
                 }
             }

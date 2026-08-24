@@ -2,6 +2,7 @@ package com.indiana.zwl.domain.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.locationtech.jts.geom.Polygon
@@ -143,5 +144,26 @@ class GeoJsonConverterTest {
         val props = emptyMap<String, String>()
         val district = GeoJsonConverter.extractForestDistrict(props)
         assertEquals("Nadleśnictwo (Nieznane)", district)
+    }
+
+    @Test
+    fun `extractWebsiteUrl returns https root for bare host`() {
+        val url = GeoJsonConverter.extractWebsiteUrl(mapOf("link" to "kudypy.szczecinek.lasy.gov.pl"))
+        assertEquals("https://kudypy.szczecinek.lasy.gov.pl", url)
+    }
+
+    @Test
+    fun `extractWebsiteUrl strips path from full link`() {
+        val url = GeoJsonConverter.extractWebsiteUrl(
+            mapOf("link" to "https://kaliska.gdansk.lasy.gov.pl/program-zanocuj-w-lesie-")
+        )
+        assertEquals("https://kaliska.gdansk.lasy.gov.pl", url)
+    }
+
+    @Test
+    fun `extractWebsiteUrl returns null when link missing or invalid`() {
+        assertNull(GeoJsonConverter.extractWebsiteUrl(emptyMap()))
+        assertNull(GeoJsonConverter.extractWebsiteUrl(mapOf("link" to "")))
+        assertNull(GeoJsonConverter.extractWebsiteUrl(mapOf("link" to "not a valid url")))
     }
 }

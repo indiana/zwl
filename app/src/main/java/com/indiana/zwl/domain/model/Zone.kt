@@ -1,4 +1,4 @@
-package com.indiana.zwl.domain.model
+﻿package com.indiana.zwl.domain.model
 
 data class Zone(
     val id: Long,
@@ -7,5 +7,6 @@ data class Zone(
     val fireRiskLevel: Int? = null,
     val fireRiskTimestamp: Long? = null,
     val forestStandJson: String? = null,
-    val forestStandTimestamp: Long? = null
+    val forestStandTimestamp: Long? = null,
+    val websiteUrl: String? = null
 )

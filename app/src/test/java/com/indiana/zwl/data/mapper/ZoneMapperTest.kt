@@ -15,7 +15,8 @@ class ZoneMapperTest {
             forestDistrict = "Nadleśnictwo Borki",
             geometryWkt = "POLYGON ((10 10, 20 10, 20 20, 10 20, 10 10))",
             fireRiskLevel = 1,
-            fireRiskTimestamp = 123456789L
+            fireRiskTimestamp = 123456789L,
+            websiteUrl = "https://borki.bialystok.lasy.gov.pl"
         )
 
         // Act
@@ -27,6 +28,7 @@ class ZoneMapperTest {
         assertEquals("POLYGON ((10 10, 20 10, 20 20, 10 20, 10 10))", domain.geometryWkt)
         assertEquals(1, domain.fireRiskLevel)
         assertEquals(123456789L, domain.fireRiskTimestamp)
+        assertEquals("https://borki.bialystok.lasy.gov.pl", domain.websiteUrl)
     }
 
     @Test
@@ -37,7 +39,8 @@ class ZoneMapperTest {
             forestDistrict = "Nadleśnictwo Spychowo",
             geometryWkt = "POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))",
             fireRiskLevel = 3,
-            fireRiskTimestamp = 987654321L
+            fireRiskTimestamp = 987654321L,
+            websiteUrl = "https://spychowo.olsztyn.lasy.gov.pl"
         )
 
         // Act
@@ -49,5 +52,6 @@ class ZoneMapperTest {
         assertEquals("POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))", entity.geometryWkt)
         assertEquals(3, entity.fireRiskLevel)
         assertEquals(987654321L, entity.fireRiskTimestamp)
+        assertEquals("https://spychowo.olsztyn.lasy.gov.pl", entity.websiteUrl)
     }
 }

@@ -12,8 +12,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.domain.model.ForestBan
+import com.indiana.zwl.domain.util.NadlesnictwoUrls
 import com.indiana.zwl.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,6 +35,9 @@ fun ForestBanDetailsScreen(
     onBanIconClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val nadlesnictwoUrl = remember(ban.forestDistrictName, ban.rdlpName) {
+        NadlesnictwoUrls.websiteUrl(ban.forestDistrictName, ban.rdlpName)
+    }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -206,7 +212,40 @@ fun ForestBanDetailsScreen(
                 }
             }
 
-            // Card 3: Forest Administration Details
+            // Card 3: Forest Administration Website
+            if (nadlesnictwoUrl != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = null,
+                                tint = ForestGreenAccent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Strona nadleśnictwa",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        WebsiteLinkRow(url = nadlesnictwoUrl)
+                    }
+                }
+            }
+
+            // Card 4: Forest Administration Details
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -281,25 +320,6 @@ fun ForestBanDetailsScreen(
                             )
                             Text(
                                 text = forestry,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-
-                    ban.compartmentCode?.let { compartment ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Oddział:",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = compartment,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
