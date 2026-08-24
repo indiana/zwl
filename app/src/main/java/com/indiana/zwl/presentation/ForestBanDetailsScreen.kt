@@ -307,27 +307,7 @@ fun ForestBanDetailsScreen(
                         }
                     }
 
-                    ban.forestAddress?.let { address ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Adres leśny:",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = address,
-                                fontSize = 13.sp,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-
                     ban.areaSqMeters?.let { areaSqM ->
-                        val ha = areaSqM / 10000.0
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -338,7 +318,7 @@ fun ForestBanDetailsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = String.format(java.util.Locale.US, "%.2f ha (%.0f m²)", ha, areaSqM),
+                                text = "${formatAreaHa(areaSqM)} ha (${formatAreaSqM(areaSqM)} m²)",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -350,4 +330,33 @@ fun ForestBanDetailsScreen(
 
         }
     }
+}
+
+/**
+ * Formats an area given in square meters as hectares: groups of 3 digits
+ * separated by a regular space (U+0020), exactly 2 decimals after a period.
+ * Example: 1234567.891 -> "123.46".
+ */
+internal fun formatAreaHa(areaSqMeters: Double): String {
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale.ROOT).apply {
+        groupingSeparator = ' '
+        decimalSeparator = '.'
+    }
+    val df = java.text.DecimalFormat("#,##0.00", symbols)
+    df.roundingMode = java.math.RoundingMode.HALF_UP
+    return df.format(areaSqMeters / 10000.0)
+}
+
+/**
+ * Formats an area in square meters: groups of 3 digits separated by a regular
+ * space (U+0020), no decimals. Example: 999.4 -> "999".
+ */
+internal fun formatAreaSqM(areaSqMeters: Double): String {
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale.ROOT).apply {
+        groupingSeparator = ' '
+        decimalSeparator = '.'
+    }
+    val df = java.text.DecimalFormat("#,##0", symbols)
+    df.roundingMode = java.math.RoundingMode.HALF_UP
+    return df.format(areaSqMeters)
 }
