@@ -1,11 +1,11 @@
 package com.indiana.zwl.domain.model
 
-sealed class LocationStatus {
-    data class InZone(val forestDistrict: String) : LocationStatus()
+sealed interface LocationStatus {
+    data class InZone(val forestDistrict: String) : LocationStatus
     data class OutsideZone(
         val nearestDistrict: String,
         val distanceMeters: Double,
         val bearingDegrees: Float
-    ) : LocationStatus()
-    object EmptyData : LocationStatus()
+    ) : LocationStatus
+    data object EmptyData : LocationStatus
 }

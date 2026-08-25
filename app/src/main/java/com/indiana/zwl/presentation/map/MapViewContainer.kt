@@ -28,6 +28,8 @@ import com.indiana.zwl.presentation.DownloadEvent
 import com.indiana.zwl.presentation.SelectedZoneDetails
 import com.indiana.zwl.presentation.SelectedPoiDetails
 import com.indiana.zwl.data.local.PoiEntity
+import com.indiana.zwl.domain.util.PoiCategory
+import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.presentation.theme.ZwlTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -195,26 +197,18 @@ fun MapViewContainer(
 
         val newMarkers = mutableListOf<Marker>()
         for (poi in pois) {
-            val nameLower = poi.name.lowercase(java.util.Locale.getDefault())
-            val isWiata = nameLower.contains("wiata") || nameLower.contains("altan") ||
-                    nameLower.contains("szałas") || nameLower.contains("shelter")
-            val isFireplace = nameLower.contains("ognis") || nameLower.contains("palenis") ||
-                    nameLower.contains("fire")
-            
-            val bitmap = if (isWiata) {
-                shelterBitmap
-            } else if (isFireplace) {
-                fireplaceBitmap
-            } else {
-                genericBitmap
+            val category = poi.classify()
+
+            val bitmap = when (category) {
+                PoiCategory.SHELTER -> shelterBitmap
+                PoiCategory.FIREPLACE -> fireplaceBitmap
+                PoiCategory.OTHER -> genericBitmap
             }
 
-            val dotColor = if (isWiata) {
-                android.graphics.Color.parseColor("#4E342E")
-            } else if (isFireplace) {
-                android.graphics.Color.parseColor("#E65100")
-            } else {
-                android.graphics.Color.parseColor("#1976D2")
+            val dotColor = when (category) {
+                PoiCategory.SHELTER -> android.graphics.Color.parseColor("#4E342E")
+                PoiCategory.FIREPLACE -> android.graphics.Color.parseColor("#E65100")
+                PoiCategory.OTHER -> android.graphics.Color.parseColor("#1976D2")
             }
 
             if (bitmap != null) {

@@ -22,23 +22,3 @@ fun ForestBanEntity.toDomainModel(): ForestBan {
         geometryWkt = this.geometryWkt
     )
 }
-
-fun ForestBan.toEntity(): ForestBanEntity {
-    return ForestBanEntity(
-        id = this.id,
-        remoteId = this.remoteId,
-        forestDistrictCode = this.forestDistrictCode,
-        forestDistrictName = this.forestDistrictName,
-        rdlpName = this.rdlpName,
-        forestryName = this.forestryName,
-        forestryCode = this.forestryCode,
-        reason = this.reason,
-        description = this.description,
-        startDate = this.startDate,
-        endDate = this.endDate,
-        forestAddress = this.forestAddress,
-        compartmentCode = this.compartmentCode,
-        areaSqMeters = this.areaSqMeters,
-        geometryWkt = this.geometryWkt
-    )
-}

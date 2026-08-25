@@ -15,6 +15,8 @@ import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
+import com.indiana.zwl.domain.util.PoiCategory
+import com.indiana.zwl.domain.util.classify
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
@@ -150,15 +152,11 @@ class MainViewModel @Inject constructor(
         _showOthers
     ) { allPois, showFireplaces, showShelters, showOthers ->
         allPois.filter { poi ->
-            val nameLower = poi.name.lowercase(java.util.Locale.getDefault())
-            val isWiata = nameLower.contains("wiata") || nameLower.contains("altan") ||
-                    nameLower.contains("szałas") || nameLower.contains("shelter")
-            val isFireplace = nameLower.contains("ognis") || nameLower.contains("palenis") ||
-                    nameLower.contains("fire")
-
-            if (isWiata) showShelters
-            else if (isFireplace) showFireplaces
-            else showOthers
+            when (poi.classify()) {
+                PoiCategory.SHELTER -> showShelters
+                PoiCategory.FIREPLACE -> showFireplaces
+                PoiCategory.OTHER -> showOthers
+            }
         }
     }.stateIn(
         scope = viewModelScope,
@@ -434,6 +432,6 @@ class MainViewModel @Inject constructor(
     }
 }
 
-sealed class DownloadEvent {
-    data class ToastMessage(val message: String, val isLong: Boolean = false) : DownloadEvent()
+sealed interface DownloadEvent {
+    data class ToastMessage(val message: String, val isLong: Boolean = false) : DownloadEvent
 }
