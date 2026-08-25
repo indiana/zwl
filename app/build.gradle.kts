@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.devtools.ksp)
     alias(libs.plugins.hilt.android)
@@ -8,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.indiana.zwl"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.indiana.zwl"
@@ -63,6 +62,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":shared"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -87,8 +87,9 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
 
-    // JTS (Spatial Calculations)
-    implementation(libs.jts.core)
+    // JTS → kts-core (KMP-compatible, same org.locationtech.jts package)
+    implementation(libs.kts.core)
+    implementation(libs.kts.io.wkt)
 
     // Mapsforge (Map rendering)
     implementation("com.caverock:androidsvg:1.4")

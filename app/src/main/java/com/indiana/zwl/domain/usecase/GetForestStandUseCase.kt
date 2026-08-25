@@ -17,14 +17,14 @@ class GetForestStandUseCase @Inject constructor(
     suspend operator fun invoke(zone: Zone): Result<ForestStandSummary> {
         return try {
             val reader = WKTReader()
-            val geometry = reader.read(zone.geometryWkt)
-            val envelope: Envelope = geometry.envelopeInternal
+            val geometry = reader.read(zone.geometryWkt)!!
+            val envelope: Envelope = geometry.getEnvelopeInternal()
 
-            val bbox = "${envelope.minX},${envelope.minY},${envelope.maxX},${envelope.maxY}"
-            val centroid = geometry.centroid
+            val bbox = "${envelope.getMinX()},${envelope.getMinY()},${envelope.getMaxX()},${envelope.getMaxY()}"
+            val centroid = geometry.getCentroid()
 
             val regionResult = ogcApi.findNadlesnictwo(
-                bbox = "${centroid.x - 0.01},${centroid.y - 0.01},${centroid.x + 0.01},${centroid.y + 0.01}"
+                bbox = "${centroid.getX() - 0.01},${centroid.getY() - 0.01},${centroid.getX() + 0.01},${centroid.getY() + 0.01}"
             )
             val regionCd = regionResult.features?.firstOrNull()?.properties?.get("region_cd") as? String
 

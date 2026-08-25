@@ -210,7 +210,7 @@ object GeoJsonConverter {
             }
             else -> null
         }
-        return if (geom != null && !geom.isValid) {
+        return if (geom != null && !geom.isValid()) {
             try { geom.buffer(0.0) } catch (_: Throwable) { geom }
         } else {
             geom

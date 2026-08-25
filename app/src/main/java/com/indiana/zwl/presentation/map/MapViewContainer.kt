@@ -793,22 +793,22 @@ private fun drawZonePolygons(
 
     for (zone in zones) {
         try {
-            var geom = wktReader.read(zone.geometryWkt)
-            if (!geom.isValid) {
+            var geom = wktReader.read(zone.geometryWkt)!!
+            if (!geom.isValid()) {
                 try {
                     geom = geom.buffer(0.0)
                 } catch (e: Throwable) {
                     e.printStackTrace()
                 }
             }
-            val numGeoms = geom.numGeometries
+            val numGeoms = geom.getNumGeometries()
             for (g in 0 until numGeoms) {
                 val subGeom = geom.getGeometryN(g)
                 if (subGeom is org.locationtech.jts.geom.Polygon) {
-                    val shell = subGeom.exteriorRing
+                    val shell = subGeom.getExteriorRing()
                     val mfPoints = ArrayList<LatLong>()
-                    for (c in shell.coordinates) {
-                        mfPoints.add(LatLong(c.y, c.x))
+                    for (c in shell.getCoordinates()) {
+                        mfPoints.add(LatLong(c.getY(), c.getX()))
                     }
 
                     val clickablePolygon = ClickablePolygon(
@@ -964,22 +964,22 @@ private fun createForestBanPolygons(
 
     for (ban in bans) {
         try {
-            var geom = wktReader.read(ban.geometryWkt)
-            if (!geom.isValid) {
+            var geom = wktReader.read(ban.geometryWkt)!!
+            if (!geom.isValid()) {
                 try {
                     geom = geom.buffer(0.0)
                 } catch (e: Throwable) {
                     e.printStackTrace()
                 }
             }
-            val numGeoms = geom.numGeometries
+            val numGeoms = geom.getNumGeometries()
             for (g in 0 until numGeoms) {
                 val subGeom = geom.getGeometryN(g)
                 if (subGeom is org.locationtech.jts.geom.Polygon) {
-                    val shell = subGeom.exteriorRing
+                    val shell = subGeom.getExteriorRing()
                     val mfPoints = ArrayList<LatLong>()
-                    for (c in shell.coordinates) {
-                        mfPoints.add(LatLong(c.y, c.x))
+                    for (c in shell.getCoordinates()) {
+                        mfPoints.add(LatLong(c.getY(), c.getX()))
                     }
 
                     val clickablePolygon = ClickableBanPolygon(

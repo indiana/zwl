@@ -78,7 +78,7 @@ class ZoneDetailViewModel @Inject constructor(
                         try {
                             val gf = GeometryFactory()
                             val userPoint = gf.createPoint(Coordinate(userLon, userLat))
-                            val targetGeom = if (!jtsPolygon.isValid) {
+                            val targetGeom = if (!jtsPolygon.isValid()) {
                                 try { jtsPolygon.buffer(0.0) } catch (_: Throwable) { jtsPolygon }
                             } else jtsPolygon
                             val distanceOp = DistanceOp(targetGeom, userPoint)
@@ -174,10 +174,10 @@ class ZoneDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val (jtsPolygon, lat, lon) = withContext(Dispatchers.Default) {
-                    val polygon = org.locationtech.jts.io.WKTReader().read(zone.geometryWkt)
-                    val centroid = polygon.centroid
-                    val useLat = userLat ?: centroid.y
-                    val useLon = userLon ?: centroid.x
+                    val polygon = org.locationtech.jts.io.WKTReader().read(zone.geometryWkt)!!
+                    val centroid = polygon.getCentroid()
+                    val useLat = userLat ?: centroid.getY()
+                    val useLon = userLon ?: centroid.getX()
                     Triple(polygon, useLat, useLon)
                 }
                 selectZone(zone, jtsPolygon, lat, lon, userLat, userLon)

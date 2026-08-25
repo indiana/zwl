@@ -54,9 +54,9 @@ class GeoJsonConverterTest {
         assertEquals(1, parsedGeometries.size)
         assertTrue(parsedGeometries[0] is Polygon)
         val polygon = parsedGeometries[0] as Polygon
-        assertEquals(4, polygon.exteriorRing.numPoints)
-        assertEquals(19.123, polygon.exteriorRing.coordinates[0].x, 0.0001)
-        assertEquals(52.123, polygon.exteriorRing.coordinates[0].y, 0.0001)
+        assertEquals(4, polygon.getExteriorRing().getNumPoints())
+        assertEquals(19.123, polygon.getExteriorRing().getCoordinates()[0].getX(), 0.0001)
+        assertEquals(52.123, polygon.getExteriorRing().getCoordinates()[0].getY(), 0.0001)
     }
 
     @Test
@@ -110,7 +110,7 @@ class GeoJsonConverterTest {
         assertEquals(1, parsedGeometries.size)
         assertTrue(parsedGeometries[0] is MultiPolygon)
         val multiPolygon = parsedGeometries[0] as MultiPolygon
-        assertEquals(2, multiPolygon.numGeometries)
+        assertEquals(2, multiPolygon.getNumGeometries())
     }
 
     @Test

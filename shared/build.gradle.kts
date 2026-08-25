@@ -1,12 +1,16 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.library)
+    alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.sqldelight)
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
-    androidTarget {
+    android {
+        namespace = "com.indiana.zwl.shared"
+        compileSdk = 37
+        minSdk = 26
+
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
@@ -18,10 +22,11 @@ kotlin {
     // }
 
     sourceSets {
-        val commonMain by getting {
+        val commonMain = getByName("commonMain") {
             dependencies {
-                // NOTE: kts-core removed — requires Kotlin 2.4+, SpatialEngine stays in :app JVM-only
-                // Will be added back when Kotlin is upgraded to 2.x
+                // KTS spatial library — Kotlin 2.4+ resolved
+                implementation(libs.kts.core)
+                implementation(libs.kts.io.wkt)
 
                 // Database
                 implementation(libs.sqldelight.runtime)
@@ -42,7 +47,7 @@ kotlin {
                 implementation(libs.koin.core)
             }
         }
-        val androidMain by getting {
+        val androidMain = getByName("androidMain") {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.sqldelight.android.driver)
@@ -56,20 +61,6 @@ kotlin {
         //         implementation(libs.sqldelight.native.driver)
         //     }
         // }
-    }
-}
-
-android {
-    namespace = "com.indiana.zwl.shared"
-    compileSdk = 36
-
-    defaultConfig {
-        minSdk = 26
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 

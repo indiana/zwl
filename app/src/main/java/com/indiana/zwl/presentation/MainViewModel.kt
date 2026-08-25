@@ -108,10 +108,10 @@ class MainViewModel @Inject constructor(
     fun debugOverrideLocationToBan(ban: ForestBan) {
         if (!com.indiana.zwl.BuildConfig.DEBUG) return
         viewModelScope.launch(Dispatchers.Default) {
-            val geom = org.locationtech.jts.io.WKTReader().read(ban.geometryWkt)
-            val centroid = geom.centroid
-            val lat = centroid.y
-            val lon = centroid.x
+            val geom = org.locationtech.jts.io.WKTReader().read(ban.geometryWkt)!!
+            val centroid = geom.getCentroid()
+            val lat = centroid.getY()
+            val lon = centroid.getX()
             val status = spatialEngine.checkLocation(lat, lon)
             _debugForestBanOverride.value = DebugLocationOverride(
                 locationStatus = status,

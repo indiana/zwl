@@ -54,7 +54,7 @@ class SpatialEngine {
         for (ban in bans) {
             try {
                 var geom = wktReader.read(ban.geometryWkt)
-                if (!geom.isValid) {
+                if (!geom.isValid()) {
                     try {
                         geom = geom.buffer(0.0)
                     } catch (e: Exception) {
@@ -63,7 +63,7 @@ class SpatialEngine {
                 }
                 val parsed = ParsedBan(ban, geom)
                 newParsedBans.add(parsed)
-                newStrTree.insert(geom.envelopeInternal, parsed)
+                newStrTree.insert(geom.getEnvelopeInternal(), parsed)
             } catch (e: Exception) {
                 // Ignoruj błędne geometrie
             }
@@ -108,7 +108,7 @@ class SpatialEngine {
         for (zone in zones) {
             try {
                 var geom = wktReader.read(zone.geometryWkt)
-                if (!geom.isValid) {
+                if (!geom.isValid()) {
                     try {
                         geom = geom.buffer(0.0)
                     } catch (e: Exception) {
@@ -117,7 +117,7 @@ class SpatialEngine {
                 }
                 val parsed = ParsedZone(zone.forestDistrict, geom)
                 newParsedZones.add(parsed)
-                newStrTree.insert(geom.envelopeInternal, parsed)
+                newStrTree.insert(geom.getEnvelopeInternal(), parsed)
             } catch (e: Exception) {
                 // Ignoruj błędne geometrie
             }
@@ -172,13 +172,13 @@ class SpatialEngine {
             // Obliczanie dokładnego dystansu do skomplikowanych poligonów jest bardzo kosztowne i może zablokować wątek.
             // Zamiast tego, bierzemy po prostu strefę z najbliższym Bounding Boxem.
             nearestZone = state.parsedZones.minByOrNull {
-                it.geometry.envelopeInternal.distance(searchEnvelope)
+                it.geometry.getEnvelopeInternal().distance(searchEnvelope)
             }
             
             // Używamy środka Bounding Boxa strefy jako punktu docelowego, by uniknąć kosztownego DistanceOp.
             nearestZone?.let { zone ->
-                val env = zone.geometry.envelopeInternal
-                targetCoord = Coordinate(env.centre().x, env.centre().y)
+                val env = zone.geometry.getEnvelopeInternal()
+                targetCoord = env.centre()
                 minDistanceMeters = calculateHaversineDistance(
                     latitude, longitude,
                     targetCoord!!.y, targetCoord!!.x
@@ -193,7 +193,7 @@ class SpatialEngine {
                     try {
                         zone.geometry.buffer(0.0).distance(userPoint)
                     } catch (e2: Throwable) {
-                        zone.geometry.envelopeInternal.distance(searchEnvelope)
+                        zone.geometry.getEnvelopeInternal().distance(searchEnvelope)
                     }
                 }
                 if (distDeg < closestDistanceDeg) {
@@ -214,8 +214,8 @@ class SpatialEngine {
                         val nearestCoords = distanceOp.nearestPoints()
                         targetCoord = nearestCoords[0]
                     } catch (e2: Throwable) {
-                        val env = zone.geometry.envelopeInternal
-                        targetCoord = Coordinate(env.centre().x, env.centre().y)
+                        val env = zone.geometry.getEnvelopeInternal()
+                        targetCoord = env.centre()
                     }
                 }
                 minDistanceMeters = calculateHaversineDistance(
