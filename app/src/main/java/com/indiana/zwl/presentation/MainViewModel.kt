@@ -295,12 +295,8 @@ class MainViewModel @Inject constructor(
                         val bn = spatialEngine.checkForestBan(location.latitude, location.longitude)
                         st to bn
                     }
-                    val lastLoc = lastFireRiskLocation
-                    if (lastLoc == null || location.distanceTo(lastLoc) > 1000f) {
-                        fetchFireHazard(location, status)
-                    }
-                    data class LocationData(val location: Location, val status: LocationStatus, val fireRisk: Int, val ban: ForestBan?)
-                    LocationData(location, status, currentFireRisk, ban)
+                    data class LocationData(val location: Location, val status: LocationStatus, val ban: ForestBan?)
+                    LocationData(location, status, ban)
                 } else {
                     null
                 }
@@ -311,9 +307,17 @@ class MainViewModel @Inject constructor(
                 launch {
                     locationWithStatusFlow.collect { data ->
                         if (data != null) {
+                            val location = data.location
+                            val lastLoc = lastFireRiskLocation
+                            if (lastLoc == null || location.distanceTo(lastLoc) > 1000f) {
+                                launch(Dispatchers.IO) {
+                                    fetchFireHazard(location, data.status)
+                                }
+                            }
+
                             _uiState.value = MainUiState.Success(
                                 locationStatus = data.status,
-                                fireRiskLevel = data.fireRisk,
+                                fireRiskLevel = currentFireRisk,
                                 latitude = data.location.latitude,
                                 longitude = data.location.longitude,
                                 currentForestBan = data.ban

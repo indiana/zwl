@@ -26,6 +26,7 @@ interface BdlFireApi {
         @Query("inSR") inSR: Int = 4326,
         @Query("spatialRel") spatialRel: String = "esriSpatialRelIntersects",
         @Query("outFields") outFields: String = "kod,opis",
+        @Query("returnGeometry") returnGeometry: Boolean = false,
         @Query("f") format: String = "geojson"
     ): FireRiskGeoJson
 }
