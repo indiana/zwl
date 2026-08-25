@@ -22,7 +22,7 @@ abstract class ZwlDatabase : RoomDatabase() {
                     ZwlDatabase::class.java,
                     "zwl_database"
                 )
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                 INSTANCE = instance
                 instance

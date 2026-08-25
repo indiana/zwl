@@ -284,6 +284,7 @@ class MainViewModel @Inject constructor(
         compassRepository.startListening()
 
         @Suppress("UNCHECKED_CAST")
+        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
         val locationWithStatusFlow = (locationRepository.locationFlow as Flow<Location?>)
             .onStart { emit(null) }
             .mapLatest { location ->

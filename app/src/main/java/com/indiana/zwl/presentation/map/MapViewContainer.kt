@@ -715,7 +715,7 @@ fun MapViewContainer(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         LinearProgressIndicator(
-                            progress = downloadProgress,
+                            progress = { downloadProgress },
                             modifier = Modifier.fillMaxWidth(),
                             color = MaterialTheme.colorScheme.primary
                         )
