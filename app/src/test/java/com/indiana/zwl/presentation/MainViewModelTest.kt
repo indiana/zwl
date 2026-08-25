@@ -3,15 +3,14 @@ package com.indiana.zwl.presentation
 import android.content.Context
 import android.content.SharedPreferences
 import com.indiana.zwl.MainDispatcherRule
-import com.indiana.zwl.data.local.PoiDao
 import com.indiana.zwl.data.local.PoiEntity
-import com.indiana.zwl.data.local.ZoneDao
-import com.indiana.zwl.data.local.ZoneEntity
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Zone
+import com.indiana.zwl.domain.repository.PoiRepository
+import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestBansUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
@@ -44,8 +43,8 @@ class MainViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private val zoneDao: ZoneDao = mockk()
-    private val poiDao: PoiDao = mockk()
+    private val zoneRepository: ZoneRepository = mockk()
+    private val poiRepository: PoiRepository = mockk()
     private val locationRepository: LocationRepository = mockk(relaxed = true)
     private val compassRepository: CompassRepository = mockk(relaxed = true)
     private val syncZonesUseCase: SyncZonesUseCase = mockk()
@@ -73,24 +72,24 @@ class MainViewModelTest {
         every { sharedPreferences.edit() } returns sharedPreferencesEditor
         every { sharedPreferencesEditor.putBoolean(any(), any()) } returns sharedPreferencesEditor
 
-        every { poiDao.getAllPois() } returns allPoisFlow
+        every { poiRepository.getAllPois() } returns allPoisFlow
         coEvery { syncPoiUseCase() } returns Result.success(Unit)
         coEvery { syncForestBansUseCase() } returns Result.success(emptyList<ForestBan>())
         coEvery { getForestBansUseCase() } returns emptyList()
         every { getForestBansUseCase.asFlow() } returns flowOf(emptyList())
-        coEvery { zoneDao.getZonesCount() } returns 10
+        coEvery { zoneRepository.getZonesCount() } returns 10
         coEvery { getZonesUseCase() } returns emptyList()
     }
 
     @Test
     fun `init should transition state to PermissionsRequired when zones exist but no location permission`() = runBlocking {
         // Arrange
-        coEvery { zoneDao.getZonesCount() } returns 5
+        coEvery { zoneRepository.getZonesCount() } returns 5
         coEvery { getZonesUseCase() } returns emptyList()
 
         // Act
         val viewModel = MainViewModel(
-            zoneDao, poiDao, locationRepository, compassRepository,
+            zoneRepository, poiRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
             getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
             getZonesUseCase, spatialEngine, okHttpClient, context
@@ -100,7 +99,7 @@ class MainViewModelTest {
         val success = waitForState(viewModel.uiState, 2000) { it is MainUiState.PermissionsRequired }
         assertTrue("State should transition to PermissionsRequired", success)
         coVerify(exactly = 1) { syncPoiUseCase() }
-        coVerify(exactly = 1) { zoneDao.getZonesCount() }
+        coVerify(exactly = 1) { zoneRepository.getZonesCount() }
         coVerify(exactly = 1) { getZonesUseCase() }
         verify(exactly = 0) { locationRepository.startLocationUpdates() }
     }
@@ -108,13 +107,13 @@ class MainViewModelTest {
     @Test
     fun `init should call syncZonesUseCase when database is empty`() = runBlocking {
         // Arrange
-        coEvery { zoneDao.getZonesCount() } returns 0
+        coEvery { zoneRepository.getZonesCount() } returns 0
         coEvery { syncZonesUseCase() } returns Result.success(emptyList())
         coEvery { getZonesUseCase() } returns emptyList()
 
         // Act
         val viewModel = MainViewModel(
-            zoneDao, poiDao, locationRepository, compassRepository,
+            zoneRepository, poiRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
             getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
             getZonesUseCase, spatialEngine, okHttpClient, context
@@ -138,7 +137,7 @@ class MainViewModelTest {
         allPoisFlow.value = testPois
 
         val viewModel = MainViewModel(
-            zoneDao, poiDao, locationRepository, compassRepository,
+            zoneRepository, poiRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
             getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
             getZonesUseCase, spatialEngine, okHttpClient, context
@@ -177,7 +176,7 @@ class MainViewModelTest {
             geometryWkt = "POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))"
         )
         coEvery { getFireRiskUseCase(any()) } returns Result.failure(java.net.UnknownHostException("offline"))
-        coEvery { zoneDao.getByForestDistrict("Nadleśnictwo Test") } returns ZoneEntity(
+        coEvery { zoneRepository.getByForestDistrict("Nadleśnictwo Test") } returns Zone(
             id = 1L,
             forestDistrict = "Nadleśnictwo Test",
             geometryWkt = "",
@@ -186,7 +185,7 @@ class MainViewModelTest {
         )
 
         val viewModel = MainViewModel(
-            zoneDao, poiDao, locationRepository, compassRepository,
+            zoneRepository, poiRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
             getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
             getZonesUseCase, spatialEngine, okHttpClient, context
@@ -205,7 +204,7 @@ class MainViewModelTest {
                 "Observed: ${viewModel.selectedZoneDetails.value}, debugError: ${viewModel.debugError.value}",
             success
         )
-        coVerify(exactly = 1) { zoneDao.getByForestDistrict("Nadleśnictwo Test") }
+        coVerify(exactly = 1) { zoneRepository.getByForestDistrict("Nadleśnictwo Test") }
     }
 
     private suspend fun <T> waitForState(

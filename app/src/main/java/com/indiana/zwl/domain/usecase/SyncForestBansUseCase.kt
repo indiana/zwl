@@ -1,10 +1,10 @@
 package com.indiana.zwl.domain.usecase
 
-import com.indiana.zwl.data.local.ForestBanDao
 import com.indiana.zwl.data.local.ForestBanEntity
 import com.indiana.zwl.data.mapper.toDomainModel
 import com.indiana.zwl.data.remote.BdlArcgisApi
 import com.indiana.zwl.domain.model.ForestBan
+import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.util.GeoJsonConverter
 import org.locationtech.jts.io.WKTWriter
 import kotlinx.coroutines.CancellationException
@@ -14,7 +14,7 @@ import javax.inject.Inject
 
 class SyncForestBansUseCase @Inject constructor(
     private val arcgisApi: BdlArcgisApi,
-    private val forestBanDao: ForestBanDao
+    private val forestBanRepository: ForestBanRepository
 ) {
     suspend operator fun invoke(): Result<List<ForestBan>> = withContext(Dispatchers.IO) {
         try {
@@ -60,9 +60,9 @@ class SyncForestBansUseCase @Inject constructor(
                 }
             }
 
-            forestBanDao.clearAll()
+            forestBanRepository.clearAll()
             if (entities.isNotEmpty()) {
-                forestBanDao.insertAll(entities)
+                forestBanRepository.insertAll(entities.map { it.toDomainModel() })
             }
             Result.success(entities.map { it.toDomainModel() })
         } catch (e: Exception) {

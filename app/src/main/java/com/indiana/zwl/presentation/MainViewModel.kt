@@ -4,13 +4,12 @@ import android.location.Location
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.indiana.zwl.data.local.ZoneDao
+import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.Zone
-import com.indiana.zwl.data.local.PoiDao
 import com.indiana.zwl.data.local.PoiEntity
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
@@ -70,8 +69,8 @@ data class SelectedPoiDetails(
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    private val zoneDao: ZoneDao,
-    private val poiDao: PoiDao,
+    private val zoneRepository: ZoneRepository,
+    private val poiRepository: PoiRepository,
     private val locationRepository: LocationRepository,
     private val compassRepository: CompassRepository,
     private val syncZonesUseCase: SyncZonesUseCase,
@@ -179,7 +178,7 @@ class MainViewModel @Inject constructor(
     val showOthers: StateFlow<Boolean> = _showOthers
 
     val pois: StateFlow<List<PoiEntity>> = combine(
-        poiDao.getAllPois(),
+        poiRepository.getAllPois(),
         _showFireplaces,
         _showShelters,
         _showOthers
@@ -288,7 +287,7 @@ class MainViewModel @Inject constructor(
             }
 
             try {
-                val count = withContext(Dispatchers.IO) { zoneDao.getZonesCount() }
+                val count = zoneRepository.getZonesCount()
                 if (count == 0) {
                     val syncResult = syncZonesUseCase()
                     if (syncResult.isSuccess) {
@@ -418,7 +417,7 @@ class MainViewModel @Inject constructor(
             if (district != null && code in 0..3) {
                 val timestamp = System.currentTimeMillis()
                 withContext(Dispatchers.IO) {
-                    zoneDao.updateFireRisk(district, code, timestamp)
+                    zoneRepository.updateFireRisk(district, code, timestamp)
                 }
                 updateZoneFireRiskInMemory(district, code, timestamp)
             }
@@ -431,7 +430,7 @@ class MainViewModel @Inject constructor(
             }
             if (isNetworkException(exception)) {
                 val cached = if (district != null) {
-                    withContext(Dispatchers.IO) { zoneDao.getByForestDistrict(district) }
+                    withContext(Dispatchers.IO) { zoneRepository.getByForestDistrict(district) }
                 } else {
                     null
                 }
@@ -606,7 +605,7 @@ class MainViewModel @Inject constructor(
                     if (code in 0..3) {
                         val timestamp = System.currentTimeMillis()
                         withContext(Dispatchers.IO) {
-                            zoneDao.updateFireRisk(zone.forestDistrict, code, timestamp)
+                            zoneRepository.updateFireRisk(zone.forestDistrict, code, timestamp)
                         }
                         updateZoneFireRiskInMemory(zone.forestDistrict, code, timestamp)
                     }
@@ -619,7 +618,7 @@ class MainViewModel @Inject constructor(
                         exception?.printStackTrace()
                     }
                     if (isNetworkException(exception)) {
-                        val freshZone = withContext(Dispatchers.IO) { zoneDao.getByForestDistrict(zone.forestDistrict) }
+                        val freshZone = withContext(Dispatchers.IO) { zoneRepository.getByForestDistrict(zone.forestDistrict) }
                         resolveCachedFireRisk(freshZone?.fireRiskLevel, freshZone?.fireRiskTimestamp)
                     } else {
                         -1
@@ -642,7 +641,7 @@ class MainViewModel @Inject constructor(
                                 val json = Gson().toJson(summary)
                                 val timestamp = System.currentTimeMillis()
                                 withContext(Dispatchers.IO) {
-                                    zoneDao.updateForestStand(zone.forestDistrict, json, timestamp)
+                                    zoneRepository.updateForestStand(zone.forestDistrict, json, timestamp)
                                 }
                                 updateZoneForestStandInMemory(zone.forestDistrict, json, timestamp)
                             }

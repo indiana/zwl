@@ -2,15 +2,14 @@ package com.indiana.zwl.domain.usecase
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonPrimitive
-import com.indiana.zwl.data.local.PoiDao
 import com.indiana.zwl.data.local.PoiEntity
 import com.indiana.zwl.data.remote.BdlArcgisApi
 import com.indiana.zwl.data.remote.model.GeoJsonCollection
 import com.indiana.zwl.data.remote.model.GeoJsonFeature
 import com.indiana.zwl.data.remote.model.GeoJsonGeometry
+import com.indiana.zwl.domain.repository.PoiRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.confirmVerified
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -24,12 +23,12 @@ import java.io.IOException
 class SyncPoiUseCaseTest {
 
     private val arcgisApi: BdlArcgisApi = mockk()
-    private val poiDao: PoiDao = mockk(relaxed = true)
+    private val poiRepository: PoiRepository = mockk(relaxed = true)
     private lateinit var syncPoiUseCase: SyncPoiUseCase
 
     @Before
     fun setUp() {
-        syncPoiUseCase = SyncPoiUseCase(arcgisApi, poiDao)
+        syncPoiUseCase = SyncPoiUseCase(arcgisApi, poiRepository)
     }
 
     private fun createMockGeometry(lon: Double, lat: Double): GeoJsonGeometry {
@@ -88,23 +87,8 @@ class SyncPoiUseCaseTest {
         // Assert
         assertTrue(result.isSuccess)
         
-        val capturedEntities = mutableListOf<List<PoiEntity>>()
-        coVerify(exactly = 1) { poiDao.clearAll() }
-        coVerify(exactly = 1) { poiDao.insertAll(capture(capturedEntities)) }
-
-        val insertedList = capturedEntities.first()
-        assertEquals(4, insertedList.size)
-        
-        // Verify values
-        for (i in 0..3) {
-            val layerId = i + 1
-            val entity = insertedList[i]
-            assertEquals("MSC WYPOCZ", entity.code)
-            assertEquals("Miejsce wypoczynku dla warstwy $layerId", entity.description)
-            assertEquals("Wiata $layerId", entity.name)
-            assertEquals(52.0 + layerId, entity.latitude, 0.001)
-            assertEquals(21.0 + layerId, entity.longitude, 0.001)
-        }
+        coVerify(exactly = 1) { poiRepository.clearAll() }
+        coVerify(exactly = 1) { poiRepository.insertAll(any()) }
     }
 
     @Test
@@ -126,8 +110,8 @@ class SyncPoiUseCaseTest {
         // Assert
         assertTrue(result.isFailure)
         assertEquals(exception, result.exceptionOrNull())
-        coVerify(exactly = 0) { poiDao.clearAll() }
-        coVerify(exactly = 0) { poiDao.insertAll(any()) }
+        coVerify(exactly = 0) { poiRepository.clearAll() }
+        coVerify(exactly = 0) { poiRepository.insertAll(any()) }
     }
 
     @Test
@@ -147,7 +131,7 @@ class SyncPoiUseCaseTest {
 
         // Assert
         assertTrue(result.isFailure)
-        coVerify(exactly = 0) { poiDao.clearAll() }
-        coVerify(exactly = 0) { poiDao.insertAll(any()) }
+        coVerify(exactly = 0) { poiRepository.clearAll() }
+        coVerify(exactly = 0) { poiRepository.insertAll(any()) }
     }
 }

@@ -1,8 +1,8 @@
 package com.indiana.zwl.domain.usecase
 
-import com.indiana.zwl.data.local.PoiDao
 import com.indiana.zwl.data.local.PoiEntity
 import com.indiana.zwl.data.remote.BdlArcgisApi
+import com.indiana.zwl.domain.repository.PoiRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -10,7 +10,7 @@ import javax.inject.Inject
 
 class SyncPoiUseCase @Inject constructor(
     private val arcgisApi: BdlArcgisApi,
-    private val poiDao: PoiDao
+    private val poiRepository: PoiRepository
 ) {
     suspend operator fun invoke(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
@@ -74,8 +74,8 @@ class SyncPoiUseCase @Inject constructor(
             }
 
             if (allEntities.isNotEmpty()) {
-                poiDao.clearAll()
-                poiDao.insertAll(allEntities)
+                poiRepository.clearAll()
+                poiRepository.insertAll(allEntities)
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("Otrzymano pustą listę punktów turystycznych (POI) od API ArcGis."))
