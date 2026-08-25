@@ -22,8 +22,8 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                // Spatial (JTS KMP port)
-                implementation(libs.kts.core)
+                // NOTE: kts-core removed — requires Kotlin 2.4+, SpatialEngine stays in :app JVM-only
+                // Will be added back when Kotlin is upgraded to 2.x
 
                 // Database
                 implementation(libs.sqldelight.runtime)
