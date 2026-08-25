@@ -22,6 +22,8 @@ import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.presentation.MainUiState
 import com.indiana.zwl.presentation.MainViewModel
+import com.indiana.zwl.presentation.ZoneDetailViewModel
+import com.indiana.zwl.presentation.map.MapViewModel
 import com.indiana.zwl.presentation.DownloadEvent
 import com.indiana.zwl.presentation.SelectedZoneDetails
 import com.indiana.zwl.presentation.SelectedPoiDetails
@@ -80,14 +82,16 @@ import androidx.compose.material.icons.filled.MyLocation
 @Composable
 fun MapViewContainer(
     viewModel: MainViewModel,
+    zoneDetailViewModel: ZoneDetailViewModel,
+    mapViewModel: MapViewModel,
     zones: List<Zone>,
     isActive: Boolean
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
-    val selectedZone by viewModel.selectedZoneDetails.collectAsState()
-    val selectedPoi by viewModel.selectedPoiDetails.collectAsState()
+    val selectedZone by zoneDetailViewModel.selectedZoneDetails.collectAsState()
+    val selectedPoi by zoneDetailViewModel.selectedPoiDetails.collectAsState()
     val pois by viewModel.pois.collectAsState()
     val showFireplaces by viewModel.showFireplaces.collectAsState()
     val showShelters by viewModel.showShelters.collectAsState()
@@ -103,7 +107,7 @@ fun MapViewContainer(
     LaunchedEffect(mapViewInstance, isActive, uiState) {
         val mv = mapViewInstance ?: return@LaunchedEffect
         if (!isActive || hasCenteredOnStartup) return@LaunchedEffect
-        if (viewModel.savedMapCenter != null) {
+        if (mapViewModel.savedMapCenter != null) {
             hasCenteredOnStartup = true
             return@LaunchedEffect
         }
@@ -227,7 +231,12 @@ fun MapViewContainer(
                             val center = projection.toPixels(LatLong(poi.latitude, poi.longitude))
                             if (center != null && contains(center, tapXY, mv)) {
                                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                    viewModel.selectPoi(poi)
+                                    val successState = uiState as? MainUiState.Success
+                                    zoneDetailViewModel.selectPoi(
+                                        poi,
+                                        successState?.latitude,
+                                        successState?.longitude
+                                    )
                                 }
                                 return true
                             }
@@ -248,12 +257,12 @@ fun MapViewContainer(
     }
 
     // Download state from ViewModel
-    val isDownloadingArea by viewModel.isDownloadingArea.collectAsState()
-    val downloadProgress by viewModel.downloadProgress.collectAsState()
-    val downloadText by viewModel.downloadText.collectAsState()
+    val isDownloadingArea by mapViewModel.isDownloadingArea.collectAsState()
+    val downloadProgress by mapViewModel.downloadProgress.collectAsState()
+    val downloadText by mapViewModel.downloadText.collectAsState()
 
-    LaunchedEffect(viewModel) {
-        viewModel.downloadEvent.collect { event ->
+    LaunchedEffect(mapViewModel) {
+        mapViewModel.downloadEvent.collect { event ->
             when (event) {
                 is DownloadEvent.ToastMessage -> {
                     Toast.makeText(
@@ -325,15 +334,15 @@ fun MapViewContainer(
 
                     // Add background tap interceptor to clear selection when tapping empty areas of the map
                     this.layerManager.layers.add(MapTapInterceptor(ctx) {
-                        viewModel.clearSelectedZone()
-                        viewModel.clearSelectedPoi()
+                        zoneDetailViewModel.clearSelectedZone()
+                        zoneDetailViewModel.clearSelectedPoi()
                         viewModel.clearSelectedForestBan()
                     })
 
-                    val savedCenter = viewModel.savedMapCenter
+                    val savedCenter = mapViewModel.savedMapCenter
                     if (savedCenter != null) {
                         this.setCenter(savedCenter)
-                        viewModel.savedMapZoom?.let { this.setZoomLevel(it) }
+                        mapViewModel.savedMapZoom?.let { this.setZoomLevel(it) }
                     } else {
                         this.setCenter(LatLong(52.23, 21.01))
                         this.setZoomLevel(15)
@@ -344,7 +353,11 @@ fun MapViewContainer(
                         mapView = this,
                         zones = zones,
                         onZoneClick = { zone, geom, latLong ->
-                            viewModel.selectZone(zone, geom, latLong.latitude, latLong.longitude)
+                            val successState = uiState as? MainUiState.Success
+                            zoneDetailViewModel.selectZone(
+                                zone, geom, latLong.latitude, latLong.longitude,
+                                successState?.latitude, successState?.longitude
+                            )
                         },
                         onZoneError = { errorMsg ->
                             viewModel.setDebugError(errorMsg)
@@ -392,7 +405,7 @@ fun MapViewContainer(
             },
             onRelease = { mapView ->
                 val position = mapView.model.mapViewPosition
-                viewModel.saveMapState(position.center, position.zoomLevel)
+                mapViewModel.saveMapState(position.center, position.zoomLevel)
                 mapView.destroyAll()
                 tileCacheInstance?.destroy()
                 tileCacheInstance = null
@@ -596,7 +609,7 @@ fun MapViewContainer(
                                         if (mv != null && tc != null) {
                                             val bbox = mv.boundingBox
                                             if (bbox != null) {
-                                                viewModel.downloadMapArea(
+                                                mapViewModel.downloadMapArea(
                                                     bbox = bbox,
                                                     tileSize = mv.model.displayModel.tileSize,
                                                     tileCache = tc
@@ -726,7 +739,7 @@ fun MapViewContainer(
             selectedPoi?.let { details ->
                 PoiDetailsCard(
                     details = details,
-                    onClose = { viewModel.clearSelectedPoi() },
+                    onClose = { zoneDetailViewModel.clearSelectedPoi() },
                     modifier = Modifier.padding(bottom = 88.dp)
                 )
             }

@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
 import org.locationtech.jts.io.WKTReader
 import app.cash.turbine.test
-import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -52,10 +51,8 @@ class MainViewModelTest {
     private val syncForestBansUseCase: SyncForestBansUseCase = mockk()
     private val getForestBansUseCase: GetForestBansUseCase = mockk()
     private val getFireRiskUseCase: GetFireRiskUseCase = mockk()
-    private val getForestStandUseCase: GetForestStandUseCase = mockk()
     private val getZonesUseCase: GetZonesUseCase = mockk()
     private val spatialEngine: SpatialEngine = mockk(relaxed = true)
-    private val okHttpClient: OkHttpClient = mockk()
     private val context: Context = mockk()
     private val sharedPreferences: SharedPreferences = mockk(relaxed = true)
     private val sharedPreferencesEditor: SharedPreferences.Editor = mockk(relaxed = true)
@@ -83,19 +80,16 @@ class MainViewModelTest {
 
     @Test
     fun `init should transition state to PermissionsRequired when zones exist but no location permission`() = runBlocking {
-        // Arrange
         coEvery { zoneRepository.getZonesCount() } returns 5
         coEvery { getZonesUseCase() } returns emptyList()
 
-        // Act
         val viewModel = MainViewModel(
             zoneRepository, poiRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
-            getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
-            getZonesUseCase, spatialEngine, okHttpClient, context
+            getForestBansUseCase, getFireRiskUseCase,
+            getZonesUseCase, spatialEngine, context
         )
 
-        // Assert
         val success = waitForState(viewModel.uiState, 2000) { it is MainUiState.PermissionsRequired }
         assertTrue("State should transition to PermissionsRequired", success)
         coVerify(exactly = 1) { syncPoiUseCase() }
@@ -106,20 +100,17 @@ class MainViewModelTest {
 
     @Test
     fun `init should call syncZonesUseCase when database is empty`() = runBlocking {
-        // Arrange
         coEvery { zoneRepository.getZonesCount() } returns 0
         coEvery { syncZonesUseCase() } returns Result.success(emptyList())
         coEvery { getZonesUseCase() } returns emptyList()
 
-        // Act
         val viewModel = MainViewModel(
             zoneRepository, poiRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
-            getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
-            getZonesUseCase, spatialEngine, okHttpClient, context
+            getForestBansUseCase, getFireRiskUseCase,
+            getZonesUseCase, spatialEngine, context
         )
 
-        // Assert
         val success = waitForState(viewModel.uiState, 2000) { it is MainUiState.PermissionsRequired }
         assertTrue("State should transition to PermissionsRequired", success)
         coVerify(exactly = 1) { syncZonesUseCase() }
@@ -128,7 +119,6 @@ class MainViewModelTest {
 
     @Test
     fun `pois flow should filter POIs correctly based on toggle settings`() = runBlocking {
-        // Arrange
         val testPois = listOf(
             PoiEntity(id = 1, code = "S1", description = "Wiata leśna", name = "Schron Turystyczny Wiata", latitude = 52.0, longitude = 21.0),
             PoiEntity(id = 2, code = "F1", description = "Palenisko", name = "Miejsce na ognisko pod dębem", latitude = 52.1, longitude = 21.1),
@@ -139,72 +129,28 @@ class MainViewModelTest {
         val viewModel = MainViewModel(
             zoneRepository, poiRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
-            getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
-            getZonesUseCase, spatialEngine, okHttpClient, context
+            getForestBansUseCase, getFireRiskUseCase,
+            getZonesUseCase, spatialEngine, context
         )
 
         viewModel.pois.test {
-            // Początkowy stan (wszystkie 3 punkty widoczne)
             val initialList = awaitItem()
             assertEquals(3, initialList.size)
 
-            // Wyłączenie wiat (shelters)
             viewModel.setShowShelters(false)
             val listAfterShelters = awaitItem()
             assertEquals(2, listAfterShelters.size)
             assertTrue(listAfterShelters.none { it.name.contains("Wiata", ignoreCase = true) })
 
-            // Wyłączenie ognisk (fireplaces)
             viewModel.setShowFireplaces(false)
             val listAfterFireplaces = awaitItem()
             assertEquals(1, listAfterFireplaces.size)
             assertEquals("Góra widokowa", listAfterFireplaces.first().name)
 
-            // Wyłączenie innych
             viewModel.setShowOthers(false)
             val listAfterOthers = awaitItem()
             assertTrue(listAfterOthers.isEmpty())
         }
-    }
-
-    @Test
-    fun `selectZone offline should read fresh fire risk from database instead of stale in-memory zone`() = runBlocking {
-        // Arrange
-        val staleZone = Zone(
-            id = 1L,
-            forestDistrict = "Nadleśnictwo Test",
-            geometryWkt = "POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))"
-        )
-        coEvery { getFireRiskUseCase(any()) } returns Result.failure(java.net.UnknownHostException("offline"))
-        coEvery { zoneRepository.getByForestDistrict("Nadleśnictwo Test") } returns Zone(
-            id = 1L,
-            forestDistrict = "Nadleśnictwo Test",
-            geometryWkt = "",
-            fireRiskLevel = 1,
-            fireRiskTimestamp = System.currentTimeMillis()
-        )
-
-        val viewModel = MainViewModel(
-            zoneRepository, poiRepository, locationRepository, compassRepository,
-            syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
-            getForestBansUseCase, getFireRiskUseCase, getForestStandUseCase,
-            getZonesUseCase, spatialEngine, okHttpClient, context
-        )
-
-        // Act
-        val polygon = WKTReader().read(staleZone.geometryWkt)
-        viewModel.selectZone(staleZone, polygon, 0.5, 0.5)
-
-        // Assert
-        val success = waitForState(viewModel.selectedZoneDetails, 5000) { details ->
-            details?.fireRiskLevel == 11 && details?.isLoadingFireRisk == false
-        }
-        assertTrue(
-            "Offline selection should resolve fresh cached risk (level + 10). " +
-                "Observed: ${viewModel.selectedZoneDetails.value}, debugError: ${viewModel.debugError.value}",
-            success
-        )
-        coVerify(exactly = 1) { zoneRepository.getByForestDistrict("Nadleśnictwo Test") }
     }
 
     private suspend fun <T> waitForState(
