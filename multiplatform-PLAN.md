@@ -1,6 +1,6 @@
 # Multiplatform Migration Plan — Legalny Bushcraft
 
-> **Status:** FAZY 0-1.2 ukończone (częściowo), FAZA 1.3 w toku
+> **Status:** FAZY 0-1.2.5 Phase D ukończone, FAZA 1.3 w toku
 > **Ostatnia aktualizacja:** 2026-08-25
 > **Główny cel:** Port aplikacji na iOS (KMP + SwiftUI + MapLibre)
 > **Strategia branchy:** `main` nietknięte → `multiplatform` integration branch → feature branches per faza
@@ -189,35 +189,35 @@ MapViewModel (~75 linii):
 - ✅ Dodać `shared` do `settings.gradle.kts`
 - ⬜ Skonfigurować targets: androidTarget() ✅, iosX64/Arm64/SimulatorArm64 ⬜ (wymaga macOS)
 - ✅ Dodać zależności commonMain:
-  - ⬜ kts-core 1.20.0.0 — usunięte, wymaga Kotlin 2.4+ (SpatialEngine zostaje w :app)
-  - ✅ SQLDelight 2.0.2, Ktor 2.3.13, kotlinx-serialization 1.6.3, Koin 3.5.6, kotlinx-coroutines
+  - ✅ kts-core 1.20.0.0 + kts-io-wkt — dodane w Phase D (commit `a6903cf`)
+  - ✅ SQLDelight 2.0.2, Ktor 2.3.13, kotlinx-serialization 1.7.3, Koin 3.5.6, kotlinx-coroutines
 - ✅ androidTarget z JVM 17
 - ⬜ iOS targets zakomentowane (Kotlin/Native compiler nie działa na Windows)
 
 ### 1.2: Przeniesienie domain layer do commonMain
 
-**Status:** ✅ Zakończone (częściowo — pliki zależne od JTS/Gson zostają w :app do upgrade Kotlin)
+**Status:** ✅ Zakończone (domain models/utils w shared, use cases w :app z Hilt @Inject)
 
 **Skopiowane do shared/commonMain:**
 - ✅ `domain/model/` — Zone.kt, ForestBan.kt, LocationStatus.kt, ForestStandSummary.kt, CommonLocation.kt
 - ✅ `domain/repository/` — ZoneRepository.kt, ForestBanRepository.kt, PoiRepository.kt, CompassRepository.kt
-- ✅ `domain/usecase/` — GetZonesUseCase.kt, GetForestBansUseCase.kt, GetFireRiskUseCase.kt
 - ✅ `domain/util/` — BdlInfo.kt, NadlesnictwoUrls.kt, RdlpMapper.kt, PoiClassification.kt
-- ✅ `domain/` — LocationRepository.kt (common)
+- ✅ `domain/` — LocationRepository.kt (common), SpatialEngine.kt (przeniesiony w Phase D)
 - ✅ `data/local/` — PoiEntity.kt (common, bez Room annotations)
 - ✅ `data/remote/` — BdlFireApi.kt (common interface), FireRiskModels.kt (kotlinx.serialization)
 
-**Zostają w :app (zależą od JTS/Gson, przeniosą się po upgrade Kotlin 2.x):**
-- ⬜ `SpatialEngine.kt` — JTS (Envelope, WKTReader, STRtree, DistanceOp)
-- ⬜ `GeoJsonConverter.kt` — JTS + Gson (JsonReader, JsonToken)
-- ⬜ `GetForestStandUseCase.kt` — JTS (Envelope, WKTReader)
-- ⬜ `SyncZonesUseCase.kt` — JTS (WKTWriter) + ZoneEntity + GeoJsonConverter
-- ⬜ `SyncForestBansUseCase.kt` — JTS (WKTWriter) + ForestBanEntity + GeoJsonConverter
-- ⬜ `SyncPoiUseCase.kt` — PoiEntity (Room) + BdlArcgisApi + Gson
+**Zostają w :app (zależą od Hilt @Inject / Gson):**
+- ✅ `SpatialEngine.kt` — PRZENIESIONY do shared/commonMain (kts-core zastępuje JTS)
+- ⬜ `GeoJsonConverter.kt` — JTS(kts) + Gson (wymaga refactor Gson → kotlinx.serialization)
+- ⬜ `GetForestStandUseCase.kt` — JTS(kts) + BdlOgcApi (Hilt @Inject)
+- ⬜ `SyncZonesUseCase.kt` — JTS(kts) + ZoneEntity + GeoJsonConverter (Hilt @Inject)
+- ⬜ `SyncForestBansUseCase.kt` — JTS(kts) + ForestBanEntity + GeoJsonConverter (Hilt @Inject)
+- ⬜ `SyncPoiUseCase.kt` — PoiEntity (Room) + BdlArcgisApi + Gson (Hilt @Inject)
 
 **Zamiana JTS → kts:**
-- ⬜ kts-core 1.20.0.0 wymaga Kotlin 2.4+ (metadata version 2.4.0, nasz compiler 1.9.23 czyta do 2.0.0)
-- ⬜ SpatialEngine i GeoJsonConverter przeniosą się po upgrade Kotlin do 2.x
+- ✅ kts-core 1.20.0.0 dodane do shared/commonMain + :app (commit `a6903cf`)
+- ✅ SpatialEngine przeniesiony do shared/commonMain z kts-core API
+- ⬜ GeoJsonConverter — zostaje w :app (Gson jest JVM-only)
 
 ### 1.2.5: Upgrade Kotlin 1.9.23 → 2.x
 
@@ -250,10 +250,16 @@ MapViewModel (~75 linii):
 - ✅ APK się buduje
 - ✅ CI green na GitHub Actions
 
-**Phase D: kts-core + SpatialEngine** ⬜ ZABLOKOWANY
-- ⬜ Blokada: kts-core 1.20.0.0 wymaga metadata 2.4.0 → Kotlin 2.4+ → Hilt 2.60.1+ → AGP 9.0+ → Gradle 9.0+
-- ⬜ Odblokowanie wymaga upgrade AGP 8.13.2 → 9.x (duże zmiany w API/DSL)
-- ⬜ Alternatywa: użyć starszej wersji kts-core kompatybilnej z Kotlin 2.1.x (wymaga weryfikacji)
+**Phase D: kts-core + Full Toolchain** ✅
+- ✅ Gradle 8.14.1 → 9.7.1, AGP 8.13.2 → 9.3.0
+- ✅ Kotlin 2.1.21 → 2.4.10, KSP 2.1.21-2.0.2 → 2.3.10
+- ✅ Hilt 2.56.2 → 2.60.1, Compose BOM → 2025.05.00, compileSdk 36 → 37
+- ✅ kotlinx-coroutines 1.9.0 → 1.10.1, kotlinx-serialization 1.7.3 → 1.8.1
+- ✅ hilt-navigation-compose 1.2.0 → 1.4.0, hilt-work 1.2.0 → 1.4.0
+- ✅ AGP 9.x: usunięto `kotlin.android` plugin, `com.android.library` → `com.android.kotlin.multiplatform.library`
+- ✅ kts-core 1.20.0.0 + kts-io-wkt dodane do shared/commonMain i :app
+- ✅ SpatialEngine przeniesiony do shared/commonMain (kts API: isValid(), getEnvelopeInternal(), getCentroid(), centre())
+- ✅ Wszystkie 57 testów przechodzą
 
 **Weryfikacja:** ✅
 - ✅ `gradle :app:testDebugUnitTest` — testy przechodzą
