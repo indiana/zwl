@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.indiana.zwl.domain.repository.ZoneRepository
+import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
