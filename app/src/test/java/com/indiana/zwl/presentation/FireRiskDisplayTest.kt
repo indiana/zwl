@@ -16,12 +16,18 @@ class FireRiskDisplayTest {
     }
 
     @Test
-    fun `fireRiskStatusText unifies unknown and offline-no-cache levels`() {
-        assertEquals(fireRiskStatusText(-2), fireRiskStatusText(-1))
-        assertEquals(fireRiskStatusText(-2), fireRiskStatusText(99))     // any unexpected value
-        assertTrue(fireRiskStatusText(-2).contains("Brak danych"))
-        assertFalse(fireRiskStatusText(-2).contains("WARUNKOWO"))
-        assertFalse(fireRiskStatusText(-2).contains("Nieznany"))         // -2 wording aligned with else
+    fun `fireRiskStatusText distinguishes no-network from no-data`() {
+        assertEquals("Brak połączenia", fireRiskStatusText(-1))
+        assertEquals("Brak danych z serwisu", fireRiskStatusText(-2))
+        assertTrue(fireRiskStatusText(-1).contains("połączenia"))
+        assertTrue(fireRiskStatusText(-2).contains("danych"))
+        assertFalse(fireRiskStatusText(-1) == fireRiskStatusText(-2))
+    }
+
+    @Test
+    fun `fireRiskStatusText handles other unknown values`() {
+        assertTrue(fireRiskStatusText(99).contains("Nieznany"))
+        assertFalse(fireRiskStatusText(99).contains("WARUNKOWO"))
     }
 
     @Test
