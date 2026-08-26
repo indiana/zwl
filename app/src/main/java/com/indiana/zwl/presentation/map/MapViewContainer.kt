@@ -355,13 +355,17 @@ fun MapViewContainer(
                                     false
                                 }
 
+                                val cameraDebounceHandler = android.os.Handler(android.os.Looper.getMainLooper())
+                                var cameraDebounceRunnable: Runnable? = null
                                 map.addOnCameraMoveListener {
                                     val zoom = map.cameraPosition.zoom
                                     val newUseIcons = zoom >= 13.0
                                     if (newUseIcons != usePoiIcons) {
                                         usePoiIcons = newUseIcons
                                     }
-                                    viewportRenderVersion++
+                                    cameraDebounceRunnable?.let { cameraDebounceHandler.removeCallbacks(it) }
+                                    cameraDebounceRunnable = Runnable { viewportRenderVersion++ }
+                                    cameraDebounceHandler.postDelayed(cameraDebounceRunnable!!, 300L)
                                 }
                                 usePoiIcons = map.cameraPosition.zoom >= 13.0
                             }
