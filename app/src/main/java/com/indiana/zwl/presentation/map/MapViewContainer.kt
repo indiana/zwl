@@ -40,6 +40,7 @@ import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.Style
 import org.maplibre.android.plugins.annotation.Fill
 import org.maplibre.android.plugins.annotation.FillManager
@@ -100,7 +101,9 @@ fun MapViewContainer(
     val showForestBans by viewModel.showForestBans.collectAsState()
     val forestBans by viewModel.forestBans.collectAsState()
 
-    var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
+    val rememberedMapView = remember {
+        MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true))
+    }
     var mapboxMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleInstance by remember { mutableStateOf<Style?>(null) }
     var symbolManager by remember { mutableStateOf<SymbolManager?>(null) }
@@ -118,7 +121,7 @@ fun MapViewContainer(
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
 
-    LaunchedEffect(mapViewInstance, isActive, uiState) {
+    LaunchedEffect(rememberedMapView, isActive, uiState) {
         val map = mapboxMapInstance ?: return@LaunchedEffect
         if (!isActive || hasCenteredOnStartup) return@LaunchedEffect
         if (mapViewModel.savedMapCenterLat != null) {
@@ -217,15 +220,15 @@ fun MapViewContainer(
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, rememberedMapView) {
         val observer = LifecycleEventObserver { _, event ->
-            val mv = mapViewInstance ?: return@LifecycleEventObserver
             when (event) {
-                Lifecycle.Event.ON_START -> mv.onStart()
-                Lifecycle.Event.ON_RESUME -> mv.onResume()
-                Lifecycle.Event.ON_PAUSE -> mv.onPause()
-                Lifecycle.Event.ON_STOP -> mv.onStop()
-                Lifecycle.Event.ON_DESTROY -> mv.onDestroy()
+                Lifecycle.Event.ON_CREATE -> rememberedMapView.onCreate(null)
+                Lifecycle.Event.ON_START -> rememberedMapView.onStart()
+                Lifecycle.Event.ON_RESUME -> rememberedMapView.onResume()
+                Lifecycle.Event.ON_PAUSE -> rememberedMapView.onPause()
+                Lifecycle.Event.ON_STOP -> rememberedMapView.onStop()
+                Lifecycle.Event.ON_DESTROY -> rememberedMapView.onDestroy()
                 else -> {}
             }
         }
@@ -271,8 +274,7 @@ fun MapViewContainer(
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             AndroidView(
                 factory = { ctx ->
-                    MapView(ctx).apply {
-                        onCreate(null)
+                    rememberedMapView.apply {
                         getMapAsync { map ->
                             mapboxMapInstance = map
 
@@ -408,8 +410,6 @@ fun MapViewContainer(
                                 }
                             }
                         }
-
-                        mapViewInstance = this
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -644,8 +644,8 @@ fun MapViewContainer(
                                                 return@Button
                                             }
                                             val map = mapboxMapInstance
-                                            val mv = mapViewInstance
-                                            if (map != null && mv != null) {
+                                            val mv = rememberedMapView
+                                            if (map != null) {
                                                 val pos = map.cameraPosition
                                                 val center = pos.target
                                                 val zoom = pos.zoom
