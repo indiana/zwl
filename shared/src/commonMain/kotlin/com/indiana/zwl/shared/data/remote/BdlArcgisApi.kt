@@ -36,11 +36,16 @@ class BdlArcgisApi(private val client: HttpClient) {
         }.body()
     }
 
-    suspend fun getForestBans(): String {
+    suspend fun getForestBans(
+        resultOffset: Int = 0,
+        resultRecordCount: Int = 500
+    ): GeoJsonCollection {
         return client.get("${BASE}arcgis/rest/services/WMS_zakazy_wstepu_do_lasu/MapServer/0/query") {
             parameter("where", "1=1")
-            parameter("outFields", "*")
+            parameter("outFields", "objectid,kod_nadl,nazwa_nadl,nazwa_rdlp,lesnictwo,kod_lesn,kod,opis,data,data_koncowa,adr_lesny,adr_silp,kod_oddzialu,st_area(shape)")
             parameter("maxAllowableOffset", 0.0001)
+            parameter("resultOffset", resultOffset)
+            parameter("resultRecordCount", resultRecordCount)
             parameter("f", "geojson")
         }.body()
     }
