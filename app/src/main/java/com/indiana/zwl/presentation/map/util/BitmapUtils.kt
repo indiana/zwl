@@ -38,3 +38,30 @@ fun createUserLocationArrowBitmap(context: Context): Bitmap {
 
     return bitmap
 }
+
+fun createPoiDotBitmap(context: Context, fillColor: String, radiusDp: Float = 5f): Bitmap {
+    val density = context.resources.displayMetrics.density
+    val radiusPx = radiusDp * density
+    val borderPx = 1.5f * density
+    val size = ((radiusPx + borderPx) * 2).toInt()
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    val borderPaint = Paint().apply {
+        isAntiAlias = true
+        color = android.graphics.Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = borderPx
+    }
+    val fillPaint = Paint().apply {
+        isAntiAlias = true
+        color = android.graphics.Color.parseColor(fillColor)
+        style = Paint.Style.FILL
+    }
+
+    val center = size / 2f
+    canvas.drawCircle(center, center, radiusPx, fillPaint)
+    canvas.drawCircle(center, center, radiusPx, borderPaint)
+
+    return bitmap
+}

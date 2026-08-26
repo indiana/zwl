@@ -34,6 +34,6 @@ object MapStyle {
     const val DEFAULT_LNG = 21.01
     const val DEFAULT_ZOOM = 15.0
 
-    const val MIN_ZOOM = 8.0
+    const val MIN_ZOOM = 4.0
     const val MAX_ZOOM = 20.0
 }

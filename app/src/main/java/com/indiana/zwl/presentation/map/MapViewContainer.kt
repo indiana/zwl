@@ -1,7 +1,6 @@
 package com.indiana.zwl.presentation.map
 
 import android.content.Context
-import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -35,10 +34,9 @@ import com.indiana.zwl.presentation.theme.ZwlTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.locationtech.jts.geom.Coordinate
-import org.locationtech.jts.geom.GeometryFactory
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
@@ -53,14 +51,16 @@ import org.maplibre.android.plugins.annotation.Symbol
 import org.maplibre.android.plugins.annotation.SymbolManager
 import org.maplibre.android.plugins.annotation.SymbolOptions
 import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
+import org.locationtech.jts.geom.Envelope
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.indiana.zwl.presentation.map.util.isOnline
 import com.indiana.zwl.presentation.map.util.rememberIsOnline
 import com.indiana.zwl.presentation.map.util.createUserLocationArrowBitmap
-import com.indiana.zwl.presentation.map.util.wktToFillLatLngs
-import com.indiana.zwl.presentation.map.util.wktToJtsPolygon
+import com.indiana.zwl.presentation.map.util.createPoiDotBitmap
+import com.indiana.zwl.presentation.map.util.GeometryCache
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -103,7 +103,6 @@ fun MapViewContainer(
     val forestBans by viewModel.forestBans.collectAsState()
 
     val rememberedMapView = remember {
-        Log.d("MapView", "Creating MapView with textureMode")
         MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true))
     }
     var mapboxMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -122,6 +121,9 @@ fun MapViewContainer(
 
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
+    var usePoiIcons by remember { mutableStateOf(true) }
+    val geometryCache = remember { GeometryCache() }
+    var viewportRenderVersion by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(rememberedMapView, isActive, uiState) {
         val map = mapboxMapInstance ?: return@LaunchedEffect
@@ -144,88 +146,34 @@ fun MapViewContainer(
         }
     }
 
-    LaunchedEffect(forestBans, showForestBans, fillManager, lineManager) {
-        val fm = fillManager ?: return@LaunchedEffect
-        val lm = lineManager ?: return@LaunchedEffect
-
-        if (banFills.isNotEmpty()) {
-            fm.delete(banFills)
-            banFills = emptyList()
+    LaunchedEffect(forestBans, showForestBans) {
+        geometryCache.clearBans()
+        if (!showForestBans || forestBans.isEmpty()) {
+            viewportRenderVersion++
+            return@LaunchedEffect
         }
-        if (banLines.isNotEmpty()) {
-            lm.delete(banLines)
-            banLines = emptyList()
-        }
-        fillToBanMap = emptyMap()
-
-        if (!showForestBans || forestBans.isEmpty()) return@LaunchedEffect
-
-        val newFills = mutableListOf<Fill>()
-        val newLines = mutableListOf<Line>()
-        val newFillToBan = mutableMapOf<Long, ForestBan>()
-
         for (ban in forestBans) {
-            try {
-                val rings = wktToFillLatLngs(ban.geometryWkt)
-                if (rings.isEmpty()) continue
-
-                val fillOptions = FillOptions()
-                    .withLatLngs(rings)
-                    .withFillColor("#4DD32F2F")
-                    .withFillOpacity(0.3f)
-                val fill = fm.create(fillOptions)
-                newFills.add(fill)
-                newFillToBan[fill.id] = ban
-
-                val outerRing = rings.first()
-                val lineOptions = LineOptions()
-                    .withLatLngs(outerRing)
-                    .withLineColor("#FFB71C1C")
-                    .withLineWidth(2f)
-                val line = lm.create(lineOptions)
-                newLines.add(line)
-            } catch (e: Throwable) {
-                e.printStackTrace()
-            }
+            geometryCache.addBanPolygon(ban.id, ban.geometryWkt)
         }
-
-        banFills = newFills
-        banLines = newLines
-        fillToBanMap = newFillToBan
+        geometryCache.buildIndices()
+        viewportRenderVersion++
     }
 
-    LaunchedEffect(pois, symbolManager) {
-        val sm = symbolManager ?: return@LaunchedEffect
-
-        if (poiSymbols.isNotEmpty()) {
-            sm.delete(poiSymbols)
-            poiSymbols = emptyList()
-        }
-
-        val newSymbols = mutableListOf<Symbol>()
-        for (poi in pois) {
-            val category = poi.classify()
-            val iconName = when (category) {
-                PoiCategory.SHELTER -> "poi-shelter"
-                PoiCategory.FIREPLACE -> "poi-fireplace"
-                PoiCategory.OTHER -> "poi-generic"
+    val filteredPois = remember(pois, showFireplaces, showShelters, showOthers) {
+        pois.filter { poi ->
+            val cat = poi.classify()
+            when (cat) {
+                PoiCategory.SHELTER -> showShelters
+                PoiCategory.FIREPLACE -> showFireplaces
+                PoiCategory.OTHER -> showOthers
             }
-            val options = SymbolOptions()
-                .withLatLng(LatLng(poi.latitude, poi.longitude))
-                .withIconImage(iconName)
-                .withIconSize(1.0f)
-            val symbol = sm.create(options)
-            newSymbols.add(symbol)
         }
-        poiSymbols = newSymbols
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, rememberedMapView) {
-        Log.d("MapView", "Setting up lifecycle observer, current state=${lifecycleOwner.lifecycle.currentState}")
         val observer = LifecycleEventObserver { _, event ->
-            Log.d("MapView", "Lifecycle event: $event")
             when (event) {
                 Lifecycle.Event.ON_CREATE -> rememberedMapView.onCreate(null)
                 Lifecycle.Event.ON_START -> rememberedMapView.onStart()
@@ -238,8 +186,8 @@ fun MapViewContainer(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            Log.d("MapView", "Disposing lifecycle observer")
             lifecycleOwner.lifecycle.removeObserver(observer)
+            rememberedMapView.onDestroy()
         }
     }
 
@@ -275,18 +223,46 @@ fun MapViewContainer(
     val isOnlineState by rememberIsOnline()
     val isInZone = (uiState as? MainUiState.Success)?.locationStatus is LocationStatus.InZone
 
+    val userLat = (uiState as? MainUiState.Success)?.latitude
+    val userLon = (uiState as? MainUiState.Success)?.longitude
+
+    LaunchedEffect(userLat, userLon, symbolManager) {
+        val sm = symbolManager ?: return@LaunchedEffect
+        if (userLat != null && userLon != null) {
+            val current = userSymbol
+            if (current != null) {
+                current.latLng = LatLng(userLat, userLon)
+                current.iconRotate = lastAzimuth
+                sm.update(current)
+            } else {
+                val options = SymbolOptions()
+                    .withLatLng(LatLng(userLat, userLon))
+                    .withIconImage("user-arrow")
+                    .withIconRotate(lastAzimuth)
+                userSymbol = sm.create(options)
+            }
+        } else {
+            val current = userSymbol
+            if (current != null) {
+                sm.delete(current)
+                userSymbol = null
+            }
+        }
+    }
+
     ZwlTheme(isInZone = isInZone) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             AndroidView(
                 factory = { ctx ->
-                    Log.d("MapView", "AndroidView factory called")
                     rememberedMapView.apply {
                         getMapAsync { map ->
-                            Log.d("MapView", "getMapAsync callback fired!")
                             mapboxMapInstance = map
 
                             map.setMinZoomPreference(MapStyle.MIN_ZOOM)
                             map.setMaxZoomPreference(MapStyle.MAX_ZOOM)
+
+                            map.uiSettings.isRotateGesturesEnabled = false
+                            map.uiSettings.isTiltGesturesEnabled = false
 
                             val savedLat = mapViewModel.savedMapCenterLat
                             val savedLng = mapViewModel.savedMapCenterLng
@@ -302,15 +278,16 @@ fun MapViewContainer(
                                 .zoom(savedZoom ?: MapStyle.DEFAULT_ZOOM)
                                 .build()
 
-                            Log.d("MapView", "Calling setStyle...")
-                            map.setStyle(MapStyle.OSM_STYLE_JSON) { style ->
-                                Log.d("MapView", "Style loaded successfully!")
+                            map.setStyle(Style.Builder().fromJson(MapStyle.OSM_STYLE_JSON)) { style ->
                                 styleInstance = style
 
                                 val arrowBitmap = createUserLocationArrowBitmap(ctx)
                                 style.addImage("user-arrow", arrowBitmap)
 
                                 registerPoiIcons(ctx, style)
+                                style.addImage("poi-shelter-dot", createPoiDotBitmap(ctx, "#4E342E"))
+                                style.addImage("poi-fireplace-dot", createPoiDotBitmap(ctx, "#E65100"))
+                                style.addImage("poi-generic-dot", createPoiDotBitmap(ctx, "#2196F3"))
 
                                 val mv = this@apply
                                 symbolManager = SymbolManager(mv, map, style).apply {
@@ -321,85 +298,45 @@ fun MapViewContainer(
                                 lineManager = LineManager(mv, map, style)
 
                                 map.addOnMapClickListener { point ->
-                                    val gf = GeometryFactory()
-                                    val clickedPoint = gf.createPoint(Coordinate(point.longitude, point.latitude))
+                                    val clickedPoint = geometryCache.createPoint(point.longitude, point.latitude)
 
-                                    var handledZone = false
-                                    for ((fillId, zone) in fillToZoneMap) {
-                                        val jtsPoly = wktToJtsPolygon(zone.geometryWkt)
-                                        if (jtsPoly != null) {
-                                            val safePoly = if (!jtsPoly.isValid()) {
-                                                try { jtsPoly.buffer(0.0) } catch (_: Throwable) { jtsPoly }
-                                            } else jtsPoly
-                                            if (safePoly.contains(clickedPoint)) {
-                                                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                                    val successState = uiState as? MainUiState.Success
-                                                    zoneDetailViewModel.selectZone(
-                                                        zone, jtsPoly,
-                                                        point.latitude, point.longitude,
-                                                        successState?.latitude, successState?.longitude
-                                                    )
-                                                }
-                                                handledZone = true
-                                                break
+                                    val hitZoneId = geometryCache.findZoneIdAt(clickedPoint)
+                                    if (hitZoneId != null) {
+                                        val zone = zones.firstOrNull { it.id == hitZoneId }
+                                        val jtsPoly = zone?.let { geometryCache.parse(it.geometryWkt)?.jtsPolygons?.firstOrNull() }
+                                        if (zone != null && jtsPoly != null) {
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                val successState = uiState as? MainUiState.Success
+                                                zoneDetailViewModel.selectZone(
+                                                    zone, jtsPoly,
+                                                    point.latitude, point.longitude,
+                                                    successState?.latitude, successState?.longitude
+                                                )
                                             }
                                         }
+                                        return@addOnMapClickListener true
                                     }
-                                    if (handledZone) return@addOnMapClickListener true
 
-                                    var handledBan = false
-                                    for ((fillId, ban) in fillToBanMap) {
-                                        val jtsPoly = wktToJtsPolygon(ban.geometryWkt)
-                                        if (jtsPoly != null) {
-                                            val safePoly = if (!jtsPoly.isValid()) {
-                                                try { jtsPoly.buffer(0.0) } catch (_: Throwable) { jtsPoly }
-                                            } else jtsPoly
-                                            if (safePoly.contains(clickedPoint)) {
-                                                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                                    viewModel.selectForestBan(ban)
-                                                }
-                                                handledBan = true
-                                                break
+                                    val hitBanId = geometryCache.findBanIdAt(clickedPoint)
+                                    if (hitBanId != null) {
+                                        val ban = forestBans.firstOrNull { it.id == hitBanId }
+                                        if (ban != null) {
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                viewModel.selectForestBan(ban)
                                             }
                                         }
+                                        return@addOnMapClickListener true
                                     }
-                                    if (handledBan) return@addOnMapClickListener true
 
                                     false
                                 }
 
-                                val newZoneFills = mutableListOf<Fill>()
-                                val newZoneLines = mutableListOf<Line>()
-                                val newFillToZone = mutableMapOf<Long, Zone>()
-
+                                geometryCache.clearZones()
                                 for (zone in zones) {
-                                    try {
-                                        val rings = wktToFillLatLngs(zone.geometryWkt)
-                                        if (rings.isEmpty()) continue
-
-                                        val fillOptions = FillOptions()
-                                            .withLatLngs(rings)
-                                            .withFillColor("#4D2E7D32")
-                                            .withFillOpacity(0.3f)
-                                        val fill = fillManager!!.create(fillOptions)
-                                        newZoneFills.add(fill)
-                                        newFillToZone[fill.id] = zone
-
-                                        val outerRing = rings.first()
-                                        val lineOptions = LineOptions()
-                                            .withLatLngs(outerRing)
-                                            .withLineColor("#FF1B5E20")
-                                            .withLineWidth(2f)
-                                        val line = lineManager!!.create(lineOptions)
-                                        newZoneLines.add(line)
-                                    } catch (e: Throwable) {
-                                        e.printStackTrace()
-                                    }
+                                    geometryCache.addZonePolygon(zone.id, zone.geometryWkt)
                                 }
-
-                                zoneFills = newZoneFills
-                                zoneLines = newZoneLines
-                                fillToZoneMap = newFillToZone
+                                geometryCache.buildIndices()
+                                viewportRenderVersion++
 
                                 symbolManager?.addClickListener { symbol ->
                                     val successState = uiState as? MainUiState.Success
@@ -417,40 +354,21 @@ fun MapViewContainer(
                                     }
                                     false
                                 }
+
+                                map.addOnCameraMoveListener {
+                                    val zoom = map.cameraPosition.zoom
+                                    val newUseIcons = zoom >= 13.0
+                                    if (newUseIcons != usePoiIcons) {
+                                        usePoiIcons = newUseIcons
+                                    }
+                                    viewportRenderVersion++
+                                }
+                                usePoiIcons = map.cameraPosition.zoom >= 13.0
                             }
                         }
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
-                update = { mapView ->
-                    val state = uiState
-                    if (state is MainUiState.Success) {
-                        val lat = state.latitude
-                        val lon = state.longitude
-                        if (lat != null && lon != null) {
-                            val sm = symbolManager ?: return@AndroidView
-                            val current = userSymbol
-                            if (current != null) {
-                                current.latLng = LatLng(lat, lon)
-                                current.iconRotate = lastAzimuth
-                                sm.update(current)
-                            } else {
-                                val options = SymbolOptions()
-                                    .withLatLng(LatLng(lat, lon))
-                                    .withIconImage("user-arrow")
-                                    .withIconRotate(lastAzimuth)
-                                val symbol = sm.create(options)
-                                userSymbol = symbol
-                            }
-                        } else {
-                            val current = userSymbol
-                            if (current != null) {
-                                symbolManager?.delete(current)
-                                userSymbol = null
-                            }
-                        }
-                    }
-                },
                 onRelease = { mapView ->
                     mapboxMapInstance?.let { map ->
                         val pos = map.cameraPosition
@@ -458,6 +376,101 @@ fun MapViewContainer(
                     }
                 }
             )
+
+            val lastRenderedVersion = remember { mutableIntStateOf(-1) }
+            LaunchedEffect(viewportRenderVersion, mapboxMapInstance, styleInstance, zones, forestBans, showForestBans, filteredPois, usePoiIcons) {
+                val map = mapboxMapInstance ?: return@LaunchedEffect
+                val fm = fillManager ?: return@LaunchedEffect
+                val lm = lineManager ?: return@LaunchedEffect
+                val sm = symbolManager ?: return@LaunchedEffect
+                if (lastRenderedVersion.intValue == viewportRenderVersion && zoneFills.isNotEmpty()) return@LaunchedEffect
+                lastRenderedVersion.intValue = viewportRenderVersion
+
+                val bounds = map.projection.visibleRegion.latLngBounds
+                val viewportEnvelope = Envelope(
+                    bounds.southWest.longitude, bounds.northEast.longitude,
+                    bounds.southWest.latitude, bounds.northEast.latitude
+                )
+
+                if (zoneFills.isNotEmpty()) { fm.delete(zoneFills); zoneFills = emptyList() }
+                if (zoneLines.isNotEmpty()) { lm.delete(zoneLines); zoneLines = emptyList() }
+                if (banFills.isNotEmpty()) { fm.delete(banFills); banFills = emptyList() }
+                if (banLines.isNotEmpty()) { lm.delete(banLines); banLines = emptyList() }
+                if (poiSymbols.isNotEmpty()) { sm.delete(poiSymbols); poiSymbols = emptyList() }
+                fillToZoneMap = emptyMap()
+                fillToBanMap = emptyMap()
+
+                val visibleZoneIds = geometryCache.queryZoneIdsInEnvelope(viewportEnvelope)
+                val newZoneFills = mutableListOf<Fill>()
+                val newZoneLines = mutableListOf<Line>()
+                val newFillToZone = mutableMapOf<Long, Zone>()
+                for (zoneId in visibleZoneIds) {
+                    val zone = zones.firstOrNull { it.id == zoneId } ?: continue
+                    val rings = geometryCache.getZoneRings(zoneId) ?: continue
+                    for (polygonRings in rings) {
+                        val ringsForFill = mutableListOf(polygonRings.outer)
+                        ringsForFill.addAll(polygonRings.holes)
+                        val fill = fm.create(FillOptions().withLatLngs(ringsForFill).withFillColor("#1B5E20").withFillOpacity(0.35f))
+                        newZoneFills.add(fill)
+                        newFillToZone[fill.id] = zone
+                        val line = lm.create(LineOptions().withLatLngs(polygonRings.outer).withLineColor("#FF1B5E20").withLineWidth(2f))
+                        newZoneLines.add(line)
+                    }
+                }
+                zoneFills = newZoneFills
+                zoneLines = newZoneLines
+                fillToZoneMap = newFillToZone
+
+                if (showForestBans) {
+                    val visibleBanIds = geometryCache.queryBanIdsInEnvelope(viewportEnvelope)
+                    val newBanFills = mutableListOf<Fill>()
+                    val newBanLines = mutableListOf<Line>()
+                    val newFillToBan = mutableMapOf<Long, ForestBan>()
+                    for (banId in visibleBanIds) {
+                        val ban = forestBans.firstOrNull { it.id == banId } ?: continue
+                        val rings = geometryCache.getBanRings(banId) ?: continue
+                        for (polygonRings in rings) {
+                            val ringsForFill = mutableListOf(polygonRings.outer)
+                            ringsForFill.addAll(polygonRings.holes)
+                            val fill = fm.create(FillOptions().withLatLngs(ringsForFill).withFillColor("#D32F2F").withFillOpacity(0.35f))
+                            newBanFills.add(fill)
+                            newFillToBan[fill.id] = ban
+                            val line = lm.create(LineOptions().withLatLngs(polygonRings.outer).withLineColor("#FFB71C1C").withLineWidth(2f))
+                            newBanLines.add(line)
+                        }
+                    }
+                    banFills = newBanFills
+                    banLines = newBanLines
+                    fillToBanMap = newFillToBan
+                }
+
+                val visiblePois = filteredPois.filter { poi ->
+                    bounds.contains(LatLng(poi.latitude, poi.longitude))
+                }
+                val newPoiSymbols = mutableListOf<Symbol>()
+                for (poi in visiblePois) {
+                    val category = poi.classify()
+                    val iconName = if (usePoiIcons) {
+                        when (category) {
+                            PoiCategory.SHELTER -> "poi-shelter"
+                            PoiCategory.FIREPLACE -> "poi-fireplace"
+                            PoiCategory.OTHER -> "poi-generic"
+                        }
+                    } else {
+                        when (category) {
+                            PoiCategory.SHELTER -> "poi-shelter-dot"
+                            PoiCategory.FIREPLACE -> "poi-fireplace-dot"
+                            PoiCategory.OTHER -> "poi-generic-dot"
+                        }
+                    }
+                    val symbol = sm.create(SymbolOptions()
+                        .withLatLng(LatLng(poi.latitude, poi.longitude))
+                        .withIconImage(iconName)
+                        .withIconSize(1.0f))
+                    newPoiSymbols.add(symbol)
+                }
+                poiSymbols = newPoiSymbols
+            }
 
             Box(
                 modifier = Modifier
@@ -835,26 +848,31 @@ fun MapViewContainer(
     }
 }
 
+private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable, size: Int = 48): android.graphics.Bitmap {
+    val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    drawable.setBounds(0, 0, size, size)
+    drawable.draw(canvas)
+    return bitmap
+}
+
 private fun registerPoiIcons(ctx: Context, style: Style) {
     val shelterDrawable = androidx.core.content.ContextCompat.getDrawable(ctx, com.indiana.zwl.R.drawable.ic_shelter)
     shelterDrawable?.let { drawable ->
         androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#4E342E"))
-        val bitmap = (drawable as android.graphics.drawable.BitmapDrawable).bitmap
-        style.addImage("poi-shelter", bitmap)
+        style.addImage("poi-shelter", drawableToBitmap(drawable))
     }
 
     val fireplaceDrawable = androidx.core.content.ContextCompat.getDrawable(ctx, com.indiana.zwl.R.drawable.ic_fireplace)
     fireplaceDrawable?.let { drawable ->
         androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#E65100"))
-        val bitmap = (drawable as android.graphics.drawable.BitmapDrawable).bitmap
-        style.addImage("poi-fireplace", bitmap)
+        style.addImage("poi-fireplace", drawableToBitmap(drawable))
     }
 
     val genericDrawable = androidx.core.content.ContextCompat.getDrawable(ctx, com.indiana.zwl.R.drawable.ic_generic_point)
     genericDrawable?.let { drawable ->
         androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#1976D2"))
-        val bitmap = (drawable as android.graphics.drawable.BitmapDrawable).bitmap
-        style.addImage("poi-generic", bitmap)
+        style.addImage("poi-generic", drawableToBitmap(drawable))
     }
 }
 
