@@ -227,20 +227,15 @@ class MainViewModel @Inject constructor(
                     withContext(Dispatchers.Default) {
                         spatialEngine.initializeBans(localBans)
                     }
-                    _debugError.value = "BAN: local ${localBans.size}, syncing..."
                     val syncResult = syncForestBansUseCase()
                     if (syncResult.isSuccess) {
                         val updatedBans = syncResult.getOrNull() ?: emptyList()
-                        _debugError.value = "BAN: synced ${updatedBans.size}"
                         withContext(Dispatchers.Default) {
                             spatialEngine.initializeBans(updatedBans)
                         }
-                    } else {
-                        _debugError.value = "BAN sync FAILED: ${syncResult.exceptionOrNull()?.message}"
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
-                    _debugError.value = "BAN exception: ${e.message}"
                     e.printStackTrace()
                 }
             }
