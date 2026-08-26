@@ -11,8 +11,8 @@ selectAll:
 SELECT * FROM Poi;
 
 insertAll:
-INSERT OR REPLACE INTO Poi(id, code, description, name, latitude, longitude)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO Poi(code, description, name, latitude, longitude)
+VALUES (?, ?, ?, ?, ?);
 
 deleteAll:
 DELETE FROM Poi;

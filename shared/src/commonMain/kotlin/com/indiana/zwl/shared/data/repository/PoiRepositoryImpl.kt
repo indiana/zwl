@@ -27,7 +27,6 @@ class PoiRepositoryImpl(
     override suspend fun insertAll(pois: List<Poi>) {
         pois.forEach { poi ->
             database.poiQueries.insertAll(
-                poi.id,
                 poi.code,
                 poi.description,
                 poi.name,

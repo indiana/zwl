@@ -55,7 +55,6 @@ class ZoneRepositoryImpl(
     override suspend fun insertAll(zones: List<Zone>) {
         zones.forEach { zone ->
             database.zoneQueries.insertAll(
-                zone.id,
                 zone.forestDistrict,
                 zone.geometryWkt,
                 zone.fireRiskLevel?.toLong(),

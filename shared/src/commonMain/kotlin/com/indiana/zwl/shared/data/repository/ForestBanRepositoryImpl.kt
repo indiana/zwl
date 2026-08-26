@@ -62,7 +62,6 @@ class ForestBanRepositoryImpl(
     override suspend fun insertAll(bans: List<ForestBan>) {
         bans.forEach { ban ->
             database.forestBanQueries.insertAll(
-                ban.id,
                 ban.remoteId,
                 ban.forestDistrictCode,
                 ban.forestDistrictName,
