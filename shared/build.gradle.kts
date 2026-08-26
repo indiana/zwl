@@ -66,8 +66,8 @@ kotlin {
 
 sqldelight {
     databases {
-        create("ZwlDatabase") {
-            packageName.set("com.indiana.zwl.data.local")
+        create("SharedDatabase") {
+            packageName.set("com.indiana.zwl.shared.data.local")
         }
     }
 }

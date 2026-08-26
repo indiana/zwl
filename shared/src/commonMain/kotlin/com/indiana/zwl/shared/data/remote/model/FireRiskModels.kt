@@ -1,4 +1,4 @@
-package com.indiana.zwl.data.remote.model
+package com.indiana.zwl.shared.data.remote.model
 
 import kotlinx.serialization.Serializable
 

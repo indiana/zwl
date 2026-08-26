@@ -1,0 +1,30 @@
+CREATE TABLE IF NOT EXISTS ForestBan (
+    id INTEGER NOT NULL DEFAULT 0 PRIMARY KEY AUTOINCREMENT,
+    remoteId INTEGER NOT NULL,
+    forestDistrictCode TEXT,
+    forestDistrictName TEXT,
+    rdlpName TEXT,
+    forestryName TEXT,
+    forestryCode INTEGER,
+    reason TEXT,
+    description TEXT,
+    startDate TEXT,
+    endDate TEXT,
+    forestAddress TEXT,
+    compartmentCode TEXT,
+    areaSqMeters REAL,
+    geometryWkt TEXT NOT NULL
+);
+
+selectAll:
+SELECT * FROM ForestBan;
+
+selectCount:
+SELECT COUNT(*) FROM ForestBan;
+
+insertAll:
+INSERT OR REPLACE INTO ForestBan(id, remoteId, forestDistrictCode, forestDistrictName, rdlpName, forestryName, forestryCode, reason, description, startDate, endDate, forestAddress, compartmentCode, areaSqMeters, geometryWkt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteAll:
+DELETE FROM ForestBan;

@@ -1,0 +1,32 @@
+CREATE TABLE IF NOT EXISTS Zone (
+    id INTEGER NOT NULL DEFAULT 0 PRIMARY KEY AUTOINCREMENT,
+    forestDistrict TEXT NOT NULL,
+    geometryWkt TEXT NOT NULL,
+    fireRiskLevel INTEGER,
+    fireRiskTimestamp INTEGER,
+    forestStandJson TEXT,
+    forestStandTimestamp INTEGER,
+    websiteUrl TEXT
+);
+
+selectAll:
+SELECT * FROM Zone;
+
+selectCount:
+SELECT COUNT(*) FROM Zone;
+
+selectByForestDistrict:
+SELECT * FROM Zone WHERE forestDistrict = :forestDistrict COLLATE NOCASE LIMIT 1;
+
+insertAll:
+INSERT OR REPLACE INTO Zone(id, forestDistrict, geometryWkt, fireRiskLevel, fireRiskTimestamp, forestStandJson, forestStandTimestamp, websiteUrl)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+updateFireRisk:
+UPDATE Zone SET fireRiskLevel = :fireRiskLevel, fireRiskTimestamp = :timestamp WHERE forestDistrict = :forestDistrict;
+
+updateForestStand:
+UPDATE Zone SET forestStandJson = :json, forestStandTimestamp = :timestamp WHERE forestDistrict = :forestDistrict;
+
+deleteAll:
+DELETE FROM Zone;
