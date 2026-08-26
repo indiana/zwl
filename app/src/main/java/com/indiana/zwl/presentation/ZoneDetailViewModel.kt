@@ -3,14 +3,14 @@ package com.indiana.zwl.presentation
 import android.location.Location
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.indiana.zwl.data.local.PoiEntity
+import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.ForestStandSummary
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
-import com.google.gson.Gson
+import kotlinx.serialization.json.Json
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +54,7 @@ class ZoneDetailViewModel @Inject constructor(
         }
     }
 
-    fun selectPoi(poi: PoiEntity, userLat: Double?, userLon: Double?) {
+    fun selectPoi(poi: Poi, userLat: Double?, userLon: Double?) {
         viewModelScope.launch {
             _selectedZoneDetails.value = null
             val distance = if (userLat != null && userLon != null) {
@@ -106,12 +106,7 @@ class ZoneDetailViewModel @Inject constructor(
                     )
                 }
 
-                val tempLoc = Location("").apply {
-                    latitude = clickLat
-                    longitude = clickLon
-                }
-
-                val fireRiskResult = getFireRiskUseCase(tempLoc)
+                val fireRiskResult = getFireRiskUseCase(clickLat, clickLon)
                 val riskCode = if (fireRiskResult.isSuccess) {
                     val code = fireRiskResult.getOrDefault(-1)
                     if (code in 0..3) {
@@ -144,7 +139,7 @@ class ZoneDetailViewModel @Inject constructor(
                         if (forestStandResult.isSuccess) {
                             val summary = forestStandResult.getOrNull()
                             if (summary != null) {
-                                val json = Gson().toJson(summary)
+                                val json = Json.encodeToString(summary)
                                 val timestamp = System.currentTimeMillis()
                                 withContext(Dispatchers.IO) {
                                     zoneRepository.updateForestStand(zone.forestDistrict, json, timestamp)
@@ -200,7 +195,7 @@ class ZoneDetailViewModel @Inject constructor(
     private fun loadCachedForestStand(zone: Zone): ForestStandSummary? {
         val json = zone.forestStandJson ?: return null
         return try {
-            Gson().fromJson(json, ForestStandSummary::class.java)
+            Json.decodeFromString<ForestStandSummary>(json)
         } catch (e: Exception) {
             e.printStackTrace()
             null

@@ -1,15 +1,15 @@
 package com.indiana.zwl.domain.usecase
 
-import com.indiana.zwl.data.local.ForestBanEntity
-import com.indiana.zwl.data.mapper.toDomainModel
-import com.indiana.zwl.data.remote.BdlArcgisApi
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.repository.ForestBanRepository
-import com.indiana.zwl.domain.util.GeoJsonConverter
-import org.locationtech.jts.io.WKTWriter
+import com.indiana.zwl.shared.data.remote.BdlArcgisApi
+import com.indiana.zwl.shared.data.remote.GeoJsonToWkt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonPrimitive
+import com.indiana.zwl.shared.data.remote.model.GeoJsonCollection
 import javax.inject.Inject
 
 class SyncForestBansUseCase @Inject constructor(
@@ -18,53 +18,44 @@ class SyncForestBansUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(): Result<List<ForestBan>> = withContext(Dispatchers.IO) {
         try {
-            val responseBody = arcgisApi.getForestBans()
-            val wktWriter = WKTWriter()
-            val entities = mutableListOf<ForestBanEntity>()
+            val responseStr = arcgisApi.getForestBans()
+            val collection = Json.decodeFromString<GeoJsonCollection>(responseStr)
+            val bans = mutableListOf<ForestBan>()
 
-            responseBody.use { body ->
-                GeoJsonConverter.parseFeatureCollectionStream(body.charStream()) { properties, geometry ->
-                    val wkt = wktWriter.write(geometry)
-                    val remoteId = properties["objectid"]?.toLongOrNull() ?: 0L
-                    val forestDistrictCode = properties["kod_nadl"]
-                    val forestDistrictName = properties["nazwa_nadl"]
-                    val rdlpName = properties["nazwa_rdlp"]
-                    val forestryName = properties["lesnictwo"]
-                    val forestryCode = properties["kod_lesn"]?.toIntOrNull()
-                    val reason = properties["kod"]
-                    val description = properties["opis"]
-                    val startDate = properties["data"]
-                    val endDate = properties["data_koncowa"]
-                    val forestAddress = properties["adr_lesny"] ?: properties["adr_silp"]
-                    val compartmentCode = properties["kod_oddzialu"]
-                    val areaSqMeters = properties["st_area(shape)"]?.toDoubleOrNull()
-
-                    entities.add(
-                        ForestBanEntity(
-                            remoteId = remoteId,
-                            forestDistrictCode = forestDistrictCode,
-                            forestDistrictName = forestDistrictName,
-                            rdlpName = rdlpName,
-                            forestryName = forestryName,
-                            forestryCode = forestryCode,
-                            reason = reason,
-                            description = description,
-                            startDate = startDate,
-                            endDate = endDate,
-                            forestAddress = forestAddress,
-                            compartmentCode = compartmentCode,
-                            areaSqMeters = areaSqMeters,
-                            geometryWkt = wkt
-                        )
-                    )
+            for (feature in collection.features) {
+                val properties = feature.properties ?: continue
+                val propsMap = mutableMapOf<String, String>()
+                for ((key, value) in properties) {
+                    propsMap[key] = value?.jsonPrimitive?.content ?: continue
                 }
+                val wkt = GeoJsonToWkt.geometryToWkt(feature.geometry) ?: continue
+
+                bans.add(
+                    ForestBan(
+                        id = 0,
+                        remoteId = propsMap["objectid"]?.toLongOrNull() ?: 0L,
+                        forestDistrictCode = propsMap["kod_nadl"],
+                        forestDistrictName = propsMap["nazwa_nadl"] ?: "Nadleśnictwo (Nieznane)",
+                        rdlpName = propsMap["nazwa_rdlp"],
+                        forestryName = propsMap["lesnictwo"],
+                        forestryCode = propsMap["kod_lesn"]?.toIntOrNull(),
+                        reason = propsMap["kod"] ?: "Zakaz wstępu do lasu",
+                        description = propsMap["opis"],
+                        startDate = propsMap["data"],
+                        endDate = propsMap["data_koncowa"],
+                        forestAddress = propsMap["adr_lesny"] ?: propsMap["adr_silp"],
+                        compartmentCode = propsMap["kod_oddzialu"],
+                        areaSqMeters = propsMap["st_area(shape)"]?.toDoubleOrNull(),
+                        geometryWkt = wkt
+                    )
+                )
             }
 
             forestBanRepository.clearAll()
-            if (entities.isNotEmpty()) {
-                forestBanRepository.insertAll(entities.map { it.toDomainModel() })
+            if (bans.isNotEmpty()) {
+                forestBanRepository.insertAll(bans)
             }
-            Result.success(entities.map { it.toDomainModel() })
+            Result.success(bans)
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             e.printStackTrace()

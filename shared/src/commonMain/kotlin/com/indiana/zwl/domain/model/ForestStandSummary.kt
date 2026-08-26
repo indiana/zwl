@@ -1,15 +1,19 @@
 package com.indiana.zwl.domain.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Raw BDL code + its translated (Polish) display name.
  * [code] is exactly what the BDL API returned (e.g. "O SPO", "2 PIĘT", "ŚW.KB")
  * and is the lookup key for tooltips / Wikipedia links in [com.indiana.zwl.domain.util.BdlInfo].
  */
+@Serializable
 data class TranslatedCode(
     val code: String,
     val name: String
 )
 
+@Serializable
 data class ForestStandSummary(
     val speciesBreakdown: List<SpeciesEntry>,
     val forestFunction: TranslatedCode?,
@@ -20,6 +24,7 @@ data class ForestStandSummary(
     val rotationAge: Int?
 )
 
+@Serializable
 data class SpeciesEntry(
     val speciesCode: String,
     val speciesName: String,

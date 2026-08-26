@@ -1,18 +1,18 @@
 package com.indiana.zwl.domain.usecase
 
-import com.google.gson.JsonArray
-import com.google.gson.JsonPrimitive
-import com.indiana.zwl.data.local.PoiEntity
-import com.indiana.zwl.data.remote.BdlArcgisApi
-import com.indiana.zwl.data.remote.model.GeoJsonCollection
-import com.indiana.zwl.data.remote.model.GeoJsonFeature
-import com.indiana.zwl.data.remote.model.GeoJsonGeometry
+import com.indiana.zwl.domain.model.Poi
+import com.indiana.zwl.shared.data.remote.BdlArcgisApi
+import com.indiana.zwl.shared.data.remote.model.GeoJsonCollection
+import com.indiana.zwl.shared.data.remote.model.GeoJsonFeature
+import com.indiana.zwl.shared.data.remote.model.GeoJsonGeometry
 import com.indiana.zwl.domain.repository.PoiRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -32,10 +32,10 @@ class SyncPoiUseCaseTest {
     }
 
     private fun createMockGeometry(lon: Double, lat: Double): GeoJsonGeometry {
-        val coords = JsonArray().apply {
-            add(JsonPrimitive(lon))
-            add(JsonPrimitive(lat))
-        }
+        val coords = JsonArray(listOf(
+            JsonPrimitive(lon),
+            JsonPrimitive(lat)
+        ))
         return GeoJsonGeometry(type = "Point", coordinates = coords)
     }
 
@@ -53,9 +53,9 @@ class SyncPoiUseCaseTest {
                     GeoJsonFeature(
                         type = "Feature",
                         properties = mapOf(
-                            codeField to "MSC WYPOCZ",
-                            "tur_obj_desc" to "Miejsce wypoczynku dla warstwy $layerId",
-                            "nzw_ob" to "Wiata $layerId"
+                            codeField to JsonPrimitive("MSC WYPOCZ"),
+                            "tur_obj_desc" to JsonPrimitive("Miejsce wypoczynku dla warstwy $layerId"),
+                            "nzw_ob" to JsonPrimitive("Wiata $layerId")
                         ),
                         geometry = createMockGeometry(21.0 + layerId, 52.0 + layerId)
                     )

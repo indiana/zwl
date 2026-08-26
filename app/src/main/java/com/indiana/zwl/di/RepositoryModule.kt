@@ -1,30 +1,34 @@
 package com.indiana.zwl.di
 
-import com.indiana.zwl.data.repository.ForestBanRepositoryImpl
-import com.indiana.zwl.data.repository.PoiRepositoryImpl
-import com.indiana.zwl.data.repository.ZoneRepositoryImpl
 import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
-import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import org.koin.java.KoinJavaComponent.get
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class RepositoryModule {
+object RepositoryModule {
 
-    @Binds
+    @Provides
     @Singleton
-    abstract fun bindZoneRepository(impl: ZoneRepositoryImpl): ZoneRepository
+    fun provideZoneRepository(): ZoneRepository {
+        return get(ZoneRepository::class.java)
+    }
 
-    @Binds
+    @Provides
     @Singleton
-    abstract fun bindPoiRepository(impl: PoiRepositoryImpl): PoiRepository
+    fun providePoiRepository(): PoiRepository {
+        return get(PoiRepository::class.java)
+    }
 
-    @Binds
+    @Provides
     @Singleton
-    abstract fun bindForestBanRepository(impl: ForestBanRepositoryImpl): ForestBanRepository
+    fun provideForestBanRepository(): ForestBanRepository {
+        return get(ForestBanRepository::class.java)
+    }
 }

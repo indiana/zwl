@@ -1,6 +1,7 @@
 package com.indiana.zwl.shared.data.remote.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class OgcFeatureCollection(
@@ -15,9 +16,23 @@ data class OgcFeatureCollection(
 data class OgcFeature(
     val type: String,
     val id: Int? = null,
-    val properties: OgcStandProperties? = null,
+    val properties: Map<String, JsonElement?>? = null,
     val geometry: GeoJsonGeometry? = null
-)
+) {
+    val standProperties: OgcStandProperties?
+        get() = properties?.let { props ->
+            OgcStandProperties(
+                species_cd = props["species_cd"]?.toString()?.trim('"'),
+                spec_age = props["spec_age"]?.toString()?.trim('"')?.toIntOrNull(),
+                sub_area = props["sub_area"]?.toString()?.trim('"')?.toDoubleOrNull(),
+                forest_fun = props["forest_fun"]?.toString()?.trim('"'),
+                stand_stru = props["stand_stru"]?.toString()?.trim('"'),
+                site_type = props["site_type"]?.toString()?.trim('"'),
+                prot_categ = props["prot_categ"]?.toString()?.trim('"'),
+                rotat_age = props["rotat_age"]?.toString()?.trim('"')?.toIntOrNull()
+            )
+        }
+}
 
 @Serializable
 data class OgcStandProperties(

@@ -3,7 +3,7 @@ package com.indiana.zwl.presentation
 import android.content.Context
 import android.content.SharedPreferences
 import com.indiana.zwl.MainDispatcherRule
-import com.indiana.zwl.data.local.PoiEntity
+import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
@@ -57,7 +57,7 @@ class MainViewModelTest {
     private val sharedPreferences: SharedPreferences = mockk(relaxed = true)
     private val sharedPreferencesEditor: SharedPreferences.Editor = mockk(relaxed = true)
 
-    private val allPoisFlow = MutableStateFlow<List<PoiEntity>>(emptyList())
+    private val allPoisFlow = MutableStateFlow<List<Poi>>(emptyList())
 
     @Before
     fun setUp() {
@@ -120,9 +120,9 @@ class MainViewModelTest {
     @Test
     fun `pois flow should filter POIs correctly based on toggle settings`() = runBlocking {
         val testPois = listOf(
-            PoiEntity(id = 1, code = "S1", description = "Wiata leśna", name = "Schron Turystyczny Wiata", latitude = 52.0, longitude = 21.0),
-            PoiEntity(id = 2, code = "F1", description = "Palenisko", name = "Miejsce na ognisko pod dębem", latitude = 52.1, longitude = 21.1),
-            PoiEntity(id = 3, code = "O1", description = "Punkt widokowy", name = "Góra widokowa", latitude = 52.2, longitude = 21.2)
+            Poi(id = 1, code = "S1", description = "Wiata leśna", name = "Schron Turystyczny Wiata", latitude = 52.0, longitude = 21.0),
+            Poi(id = 2, code = "F1", description = "Palenisko", name = "Miejsce na ognisko pod dębem", latitude = 52.1, longitude = 21.1),
+            Poi(id = 3, code = "O1", description = "Punkt widokowy", name = "Góra widokowa", latitude = 52.2, longitude = 21.2)
         )
         allPoisFlow.value = testPois
 

@@ -1,15 +1,11 @@
 package com.indiana.zwl.di
 
-import android.content.Context
-import com.indiana.zwl.data.local.ZoneDao
-import com.indiana.zwl.data.local.PoiDao
-import com.indiana.zwl.data.local.ForestBanDao
-import com.indiana.zwl.data.local.ZwlDatabase
+import com.indiana.zwl.shared.data.local.SharedDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import org.koin.java.KoinJavaComponent.get
 import javax.inject.Singleton
 
 @Module
@@ -18,22 +14,7 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideZwlDatabase(@ApplicationContext context: Context): ZwlDatabase {
-        return ZwlDatabase.getDatabase(context)
-    }
-
-    @Provides
-    fun provideZoneDao(database: ZwlDatabase): ZoneDao {
-        return database.zoneDao()
-    }
-
-    @Provides
-    fun providePoiDao(database: ZwlDatabase): PoiDao {
-        return database.poiDao()
-    }
-
-    @Provides
-    fun provideForestBanDao(database: ZwlDatabase): ForestBanDao {
-        return database.forestBanDao()
+    fun provideSharedDatabase(): SharedDatabase {
+        return get(SharedDatabase::class.java)
     }
 }

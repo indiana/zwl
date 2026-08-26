@@ -1,11 +1,11 @@
 package com.indiana.zwl.domain.usecase
 
-import com.indiana.zwl.data.remote.BdlOgcApi
 import com.indiana.zwl.domain.model.ForestStandSummary
 import com.indiana.zwl.domain.model.SpeciesEntry
 import com.indiana.zwl.domain.model.TranslatedCode
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.util.RdlpMapper
+import com.indiana.zwl.shared.data.remote.BdlOgcApi
 import kotlinx.coroutines.CancellationException
 import org.locationtech.jts.geom.Envelope
 import org.locationtech.jts.io.WKTReader
@@ -26,7 +26,7 @@ class GetForestStandUseCase @Inject constructor(
             val regionResult = ogcApi.findNadlesnictwo(
                 bbox = "${centroid.getX() - 0.01},${centroid.getY() - 0.01},${centroid.getX() + 0.01},${centroid.getY() + 0.01}"
             )
-            val regionCd = regionResult.features?.firstOrNull()?.properties?.get("region_cd") as? String
+            val regionCd = regionResult.features.firstOrNull()?.properties?.get("region_cd")?.toString()?.trim('"')
 
             if (regionCd == null) {
                 return Result.failure(Exception("Nie udało się ustalić regionu RDLP."))
@@ -36,7 +36,7 @@ class GetForestStandUseCase @Inject constructor(
                 ?: return Result.failure(Exception("Nieznany region RDLP: $regionCd"))
 
             val stands = ogcApi.getForestStands(collectionId = collectionId, bbox = bbox)
-            val features = stands.features ?: emptyList()
+            val features = stands.features
 
             if (features.isEmpty()) {
                 return Result.success(emptySummary())
@@ -69,20 +69,26 @@ class GetForestStandUseCase @Inject constructor(
                     }
                 }
 
-                if (forestFunction == null && props.forest_fun != null) {
-                    forestFunction = RdlpMapper.forestFunCodeToValue(props.forest_fun)
+                val forestFun = props.forest_fun
+                val standStru = props.stand_stru
+                val siteTypeVal = props.site_type
+                val protCateg = props.prot_categ
+                val rotatAge = props.rotat_age
+
+                if (forestFunction == null && forestFun != null) {
+                    forestFunction = RdlpMapper.forestFunCodeToValue(forestFun)
                 }
-                if (standStructure == null && props.stand_stru != null) {
-                    standStructure = RdlpMapper.standStruCodeToValue(props.stand_stru)
+                if (standStructure == null && standStru != null) {
+                    standStructure = RdlpMapper.standStruCodeToValue(standStru)
                 }
-                if (siteType == null && props.site_type != null) {
-                    siteType = RdlpMapper.siteTypeCodeToValue(props.site_type)
+                if (siteType == null && siteTypeVal != null) {
+                    siteType = RdlpMapper.siteTypeCodeToValue(siteTypeVal)
                 }
-                if (protectionCategory == null && props.prot_categ != null) {
-                    protectionCategory = RdlpMapper.protCategCodeToValue(props.prot_categ)
+                if (protectionCategory == null && protCateg != null) {
+                    protectionCategory = RdlpMapper.protCategCodeToValue(protCateg)
                 }
-                if (rotationAge == null && props.rotat_age != null && props.rotat_age > 0) {
-                    rotationAge = props.rotat_age
+                if (rotationAge == null && rotatAge != null && rotatAge > 0) {
+                    rotationAge = rotatAge
                 }
             }
 

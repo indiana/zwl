@@ -9,7 +9,13 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.indiana.zwl.data.sync.SyncWorker
-import org.mapsforge.map.android.graphics.AndroidGraphicFactory
+import com.indiana.zwl.shared.di.androidModule
+import com.indiana.zwl.shared.di.databaseModule
+import com.indiana.zwl.shared.di.repositoryModule
+import com.indiana.zwl.shared.di.sharedModule
+import org.koin.android.ext.koin.androidContext
+import org.koin.android.ext.koin.androidLogger
+import org.koin.core.context.startKoin
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -58,13 +64,17 @@ class ZwlApplication : Application(), androidx.work.Configuration.Provider {
             throw t
         }
 
+        startKoin {
+            androidLogger()
+            androidContext(this@ZwlApplication)
+            modules(sharedModule, databaseModule, androidModule, repositoryModule)
+        }
+
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             writeCrashLog(throwable)
             prev?.uncaughtException(thread, throwable)
         }
-
-        AndroidGraphicFactory.createInstance(this)
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)

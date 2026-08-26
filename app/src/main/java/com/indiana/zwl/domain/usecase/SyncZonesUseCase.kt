@@ -1,15 +1,15 @@
 package com.indiana.zwl.domain.usecase
 
-import com.indiana.zwl.data.local.ZoneEntity
-import com.indiana.zwl.data.mapper.toDomainModel
-import com.indiana.zwl.data.remote.BdlArcgisApi
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ZoneRepository
-import com.indiana.zwl.domain.util.GeoJsonConverter
-import org.locationtech.jts.io.WKTWriter
+import com.indiana.zwl.shared.data.remote.BdlArcgisApi
+import com.indiana.zwl.shared.data.remote.GeoJsonToWkt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonPrimitive
+import com.indiana.zwl.shared.data.remote.model.GeoJsonCollection
 import javax.inject.Inject
 
 class SyncZonesUseCase @Inject constructor(
@@ -18,29 +18,33 @@ class SyncZonesUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(): Result<List<Zone>> = withContext(Dispatchers.IO) {
         try {
-            val responseBody = arcgisApi.getZanocujWLesieZones()
-            val wktWriter = WKTWriter()
-            val entities = mutableListOf<ZoneEntity>()
+            val responseStr = arcgisApi.getZanocujWLesieZones()
+            val collection = Json.decodeFromString<GeoJsonCollection>(responseStr)
+            val zones = mutableListOf<Zone>()
 
-            responseBody.use { body ->
-                GeoJsonConverter.parseFeatureCollectionStream(body.charStream()) { properties, geometry ->
-                    val wkt = wktWriter.write(geometry)
-                    val forestDistrict = GeoJsonConverter.extractForestDistrict(properties)
-                    val websiteUrl = GeoJsonConverter.extractWebsiteUrl(properties)
-                    entities.add(
-                        ZoneEntity(
-                            forestDistrict = forestDistrict,
-                            geometryWkt = wkt,
-                            websiteUrl = websiteUrl
-                        )
-                    )
+            for (feature in collection.features) {
+                val properties = feature.properties ?: continue
+                val propsMap = mutableMapOf<String, String>()
+                for ((key, value) in properties) {
+                    propsMap[key] = value?.jsonPrimitive?.content ?: continue
                 }
+                val wkt = GeoJsonToWkt.geometryToWkt(feature.geometry) ?: continue
+                val forestDistrict = GeoJsonToWkt.extractForestDistrict(propsMap)
+                val websiteUrl = GeoJsonToWkt.extractWebsiteUrl(propsMap)
+                zones.add(
+                    Zone(
+                        id = 0,
+                        forestDistrict = forestDistrict,
+                        geometryWkt = wkt,
+                        websiteUrl = websiteUrl
+                    )
+                )
             }
 
-            if (entities.isNotEmpty()) {
+            if (zones.isNotEmpty()) {
                 zoneRepository.clearAll()
-                zoneRepository.insertAll(entities.map { it.toDomainModel() })
-                Result.success(entities.map { it.toDomainModel() })
+                zoneRepository.insertAll(zones)
+                Result.success(zones)
             } else {
                 Result.failure(Exception("Otrzymano pustą listę stref od API ArcGis."))
             }

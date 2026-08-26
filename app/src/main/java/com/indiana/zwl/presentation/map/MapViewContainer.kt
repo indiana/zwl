@@ -27,7 +27,7 @@ import com.indiana.zwl.presentation.map.MapViewModel
 import com.indiana.zwl.presentation.DownloadEvent
 import com.indiana.zwl.presentation.SelectedZoneDetails
 import com.indiana.zwl.presentation.SelectedPoiDetails
-import com.indiana.zwl.data.local.PoiEntity
+import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.util.PoiCategory
 import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.presentation.theme.ZwlTheme

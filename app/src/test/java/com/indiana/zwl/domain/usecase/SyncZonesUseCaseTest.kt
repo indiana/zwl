@@ -1,14 +1,12 @@
 package com.indiana.zwl.domain.usecase
 
-import com.indiana.zwl.data.remote.BdlArcgisApi
+import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.domain.repository.ZoneRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -56,10 +54,7 @@ class SyncZonesUseCaseTest {
             }
         """.trimIndent()
 
-        val mediaType = "application/json".toMediaTypeOrNull()
-        val responseBody = geoJson.toResponseBody(mediaType)
-
-        coEvery { arcgisApi.getZanocujWLesieZones() } returns responseBody
+        coEvery { arcgisApi.getZanocujWLesieZones() } returns geoJson
 
         // Act
         val result = syncZonesUseCase()
@@ -84,10 +79,7 @@ class SyncZonesUseCaseTest {
             }
         """.trimIndent()
 
-        val mediaType = "application/json".toMediaTypeOrNull()
-        val responseBody = geoJson.toResponseBody(mediaType)
-
-        coEvery { arcgisApi.getZanocujWLesieZones() } returns responseBody
+        coEvery { arcgisApi.getZanocujWLesieZones() } returns geoJson
 
         // Act
         val result = syncZonesUseCase()

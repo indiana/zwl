@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.devtools.ksp)
     alias(libs.plugins.hilt.android)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -76,25 +77,18 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
 
-    // Room DB
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
-
-    // Retrofit & OkHttp
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.converter.gson)
+    // OkHttp (used for offline map tile downloads)
     implementation(libs.okhttp)
-    implementation(libs.okhttp.logging.interceptor)
-
-    // JTS → kts-core (KMP-compatible, same org.locationtech.jts package)
-    implementation(libs.kts.core)
-    implementation(libs.kts.io.wkt)
-
-    // Mapsforge (Map rendering)
     implementation("com.caverock:androidsvg:1.4")
     implementation(libs.mapsforge.map)
     implementation(libs.mapsforge.themes)
+
+    // KTS spatial (JTS KMP-compatible — used directly in ViewModels)
+    implementation(libs.kts.core)
+    implementation(libs.kts.io.wkt)
+
+    // JSON serialization (kotlinx.serialization — replaces Gson)
+    implementation(libs.kotlinx.serialization.json)
 
     // Google Play Services Location
     implementation(libs.play.services.location)
@@ -108,6 +102,9 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
     ksp(libs.hilt.ext.compiler)
+
+    // Koin (for shared module bridge)
+    implementation(libs.koin.android)
 
     // Testing
     testImplementation(libs.junit)

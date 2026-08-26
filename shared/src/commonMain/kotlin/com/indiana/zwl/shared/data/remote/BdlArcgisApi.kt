@@ -23,12 +23,13 @@ class BdlArcgisApi(private val client: HttpClient) {
 
     suspend fun getTouristPoints(
         layerId: Int,
+        outFields: String = "tur_rec_pnt_cd,tur_obj_desc,nzw_ob",
         resultOffset: Int,
         resultRecordCount: Int = 2000
     ): GeoJsonCollection {
         return client.get("${BASE}arcgis/rest/services/WFS_BDL_mapa_turystyczna/MapServer/$layerId/query") {
             parameter("where", "1=1")
-            parameter("outFields", "tur_rec_pnt_cd,tur_obj_desc,nzw_ob")
+            parameter("outFields", outFields)
             parameter("resultOffset", resultOffset)
             parameter("resultRecordCount", resultRecordCount)
             parameter("f", "geojson")

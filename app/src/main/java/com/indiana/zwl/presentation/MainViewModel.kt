@@ -10,7 +10,7 @@ import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.Zone
-import com.indiana.zwl.data.local.PoiEntity
+import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
@@ -51,7 +51,7 @@ data class SelectedZoneDetails(
 )
 
 data class SelectedPoiDetails(
-    val poi: PoiEntity,
+    val poi: Poi,
     val distanceMeters: Double?
 )
 
@@ -145,7 +145,7 @@ class MainViewModel @Inject constructor(
     private val _showOthers = MutableStateFlow(sharedPrefs.getBoolean("show_others", true))
     val showOthers: StateFlow<Boolean> = _showOthers
 
-    val pois: StateFlow<List<PoiEntity>> = combine(
+    val pois: StateFlow<List<Poi>> = combine(
         poiRepository.getAllPois(),
         _showFireplaces,
         _showShelters,
@@ -349,7 +349,7 @@ class MainViewModel @Inject constructor(
     }
 
     private suspend fun fetchFireHazard(location: Location, status: LocationStatus) {
-        val result = getFireRiskUseCase(location)
+        val result = getFireRiskUseCase(location.latitude, location.longitude)
         val district = when (status) {
             is LocationStatus.InZone -> status.forestDistrict
             is LocationStatus.OutsideZone -> status.nearestDistrict
