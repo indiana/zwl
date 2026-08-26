@@ -1,6 +1,7 @@
 package com.indiana.zwl.presentation.map
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -102,6 +103,7 @@ fun MapViewContainer(
     val forestBans by viewModel.forestBans.collectAsState()
 
     val rememberedMapView = remember {
+        Log.d("MapView", "Creating MapView with textureMode")
         MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true))
     }
     var mapboxMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -221,7 +223,9 @@ fun MapViewContainer(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, rememberedMapView) {
+        Log.d("MapView", "Setting up lifecycle observer, current state=${lifecycleOwner.lifecycle.currentState}")
         val observer = LifecycleEventObserver { _, event ->
+            Log.d("MapView", "Lifecycle event: $event")
             when (event) {
                 Lifecycle.Event.ON_CREATE -> rememberedMapView.onCreate(null)
                 Lifecycle.Event.ON_START -> rememberedMapView.onStart()
@@ -234,6 +238,7 @@ fun MapViewContainer(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            Log.d("MapView", "Disposing lifecycle observer")
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
@@ -274,8 +279,10 @@ fun MapViewContainer(
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             AndroidView(
                 factory = { ctx ->
+                    Log.d("MapView", "AndroidView factory called")
                     rememberedMapView.apply {
                         getMapAsync { map ->
+                            Log.d("MapView", "getMapAsync callback fired!")
                             mapboxMapInstance = map
 
                             map.setMinZoomPreference(MapStyle.MIN_ZOOM)
@@ -295,7 +302,9 @@ fun MapViewContainer(
                                 .zoom(savedZoom ?: MapStyle.DEFAULT_ZOOM)
                                 .build()
 
+                            Log.d("MapView", "Calling setStyle...")
                             map.setStyle(MapStyle.OSM_STYLE_JSON) { style ->
+                                Log.d("MapView", "Style loaded successfully!")
                                 styleInstance = style
 
                                 val arrowBitmap = createUserLocationArrowBitmap(ctx)
