@@ -1,6 +1,8 @@
 package com.indiana.zwl
 
 import android.app.Application
+import android.os.Environment
+import android.widget.Toast
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -8,6 +10,9 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.indiana.zwl.data.sync.SyncWorker
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.util.concurrent.TimeUnit
 
 import androidx.hilt.work.HiltWorkerFactory
@@ -25,19 +30,38 @@ class ZwlApplication : Application(), androidx.work.Configuration.Provider {
             .setWorkerFactory(workerFactory)
             .build()
 
-    override fun onCreate() {
-        super.onCreate()
-        
-        // Global uncaught exception handler to write crash logs for diagnostics
-        val originalHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            try {
-                val file = java.io.File(cacheDir, "crash_log.txt")
-                file.writeText(throwable.stackTraceToString())
-            } catch (e: Exception) {
-                e.printStackTrace()
+    private fun writeCrashLog(t: Throwable) {
+        val sw = StringWriter()
+        t.printStackTrace(PrintWriter(sw))
+        val msg = "=== CRASH ${System.currentTimeMillis()} ===\n${sw.toString()}"
+        // Write to internal storage — always accessible via app settings
+        try {
+            File(filesDir, "crash_log.txt").writeText(msg)
+        } catch (_: Exception) {}
+        // Also write to Downloads — accessible from device file manager
+        try {
+            val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (dir.exists() || dir.mkdirs()) {
+                File(dir, "zwl_crash_log.txt").writeText(msg)
             }
-            originalHandler?.uncaughtException(thread, throwable)
+        } catch (_: Exception) {}
+        try {
+            Toast.makeText(this, "CRASH: ${t.message}", Toast.LENGTH_LONG).show()
+        } catch (_: Exception) {}
+    }
+
+    override fun onCreate() {
+        try {
+            super.onCreate()
+        } catch (t: Throwable) {
+            writeCrashLog(t)
+            throw t
+        }
+
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            writeCrashLog(throwable)
+            prev?.uncaughtException(thread, throwable)
         }
 
         AndroidGraphicFactory.createInstance(this)
