@@ -7,7 +7,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -41,32 +41,37 @@ class SyncPoiUseCase @Inject constructor(
                     }
 
                     for (feature in features) {
-                        val properties = feature.properties
-                        val geom = feature.geometry
+                        try {
+                            val properties = feature.properties
+                            val geom = feature.geometry
 
-                        if (geom.type.equals("point", ignoreCase = true) && geom.coordinates is JsonArray) {
-                            val coords = geom.coordinates.jsonArray
-                            if (coords.size >= 2) {
-                                val lon = coords[0].jsonPrimitive.double
-                                val lat = coords[1].jsonPrimitive.double
+                            if (geom.type.equals("point", ignoreCase = true) && geom.coordinates is JsonArray) {
+                                val coords = geom.coordinates.jsonArray
+                                if (coords.size >= 2) {
+                                    val lon = coords[0].jsonPrimitive.double
+                                    val lat = coords[1].jsonPrimitive.double
 
-                                val code = properties?.get("tur_rec_pnt_cd")?.jsonPrimitive?.content
-                                    ?: properties?.get("tur_edu_pnt_cd")?.jsonPrimitive?.content
-                                    ?: ""
-                                val desc = properties?.get("tur_obj_desc")?.jsonPrimitive?.content ?: ""
-                                val name = properties?.get("nzw_ob")?.jsonPrimitive?.content ?: ""
+                                    val code = properties?.get("tur_rec_pnt_cd")?.jsonPrimitive?.contentOrNull
+                                        ?: properties?.get("tur_edu_pnt_cd")?.jsonPrimitive?.contentOrNull
+                                        ?: ""
+                                    val desc = properties?.get("tur_obj_desc")?.jsonPrimitive?.contentOrNull ?: ""
+                                    val name = properties?.get("nzw_ob")?.jsonPrimitive?.contentOrNull ?: ""
 
-                                allPois.add(
-                                    Poi(
-                                        id = 0,
-                                        code = code,
-                                        description = desc,
-                                        name = name,
-                                        latitude = lat,
-                                        longitude = lon
+                                    allPois.add(
+                                        Poi(
+                                            id = 0,
+                                            code = code,
+                                            description = desc,
+                                            name = name,
+                                            latitude = lat,
+                                            longitude = lon
+                                        )
                                     )
-                                )
+                                }
                             }
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            e.printStackTrace()
                         }
                     }
 
@@ -83,7 +88,7 @@ class SyncPoiUseCase @Inject constructor(
                 poiRepository.insertAll(allPois)
                 Result.success(Unit)
             } else {
-                Result.failure(Exception("Otrzymano pustą listę punktów turystycznych (POI) od API ArcGis."))
+                Result.failure(Exception("Otrzymano pusta liste punktow turystycznych (POI) od API ArcGis."))
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e

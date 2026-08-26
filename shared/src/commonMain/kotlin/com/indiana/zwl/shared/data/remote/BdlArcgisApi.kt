@@ -40,6 +40,7 @@ class BdlArcgisApi(private val client: HttpClient) {
         return client.get("${BASE}arcgis/rest/services/WMS_zakazy_wstepu_do_lasu/MapServer/0/query") {
             parameter("where", "1=1")
             parameter("outFields", "*")
+            parameter("maxAllowableOffset", 0.0001)
             parameter("f", "geojson")
         }.body()
     }
