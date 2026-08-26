@@ -2,11 +2,15 @@ package com.indiana.zwl.domain.usecase
 
 import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
+import com.indiana.zwl.shared.data.remote.model.GeoJsonCollection
+import com.indiana.zwl.shared.data.remote.model.GeoJsonFeature
+import com.indiana.zwl.shared.data.remote.model.GeoJsonGeometry
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -25,52 +29,44 @@ class SyncForestBansUseCaseTest {
         syncForestBansUseCase = SyncForestBansUseCase(arcgisApi, forestBanRepository)
     }
 
+    private fun makeTestCollection(): GeoJsonCollection {
+        return GeoJsonCollection(
+            type = "FeatureCollection",
+            features = listOf(
+                GeoJsonFeature(
+                    type = "Feature",
+                    properties = mapOf(
+                        "objectid" to JsonPrimitive(123),
+                        "kod_nadl" to JsonPrimitive("012345"),
+                        "nazwa_nadl" to JsonPrimitive("Nadleśnictwo Kudypy"),
+                        "nazwa_rdlp" to JsonPrimitive("RDLP Szczecinek"),
+                        "lesnictwo" to JsonPrimitive("Leśnictwo Borne"),
+                        "kod_lesn" to JsonPrimitive("15"),
+                        "kod" to JsonPrimitive("Zakaz wstępu"),
+                        "opis" to JsonPrimitive("Ochrona przyrody"),
+                        "data" to JsonPrimitive("2024-01-01"),
+                        "data_koncowa" to JsonPrimitive("2024-06-30"),
+                        "adr_lesny" to JsonPrimitive("Działka 15A"),
+                        "kod_oddzialu" to JsonPrimitive("100a"),
+                        "st_area(shape)" to JsonPrimitive(5000.5)
+                    ),
+                    geometry = GeoJsonGeometry(
+                        type = "Polygon",
+                        coordinates = kotlinx.serialization.json.Json.parseToJsonElement(
+                            "[[[19.123,52.123],[19.124,52.123],[19.124,52.124],[19.123,52.123]]]"
+                        )
+                    )
+                )
+            )
+        )
+    }
+
     @Test
     fun `invoke should fetch forest bans from API and insert them into database`() = runTest {
-        // Arrange
-        val geoJson = """
-            {
-              "type": "FeatureCollection",
-              "features": [
-                {
-                  "type": "Feature",
-                  "properties": {
-                    "objectid": 123,
-                    "kod_nadl": "012345",
-                    "nazwa_nadl": "Nadleśnictwo Kudypy",
-                    "nazwa_rdlp": "RDLP Szczecinek",
-                    "lesnictwo": "Leśnictwo Borne",
-                    "kod_lesn": "15",
-                    "kod": "Zakaz wstępu",
-                    "opis": "Ochrona przyrody",
-                    "data": "2024-01-01",
-                    "data_koncowa": "2024-06-30",
-                    "adr_lesny": "Działka 15A",
-                    "kod_oddzialu": "100a",
-                    "st_area(shape)": 5000.5
-                  },
-                  "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [
-                      [
-                        [19.123, 52.123],
-                        [19.124, 52.123],
-                        [19.124, 52.124],
-                        [19.123, 52.123]
-                      ]
-                    ]
-                  }
-                }
-              ]
-            }
-        """.trimIndent()
+        coEvery { arcgisApi.getForestBans(any(), any()) } returns makeTestCollection()
 
-        coEvery { arcgisApi.getForestBans() } returns geoJson
-
-        // Act
         val result = syncForestBansUseCase()
 
-        // Assert
         assertTrue(result.isSuccess)
         val bans = result.getOrThrow()
         assertEquals(1, bans.size)
@@ -90,21 +86,14 @@ class SyncForestBansUseCaseTest {
     }
 
     @Test
-    fun `invoke should return failure when API returns empty features`() = runTest {
-        // Arrange
-        val geoJson = """
-            {
-              "type": "FeatureCollection",
-              "features": []
-            }
-        """.trimIndent()
+    fun `invoke should return empty list when API returns empty features`() = runTest {
+        coEvery { arcgisApi.getForestBans(any(), any()) } returns GeoJsonCollection(
+            type = "FeatureCollection",
+            features = emptyList()
+        )
 
-        coEvery { arcgisApi.getForestBans() } returns geoJson
-
-        // Act
         val result = syncForestBansUseCase()
 
-        // Assert
         assertTrue(result.isSuccess)
         val bans = result.getOrThrow()
         assertEquals(0, bans.size)
@@ -114,14 +103,11 @@ class SyncForestBansUseCaseTest {
 
     @Test
     fun `invoke should return failure when API call throws exception`() = runTest {
-        // Arrange
         val exception = IOException("Network error")
-        coEvery { arcgisApi.getForestBans() } throws exception
+        coEvery { arcgisApi.getForestBans(any(), any()) } throws exception
 
-        // Act
         val result = syncForestBansUseCase()
 
-        // Assert
         assertTrue(result.isFailure)
         assertEquals(exception, result.exceptionOrNull())
         coVerify(exactly = 0) { forestBanRepository.clearAll() }
