@@ -11,9 +11,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
-import org.mapsforge.core.model.BoundingBox
-import org.mapsforge.core.model.LatLong
-import org.mapsforge.map.layer.cache.TileCache
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -33,42 +31,49 @@ class MapViewModel @Inject constructor(
     private val _downloadEvent = MutableSharedFlow<DownloadEvent>()
     val downloadEvent = _downloadEvent.asSharedFlow()
 
-    var savedMapCenter: LatLong? = null
+    var savedMapCenterLat: Double? = null
         private set
-    var savedMapZoom: Byte? = null
+    var savedMapCenterLng: Double? = null
+        private set
+    var savedMapZoom: Double? = null
         private set
 
-    fun saveMapState(center: LatLong?, zoom: Byte?) {
-        if (center != null) savedMapCenter = center
+    fun saveMapState(lat: Double?, lng: Double?, zoom: Double?) {
+        if (lat != null) savedMapCenterLat = lat
+        if (lng != null) savedMapCenterLng = lng
         if (zoom != null) savedMapZoom = zoom
     }
 
-    fun downloadMapArea(bbox: BoundingBox, tileSize: Int, tileCache: TileCache) {
+    fun downloadMapArea(
+        latSouth: Double, latNorth: Double,
+        lonWest: Double, lonEast: Double,
+        cacheDir: File
+    ) {
         viewModelScope.launch {
-            OfflineMapDownloader.downloadArea(bbox, tileSize, tileCache, okHttpClient).collect { status ->
-                when (status) {
-                    is DownloadStatus.Start -> {
-                        _isDownloadingArea.value = true
-                        _downloadProgress.value = 0f
-                        _downloadText.value = "Rozpoczynanie pobierania..."
-                    }
-                    is DownloadStatus.Progress -> {
-                        _downloadProgress.value = status.progress
-                        _downloadText.value = status.text
-                    }
-                    is DownloadStatus.Finished -> {
-                        _isDownloadingArea.value = false
-                        _downloadEvent.emit(DownloadEvent.ToastMessage(
-                            "Pobrano pomyślnie ${status.successCount} z ${status.total} kafelków do cache offline!",
+            OfflineMapDownloader.downloadArea(
+                latSouth = latSouth, latNorth = latNorth,
+                lonWest = lonWest, lonEast = lonEast,
+                cacheDir = cacheDir,
+                client = okHttpClient,
+                onProgress = { progress, text ->
+                    _isDownloadingArea.value = true
+                    _downloadProgress.value = progress
+                    _downloadText.value = text
+                },
+                onSuccess = { count ->
+                    _isDownloadingArea.value = false
+                    _downloadEvent.tryEmit(
+                        DownloadEvent.ToastMessage(
+                            "Pobrano pomyślnie $count kafelków do cache offline!",
                             isLong = true
-                        ))
-                    }
-                    is DownloadStatus.Message -> {
-                        _isDownloadingArea.value = false
-                        _downloadEvent.emit(DownloadEvent.ToastMessage(status.msg, isLong = true))
-                    }
+                        )
+                    )
+                },
+                onError = { msg ->
+                    _isDownloadingArea.value = false
+                    _downloadEvent.tryEmit(DownloadEvent.ToastMessage(msg, isLong = true))
                 }
-            }
+            )
         }
     }
 }

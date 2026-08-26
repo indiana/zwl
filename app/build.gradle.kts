@@ -77,11 +77,12 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
 
-    // OkHttp (used for offline map tile downloads)
+    // OkHttp (used for API calls)
     implementation(libs.okhttp)
-    implementation("com.caverock:androidsvg:1.4")
-    implementation(libs.mapsforge.map)
-    implementation(libs.mapsforge.themes)
+
+    // MapLibre
+    implementation(libs.maplibre.sdk)
+    implementation(libs.maplibre.annotation)
 
     // KTS spatial (JTS KMP-compatible — used directly in ViewModels)
     implementation(libs.kts.core)

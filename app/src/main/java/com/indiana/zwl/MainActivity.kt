@@ -9,6 +9,7 @@ import com.indiana.zwl.presentation.MainViewModel
 import com.indiana.zwl.presentation.ZoneDetailViewModel
 import com.indiana.zwl.presentation.map.MapViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import org.maplibre.android.MapLibre
 
 import androidx.compose.runtime.DisposableEffect
 
@@ -21,6 +22,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        MapLibre.getInstance(this)
 
         setContent {
             DisposableEffect(Unit) {
