@@ -51,6 +51,9 @@ import org.maplibre.android.plugins.annotation.Symbol
 import org.maplibre.android.plugins.annotation.SymbolManager
 import org.maplibre.android.plugins.annotation.SymbolOptions
 import java.io.File
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.indiana.zwl.presentation.map.util.isOnline
 import com.indiana.zwl.presentation.map.util.rememberIsOnline
 import com.indiana.zwl.presentation.map.util.createUserLocationArrowBitmap
@@ -212,6 +215,26 @@ fun MapViewContainer(
         poiSymbols = newSymbols
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            val mv = mapViewInstance ?: return@LifecycleEventObserver
+            when (event) {
+                Lifecycle.Event.ON_START -> mv.onStart()
+                Lifecycle.Event.ON_RESUME -> mv.onResume()
+                Lifecycle.Event.ON_PAUSE -> mv.onPause()
+                Lifecycle.Event.ON_STOP -> mv.onStop()
+                Lifecycle.Event.ON_DESTROY -> mv.onDestroy()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val isDownloadingArea by mapViewModel.isDownloadingArea.collectAsState()
     val downloadProgress by mapViewModel.downloadProgress.collectAsState()
     val downloadText by mapViewModel.downloadText.collectAsState()
@@ -249,6 +272,7 @@ fun MapViewContainer(
             AndroidView(
                 factory = { ctx ->
                     MapView(ctx).apply {
+                        onCreate(null)
                         getMapAsync { map ->
                             mapboxMapInstance = map
 
@@ -423,7 +447,6 @@ fun MapViewContainer(
                         val pos = map.cameraPosition
                         mapViewModel.saveMapState(pos.target?.latitude, pos.target?.longitude, pos.zoom)
                     }
-                    mapView.onDestroy()
                 }
             )
 
