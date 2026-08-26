@@ -97,7 +97,7 @@ class SyncForestBansUseCaseTest {
         assertTrue(result.isSuccess)
         val bans = result.getOrThrow()
         assertEquals(0, bans.size)
-        coVerify(exactly = 1) { forestBanRepository.clearAll() }
+        coVerify(exactly = 0) { forestBanRepository.clearAll() }
         coVerify(exactly = 0) { forestBanRepository.insertAll(any()) }
     }
 

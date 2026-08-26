@@ -17,7 +17,6 @@ class SyncForestBansUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(): Result<List<ForestBan>> = withContext(Dispatchers.IO) {
         try {
-            forestBanRepository.clearAll()
             val allBans = mutableListOf<ForestBan>()
             var offset = 0
             val batchSize = 500
@@ -73,6 +72,7 @@ class SyncForestBansUseCase @Inject constructor(
             }
 
             if (allBans.isNotEmpty()) {
+                forestBanRepository.clearAll()
                 forestBanRepository.insertAll(allBans)
             }
             Result.success(allBans)
