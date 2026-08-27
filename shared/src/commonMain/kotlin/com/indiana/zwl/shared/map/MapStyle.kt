@@ -1,4 +1,4 @@
-package com.indiana.zwl.presentation.map
+package com.indiana.zwl.shared.map
 
 object MapStyle {
     val OSM_STYLE_JSON = """
