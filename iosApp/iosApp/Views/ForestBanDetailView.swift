@@ -22,8 +22,8 @@ struct ForestBanDetailView: View {
                         Spacer()
                     }
 
-                    if let description = ban.description, !description.isEmpty {
-                        Text(description)
+                    if !ban.description.isEmpty {
+                        Text(ban.description)
                             .font(.body)
                     }
 

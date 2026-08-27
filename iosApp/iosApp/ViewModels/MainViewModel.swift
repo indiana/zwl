@@ -71,9 +71,9 @@ final class MainViewModel: NSObject, ObservableObject {
         Task { [weak self] in
             guard let self = self else { return }
             do {
-                let ok = try await self.app.initialize()
+                let ok = try await self.app.initialize().boolValue
                 await self.refreshMapData()
-                if !ok && self.app.cachedZones().isEmpty {
+                if !ok && self.app.cachedZones().isEmpty.boolValue {
                     self.phase = .error("Błąd synchronizacji danych. Sprawdź połączenie internetowe.")
                     return
                 }
@@ -91,7 +91,9 @@ final class MainViewModel: NSObject, ObservableObject {
         Task { [weak self] in
             guard let self = self else { return }
             do {
-                _ = try await (self.app.syncZones() && self.app.syncBans() && self.app.syncPois())
+                _ = try await self.app.syncZones()
+                _ = try await self.app.syncBans()
+                _ = try await self.app.syncPois()
                 await self.app.refreshSpatialIndexes()
                 await self.refreshMapData()
                 self.computeLocationStatus()
@@ -144,19 +146,10 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func refreshFireRiskIfNeeded() async {
         guard let lat = userLatitude, let lon = userLongitude,
-              locationStatus is LocationStatusInZone else {
-            if locationStatus is LocationStatusOutsideZone {
-                do {
-                    fireRiskLevel = try await app.getFireRisk(latitude: lat, longitude: lon)
-                } catch {
-                    fireRiskLevel = -1
-                }
-            }
-            return
-        }
+              locationStatus is LocationStatusInZone || locationStatus is LocationStatusOutsideZone else { return }
         if fireRiskLevel >= 0 { return }
         do {
-            fireRiskLevel = try await app.getFireRisk(latitude: lat, longitude: lon)
+            fireRiskLevel = try await app.getFireRisk(latitude: lat, longitude: lon).intValue
         } catch {
             fireRiskLevel = -1
         }
@@ -215,7 +208,7 @@ final class MainViewModel: NSObject, ObservableObject {
                     maxZoom: 16,
                     maxTiles: 500,
                     onProgress: { [weak self] progress, text in
-                        self?.downloadProgress = progress
+                        self?.downloadProgress = progress.floatValue
                         self?.downloadStatusText = text
                     },
                     onSuccess: { [weak self] count in

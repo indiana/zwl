@@ -53,7 +53,7 @@ enum GeoJsonToFeatures {
         guard shellPoints.count >= 3 else { return [] }
 
         let polygon = shellPoints.withUnsafeBufferPointer { buffer -> MLNPolygonFeature in
-            let feature = MLNPolygonFeature(coordinates: buffer.baseAddress!, count: buffer.count)
+            let feature = MLNPolygonFeature(coordinates: buffer.baseAddress!, count: UInt(buffer.count))
             feature.attributes = properties
             return feature
         }

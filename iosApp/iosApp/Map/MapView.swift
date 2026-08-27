@@ -23,8 +23,10 @@ struct MapView: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> MLNMapView {
-        let styleURL = MLNMapView.styleURL(withJSON: MapStyle.shared.OSM_STYLE_JSON)
-        let map = MLNMapView(frame: .zero, styleURL: styleURL)
+        let map = MLNMapView(frame: .zero, styleURL: nil)
+        if let styleFile = Self.writeStyleToTemporaryFile(MapStyle.shared.OSM_STYLE_JSON) {
+            map.styleURL = styleFile
+        }
         map.delegate = context.coordinator
         map.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         map.minimumZoomLevel = MapStyle.shared.MIN_ZOOM
@@ -45,6 +47,17 @@ struct MapView: UIViewRepresentable {
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         map.addGestureRecognizer(tap)
         return map
+    }
+
+    private static func writeStyleToTemporaryFile(_ json: String) -> URL? {
+        guard let data = json.data(using: .utf8) else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("zwl-style.json")
+        do {
+            try data.write(to: url)
+            return url
+        } catch {
+            return nil
+        }
     }
 
     func updateUIView(_ map: MLNMapView, context: Context) {
@@ -178,14 +191,16 @@ struct MapView: UIViewRepresentable {
         }
 
         private func colorExpression() -> NSExpression {
-            let shelter = NSExpression(forConstantValue: "shelter")
             let shelterColor = NSExpression(forConstantValue: UIColor(red: 0.10, green: 0.65, blue: 0.25, alpha: 1.0))
-            let fireplace = NSExpression(forConstantValue: "fireplace")
             let fireplaceColor = NSExpression(forConstantValue: UIColor.systemOrange)
             let fallbackColor = NSExpression(forConstantValue: UIColor.systemBlue)
-            return NSExpression(forMGLMatchingKey: "categoryKey",
-                                in: [shelter, shelterColor, fireplace, fireplaceColor],
-                                options: [NSExpression.MatchingKey.fallback: fallbackColor])
+            let matched = [
+                NSExpression(forConstantValue: "shelter"): shelterColor,
+                NSExpression(forConstantValue: "fireplace"): fireplaceColor
+            ]
+            return NSExpression(forMLNMatchingKey: NSExpression(forKeyPath: "categoryKey"),
+                                in: matched,
+                                default: fallbackColor)
         }
 
         // MARK: Data application
@@ -194,21 +209,21 @@ struct MapView: UIViewRepresentable {
             guard styleLoaded, let mapView = mapView else { return }
 
             let zoneFeatures = GeoJsonToFeatures.features(from: zonesJson)
-            zoneSource?.features = zoneFeatures
+            zoneSource?.shape = MLNShapeCollectionFeature(shapes: zoneFeatures)
 
             let banFeatures = GeoJsonToFeatures.features(from: bansJson)
-            banSource?.features = banFeatures
+            banSource?.shape = MLNShapeCollectionFeature(shapes: banFeatures)
 
             let pois = GeoJsonToFeatures.features(from: poisJson)
             let filteredPois = pois.filter { feature in
-                let key = (feature.attributes["categoryKey"] as? String) ?? "other"
+                let key = (feature as? MLNFeature)?.attributes["categoryKey"] as? String ?? "other"
                 switch key {
                 case "shelter": return showShelters
                 case "fireplace": return showFireplaces
                 default: return showOthers
                 }
             }
-            poiSource?.features = filteredPois
+            poiSource?.shape = MLNShapeCollectionFeature(shapes: filteredPois)
 
             if let style = mapView.style {
                 style.layer(withIdentifier: banFillId)?.isVisible = showBans

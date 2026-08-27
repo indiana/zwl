@@ -2,7 +2,7 @@ name: iosApp
 options:
   bundleIdPrefix: com.indiana.zwl
   deploymentTarget:
-    iOS: "15.0"
+    iOS: "16.0"
   createIntermediateGroups: true
 settings:
   base:
@@ -55,7 +55,7 @@ targets:
         SWIFT_VERSION: "5.0"
         INFOPLIST_FILE: Info.plist
         TARGETED_DEVICE_FAMILY: "1"
-        IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
 
   iosAppTests:
     type: bundle.unit-test
