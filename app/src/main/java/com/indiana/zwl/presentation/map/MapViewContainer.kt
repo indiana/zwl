@@ -43,7 +43,9 @@ import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.RasterLayer
 import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.android.style.sources.RasterSource
 import java.io.File
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -309,6 +311,27 @@ fun MapViewContainer(
 
     val isOnlineState by rememberIsOnline()
     val isInZone = (uiState as? MainUiState.Success)?.locationStatus is LocationStatus.InZone
+
+    val offlineContext = LocalContext.current
+    LaunchedEffect(isOnlineState, styleInstance) {
+        val style = styleInstance ?: return@LaunchedEffect
+        val offlineLayerId = "osm-offline-layer"
+        val existing = style.getLayer(offlineLayerId)
+        if (isOnlineState) {
+            if (existing != null) {
+                style.removeLayer(offlineLayerId)
+                style.removeSource("osm-offline")
+            }
+        } else {
+            if (existing == null) {
+                val cacheRoot = File(offlineContext.externalCacheDir ?: offlineContext.cacheDir, "mapcache")
+                val dbFile = File(cacheRoot, "map.mbtiles")
+                val localUrl = "mbtiles://file://${dbFile.absolutePath}"
+                style.addSource(RasterSource("osm-offline", localUrl, 256))
+                style.addLayerBelow(RasterLayer(offlineLayerId, "osm-offline"), "osm")
+            }
+        }
+    }
 
     ZwlTheme(isInZone = isInZone) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {

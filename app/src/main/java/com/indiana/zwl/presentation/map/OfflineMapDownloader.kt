@@ -1,10 +1,14 @@
 package com.indiana.zwl.presentation.map
 
+import android.content.ContentValues
+import android.database.sqlite.SQLiteDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
@@ -12,6 +16,7 @@ import java.io.IOException
 object OfflineMapDownloader {
 
     private const val DOWNLOAD_CONCURRENCY = 4
+    private const val DB_FILE_NAME = "map.mbtiles"
 
     private sealed class TileResult {
         object Skipped : TileResult()
@@ -75,57 +80,89 @@ object OfflineMapDownloader {
                 return@withContext
             }
 
-            onProgress(0f, "Rozpoczynanie pobierania...")
+            val dbFile = File(cacheDir, DB_FILE_NAME)
+            dbFile.parentFile?.mkdirs()
+            val db = SQLiteDatabase.openOrCreateDatabase(dbFile, null)
+            try {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS tiles (" +
+                        "zoom_level INTEGER NOT NULL, " +
+                        "tile_column INTEGER NOT NULL, " +
+                        "tile_row INTEGER NOT NULL, " +
+                        "tile_data BLOB NOT NULL)"
+                )
+                db.execSQL("CREATE TABLE IF NOT EXISTS metadata (name TEXT NOT NULL, value TEXT NOT NULL)")
+                db.execSQL("INSERT OR REPLACE INTO metadata (name, value) VALUES ('format', 'png')")
+                db.execSQL("INSERT OR REPLACE INTO metadata (name, value) VALUES ('name', 'Legalny Bushcraft offline')")
+                db.execSQL("INSERT OR REPLACE INTO metadata (name, value) VALUES ('type', 'basemap')")
+                db.execSQL("INSERT OR REPLACE INTO metadata (name, value) VALUES ('version', '1.1')")
+                db.execSQL("INSERT OR REPLACE INTO metadata (name, value) VALUES ('minzoom', '10')")
+                db.execSQL("INSERT OR REPLACE INTO metadata (name, value) VALUES ('maxzoom', '16')")
+                db.execSQL("INSERT OR REPLACE INTO metadata (name, value) VALUES ('bounds', '$lonWest,$latSouth,$lonEast,$latNorth')")
 
-            var successCount = 0
-            for (batchStart in 0 until total step DOWNLOAD_CONCURRENCY) {
-                val batchEnd = minOf(batchStart + DOWNLOAD_CONCURRENCY, total)
-                val results = coroutineScope {
-                    (batchStart until batchEnd).map { index ->
-                        async(Dispatchers.IO) {
-                            downloadTile(tiles[index], cacheDir, client)
-                        }
-                    }.awaitAll()
-                }
-
-                var batchFailed = false
-                for ((batchOffset, result) in results.withIndex()) {
-                    val index = batchStart + batchOffset
-                    when (result) {
-                        TileResult.Skipped -> {
-                            successCount++
-                            onProgress((index + 1).toFloat() / total, "Pomiń istniejący: ${index + 1} z $total...")
-                        }
-                        TileResult.Downloaded -> {
-                            successCount++
-                            onProgress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total...")
-                        }
-                        TileResult.NotDownloaded -> {
-                            onProgress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total...")
-                        }
-                        TileResult.NetworkError -> {
-                            batchFailed = true
-                        }
+                val existingTiles = HashSet<Triple<Int, Int, Int>>()
+                db.query("tiles", arrayOf("zoom_level", "tile_column", "tile_row"), null, null, null, null, null).use { c ->
+                    while (c.moveToNext()) {
+                        existingTiles.add(Triple(c.getInt(0), c.getInt(1), c.getInt(2)))
                     }
                 }
 
-                if (batchFailed) {
-                    onError("Błąd połączenia sieciowego podczas pobierania. Przerywam.")
-                    return@withContext
-                }
-            }
+                onProgress(0f, "Rozpoczynanie pobierania...")
 
-            onSuccess(successCount)
+                val writeMutex = Mutex()
+                var successCount = 0
+                for (batchStart in 0 until total step DOWNLOAD_CONCURRENCY) {
+                    val batchEnd = minOf(batchStart + DOWNLOAD_CONCURRENCY, total)
+                    val results = coroutineScope {
+                        (batchStart until batchEnd).map { index ->
+                            async(Dispatchers.IO) {
+                                downloadTile(tiles[index], existingTiles, db, writeMutex, client)
+                            }
+                        }.awaitAll()
+                    }
+
+                    var batchFailed = false
+                    for ((batchOffset, result) in results.withIndex()) {
+                        val index = batchStart + batchOffset
+                        when (result) {
+                            TileResult.Skipped -> {
+                                successCount++
+                                onProgress((index + 1).toFloat() / total, "Pomiń istniejący: ${index + 1} z $total...")
+                            }
+                            TileResult.Downloaded -> {
+                                successCount++
+                                onProgress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total...")
+                            }
+                            TileResult.NotDownloaded -> {
+                                onProgress((index + 1).toFloat() / total, "Pobieranie: ${index + 1} z $total...")
+                            }
+                            TileResult.NetworkError -> {
+                                batchFailed = true
+                            }
+                        }
+                    }
+
+                    if (batchFailed) {
+                        onError("Błąd połączenia sieciowego podczas pobierania. Przerywam.")
+                        return@withContext
+                    }
+                }
+
+                onSuccess(successCount)
+            } finally {
+                db.close()
+            }
         }
 
     private suspend fun downloadTile(
         tile: Triple<Int, Int, Int>,
-        cacheDir: File,
+        existingTiles: HashSet<Triple<Int, Int, Int>>,
+        db: SQLiteDatabase,
+        writeMutex: Mutex,
         client: okhttp3.OkHttpClient
     ): TileResult {
         val (x, y, z) = tile
-        val tileFile = File(cacheDir, "$z/$x/$y.png")
-        if (tileFile.exists() && tileFile.length() > 0) {
+        if (!existingTiles.add(tile)) {
             return TileResult.Skipped
         }
 
@@ -140,8 +177,18 @@ object OfflineMapDownloader {
                 if (response.isSuccessful) {
                     val bytes = response.body?.bytes()
                     if (bytes != null && bytes.isNotEmpty()) {
-                        tileFile.parentFile?.mkdirs()
-                        tileFile.writeBytes(bytes)
+                        writeMutex.withLock {
+                            val values = ContentValues().apply {
+                                put("zoom_level", z)
+                                put("tile_column", x)
+                                put("tile_row", (1 shl z) - 1 - y)
+                                put("tile_data", bytes)
+                            }
+                            db.insertWithOnConflict(
+                                "tiles", null, values,
+                                SQLiteDatabase.CONFLICT_IGNORE
+                            )
+                        }
                         TileResult.Downloaded
                     } else {
                         TileResult.NotDownloaded
@@ -152,8 +199,9 @@ object OfflineMapDownloader {
             }
         } catch (e: IOException) {
             TileResult.NetworkError
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            if (e is CancellationException) throw e
             e.printStackTrace()
             TileResult.NotDownloaded
         }
