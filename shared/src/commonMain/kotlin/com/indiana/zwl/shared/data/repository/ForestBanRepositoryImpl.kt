@@ -55,10 +55,6 @@ class ForestBanRepositoryImpl(
         }.asFlow().map { it.executeAsList() }
     }
 
-    override suspend fun getBansCount(): Int {
-        return database.forestBanQueries.selectCount().executeAsOne().toInt()
-    }
-
     override suspend fun insertAll(bans: List<ForestBan>) {
         bans.forEach { ban ->
             database.forestBanQueries.insertAll(
