@@ -51,7 +51,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.indiana.zwl.iosApp
         PRODUCT_NAME: ZWL
         FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
-        OTHER_LDFLAGS: "$(inherited) -framework shared"
+        OTHER_LDFLAGS: "$(inherited) -framework shared -lsqlite3"
         SWIFT_VERSION: "5.0"
         INFOPLIST_FILE: Info.plist
         TARGETED_DEVICE_FAMILY: "1"
@@ -75,4 +75,4 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.indiana.zwl.iosAppTests
         FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
-        OTHER_LDFLAGS: "$(inherited) -framework shared"
+        OTHER_LDFLAGS: "$(inherited) -framework shared -lsqlite3"
