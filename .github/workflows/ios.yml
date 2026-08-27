@@ -2,7 +2,7 @@ name: iOS
 
 on:
   push:
-    branches: [multiplatform-ios-app, multiplatform]
+    branches: [multiplatform-ios-app, multiplatform-cicd, multiplatform]
   pull_request:
     branches: [multiplatform]
 
@@ -27,6 +27,17 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
+      - name: Set up Gradle (cache + daemon)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Kotlin/Native toolchain (~/.konan)
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-2.4.10
+          restore-keys: |
+            ${{ runner.os }}-konan-
+
       - name: Compile shared framework (iosSimulatorArm64)
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
 
@@ -44,6 +55,7 @@ jobs:
             -scheme iosApp \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
             ARCHS=arm64
         working-directory: iosApp
 
@@ -63,5 +75,22 @@ jobs:
             -project iosApp.xcodeproj \
             -scheme iosApp \
             -configuration Debug \
-            -destination "platform=iOS Simulator,name=$SIM_NAME"
+            -destination "platform=iOS Simulator,name=$SIM_NAME" \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/DerivedData/ZWL.xcresult
         working-directory: iosApp
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZWL-simulator-app
+          path: iosApp/build/DerivedData/Build/Products/Debug-iphonesimulator/ZWL.app
+          if-no-files-found: error
+
+      - name: Upload XCTest result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZWL-xcresult
+          path: iosApp/build/DerivedData/ZWL.xcresult
+          if-no-files-found: warn
