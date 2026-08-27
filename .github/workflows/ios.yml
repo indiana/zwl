@@ -43,7 +43,8 @@ jobs:
             -project iosApp.xcodeproj \
             -scheme iosApp \
             -configuration Debug \
-            -destination 'generic/platform=iOS Simulator'
+            -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64
         working-directory: iosApp
 
       - name: Run XCTest unit tests (simulator)

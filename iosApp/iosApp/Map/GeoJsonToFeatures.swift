@@ -3,17 +3,17 @@ import MapLibre
 import CoreLocation
 
 /// Turns the GeoJSON FeatureCollection strings produced by the shared module
-/// into `MGLShape` features that can be fed to `MLNShapeSource`s.
+/// into `MLNShape` features that can be fed to `MLNShapeSource`s.
 enum GeoJsonToFeatures {
 
-    static func features(from json: String) -> [MGLShape] {
+    static func features(from json: String) -> [MLNShape] {
         guard let data = json.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let featureArray = obj["features"] as? [[String: Any]] else {
             return []
         }
 
-        var result: [MGLShape] = []
+        var result: [MLNShape] = []
         for feature in featureArray {
             guard let geometry = feature["geometry"] as? [String: Any],
                   let type = geometry["type"] as? String,
@@ -35,7 +35,7 @@ enum GeoJsonToFeatures {
                 if let point = coords as? [NSNumber], point.count >= 2,
                    let lon = point[0].doubleValue as Double?,
                    let lat = point[1].doubleValue as Double? {
-                    let feature = MGLPointFeature()
+                    let feature = MLNPointFeature()
                     feature.coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
                     feature.attributes = properties
                     result.append(feature)
@@ -47,13 +47,13 @@ enum GeoJsonToFeatures {
         return result
     }
 
-    private static func polygonFeatures(rings: [[[Any]]], properties: [String: Any]) -> [MGLShape] {
+    private static func polygonFeatures(rings: [[[Any]]], properties: [String: Any]) -> [MLNShape] {
         guard let shellNumbered = rings.first else { return [] }
         let shellPoints = shellNumbered.compactMap { coordinate2D($0) }
         guard shellPoints.count >= 3 else { return [] }
 
-        let polygon = shellPoints.withUnsafeBufferPointer { buffer -> MGLPolygonFeature in
-            let feature = MGLPolygonFeature(coordinates: buffer.baseAddress!, count: buffer.count)
+        let polygon = shellPoints.withUnsafeBufferPointer { buffer -> MLNPolygonFeature in
+            let feature = MLNPolygonFeature(coordinates: buffer.baseAddress!, count: buffer.count)
             feature.attributes = properties
             return feature
         }

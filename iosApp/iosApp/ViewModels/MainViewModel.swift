@@ -245,8 +245,10 @@ final class MainViewModel: NSObject, ObservableObject {
 
 extension MainViewModel: CLLocationManagerDelegate {
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        requestLocationIfNeeded()
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            self.requestLocationIfNeeded()
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -257,7 +259,7 @@ extension MainViewModel: CLLocationManagerDelegate {
         Task { await self.refreshFireRiskIfNeeded() }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Location error: \(error.localizedDescription)")
     }
 }
