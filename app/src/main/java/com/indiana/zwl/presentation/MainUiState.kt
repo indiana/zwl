@@ -20,7 +20,6 @@ sealed class MainUiState {
         val fireRiskLevel: Int,
         val latitude: Double?,
         val longitude: Double?,
-        val currentForestBan: ForestBan? = null,
-        val debugForestBanOverride: DebugLocationOverride? = null
+        val currentForestBan: ForestBan? = null
     ) : MainUiState()
 }

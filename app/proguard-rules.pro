@@ -21,9 +21,9 @@
     @com.google.gson.annotations.SerializedName <fields>;
 }
 
-# Keep Mapsforge classes
--keep class org.mapsforge.** { *; }
--dontwarn org.mapsforge.**
+# Keep MapLibre classes
+-keep class org.maplibre.** { *; }
+-dontwarn org.maplibre.**
 
 # Keep JTS (Java Topology Suite) spatial classes
 -keep class org.locationtech.jts.** { *; }
@@ -34,9 +34,7 @@
 -keep class dagger.** { *; }
 -keep class * extends androidx.lifecycle.ViewModel
 
-# Keep AndroidSVG library (used by Mapsforge for rendering SVG icons)
--keep class com.caverock.androidsvg.** { *; }
--dontwarn com.caverock.androidsvg.**
+
 
 # Keep WorkManager workers and Hilt worker injection
 -keep class com.indiana.zwl.data.sync.** { *; }

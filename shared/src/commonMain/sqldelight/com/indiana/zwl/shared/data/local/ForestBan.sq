@@ -19,9 +19,6 @@ CREATE TABLE IF NOT EXISTS ForestBan (
 selectAll:
 SELECT * FROM ForestBan;
 
-selectCount:
-SELECT COUNT(*) FROM ForestBan;
-
 insertAll:
 INSERT INTO ForestBan(remoteId, forestDistrictCode, forestDistrictName, rdlpName, forestryName, forestryCode, reason, description, startDate, endDate, forestAddress, compartmentCode, areaSqMeters, geometryWkt)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);

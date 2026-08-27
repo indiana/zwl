@@ -1,6 +1,7 @@
 package com.indiana.zwl
 
 import android.app.Application
+import android.content.ComponentCallbacks2
 import android.os.Environment
 import android.widget.Toast
 import androidx.work.Constraints
@@ -9,6 +10,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.indiana.zwl.data.sync.SyncWorker
+import com.indiana.zwl.presentation.map.util.clearParsedGeometryCache
 import com.indiana.zwl.shared.di.androidModule
 import com.indiana.zwl.shared.di.databaseModule
 import com.indiana.zwl.shared.di.repositoryModule
@@ -54,6 +56,13 @@ class ZwlApplication : Application(), androidx.work.Configuration.Provider {
         try {
             Toast.makeText(this, "CRASH: ${t.message}", Toast.LENGTH_LONG).show()
         } catch (_: Exception) {}
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            clearParsedGeometryCache()
+        }
     }
 
     override fun onCreate() {

@@ -100,15 +100,6 @@ object GeoJsonToWkt {
         return null
     }
 
-    fun flattenCoords(coords: JsonArray): List<List<Double>> {
-        val first = coords.getOrNull(0) ?: return emptyList()
-        return if (first is JsonPrimitive) {
-            listOf(coords.map { it.jsonPrimitive.double })
-        } else {
-            coords.flatMap { flattenCoords(it.jsonArray) }
-        }
-    }
-
     private fun urlStrToUri(urlStr: String): Pair<String?, String?> {
         val regex = Regex("^https?://([a-zA-Z0-9._-]+(?:\\.[a-zA-Z]{2,})+)")
         val match = regex.find(urlStr)
