@@ -43,13 +43,10 @@ class ForestApp(
     private val zoneEngine = SpatialEngine()
     private val banEngine = SpatialEngine()
 
-    @Volatile
     private var cachedZones: List<Zone> = emptyList()
 
-    @Volatile
     private var cachedPois: List<Poi> = emptyList()
 
-    @Volatile
     private var cachedBans: List<ForestBan> = emptyList()
 
     suspend fun initialize(): Boolean {
@@ -105,7 +102,7 @@ class ForestApp(
         banEngine.initializeBans(bans)
     }
 
-    suspend fun syncZones(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun syncZones(): Boolean = withContext(Dispatchers.Default) {
         try {
             val responseStr = arcgisApi.getZanocujWLesieZones()
             val collection = Json.decodeFromString<GeoJsonCollection>(responseStr)
@@ -123,7 +120,7 @@ class ForestApp(
         }
     }
 
-    suspend fun syncBans(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun syncBans(): Boolean = withContext(Dispatchers.Default) {
         try {
             val allBans = mutableListOf<ForestBan>()
             var offset = 0
@@ -152,7 +149,7 @@ class ForestApp(
         }
     }
 
-    suspend fun syncPois(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun syncPois(): Boolean = withContext(Dispatchers.Default) {
         try {
             val allPois = mutableListOf<Poi>()
             for (layerId in listOf(1, 2, 3, 4)) {
@@ -240,21 +237,6 @@ class ForestApp(
             onProgress = onProgress,
             onSuccess = onSuccess,
             onError = onError
-        )
-    }
-}
-
-object ForestAppFactory {
-    fun create(): ForestApp {
-        val koin = koin()
-        return ForestApp(
-            zoneRepository = koin.get(),
-            poiRepository = koin.get(),
-            forestBanRepository = koin.get(),
-            arcgisApi = koin.get(),
-            fireApi = koin.get(),
-            offlineStore = koin.get(),
-            httpClient = koin.get()
         )
     }
 }

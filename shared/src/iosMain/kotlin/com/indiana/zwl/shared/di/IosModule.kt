@@ -10,5 +10,5 @@ import org.koin.dsl.module
 fun iosModule(cacheDirectory: String): Module = module {
     single { DatabaseDriverFactory() }
     single { HttpClientFactory() }
-    single<MbtilesStore> { IosMbtilesStore("$cacheDirectory/map.mbtiles") }
+    single<MbtilesStore> { IosMbtilesStore() }
 }
