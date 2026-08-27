@@ -82,7 +82,6 @@ dependencies {
 
     // MapLibre
     implementation(libs.maplibre.sdk)
-    implementation(libs.maplibre.annotation)
 
     // KTS spatial (JTS KMP-compatible — used directly in ViewModels)
     implementation(libs.kts.core)
