@@ -33,7 +33,6 @@ struct MapView: UIViewRepresentable {
         map.maximumZoomLevel = MapStyle.shared.MAX_ZOOM
         map.showsUserLocation = true
         map.allowsRotating = false
-        map.allowsTilt = false
         map.userTrackingMode = .follow
 
         context.coordinator.mapView = map

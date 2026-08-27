@@ -73,7 +73,7 @@ final class MainViewModel: NSObject, ObservableObject {
             do {
                 let ok = try await self.app.initialize().boolValue
                 await self.refreshMapData()
-                if !ok && self.app.cachedZones().isEmpty.boolValue {
+                if !ok && self.app.cachedZones().isEmpty {
                     self.phase = .error("Błąd synchronizacji danych. Sprawdź połączenie internetowe.")
                     return
                 }
@@ -94,7 +94,7 @@ final class MainViewModel: NSObject, ObservableObject {
                 _ = try await self.app.syncZones()
                 _ = try await self.app.syncBans()
                 _ = try await self.app.syncPois()
-                await self.app.refreshSpatialIndexes()
+                try await self.app.refreshSpatialIndexes()
                 await self.refreshMapData()
                 self.computeLocationStatus()
                 self.phase = .ready
