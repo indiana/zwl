@@ -15,6 +15,8 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.math.PI
+import kotlin.concurrent.Volatile
 
 class SpatialEngine {
 
@@ -58,7 +60,7 @@ class SpatialEngine {
                     try {
                         geom = geom.buffer(0.0)
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        println(e.stackTraceToString())
                     }
                 }
                 val parsed = ParsedBan(ban, geom)
@@ -112,7 +114,7 @@ class SpatialEngine {
                     try {
                         geom = geom.buffer(0.0)
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        println(e.stackTraceToString())
                     }
                 }
                 val parsed = ParsedZone(zone.forestDistrict, geom)
@@ -244,10 +246,10 @@ class SpatialEngine {
         lat2: Double, lon2: Double
     ): Double {
         val r = 6371000.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
+        val dLat = (lat2 - lat1) * PI / 180.0
+        val dLon = (lon2 - lon1) * PI / 180.0
         val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+                cos(lat1 * PI / 180.0) * cos(lat2 * PI / 180.0) *
                 sin(dLon / 2) * sin(dLon / 2)
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return r * c
@@ -257,15 +259,15 @@ class SpatialEngine {
         lat1: Double, lon1: Double,
         lat2: Double, lon2: Double
     ): Float {
-        val lat1Rad = Math.toRadians(lat1)
-        val lat2Rad = Math.toRadians(lat2)
-        val deltaLonRad = Math.toRadians(lon2 - lon1)
+        val lat1Rad = lat1 * PI / 180.0
+        val lat2Rad = lat2 * PI / 180.0
+        val deltaLonRad = (lon2 - lon1) * PI / 180.0
 
         val y = sin(deltaLonRad) * cos(lat2Rad)
         val x = cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(deltaLonRad)
 
         val bearingRad = atan2(y, x)
-        val bearingDeg = Math.toDegrees(bearingRad).toFloat()
-        return (bearingDeg + 360f) % 360f
+        val bearingDeg = (bearingRad * 180.0 / PI + 360.0) % 360.0
+        return bearingDeg.toFloat()
     }
 }

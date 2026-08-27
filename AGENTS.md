@@ -6,6 +6,7 @@
 - Android verify (lint/typecheck): `.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest`
 - Android tests only: `.\gradlew.bat :app:testDebugUnitTest`
 - iOS (KMP framework + SwiftUI app) builds happen ONLY on GitHub Actions `macos-latest` — never attempt locally on Windows.
+- GitHub CLI: `gh` is not on PATH in the shell; use `.\assets\gh.exe` (e.g. `.\assets\gh.exe run list`, `.\assets\gh.exe run view <id> --log-failed`, `.\assets\gh.exe api ...`).
 
 ## Project Conventions
 

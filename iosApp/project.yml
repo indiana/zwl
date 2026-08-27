@@ -1,0 +1,78 @@
+name: iosApp
+options:
+  bundleIdPrefix: com.indiana.zwl
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+packages:
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-gl-native-distribution
+    exactVersion: 6.26.0
+schemes:
+  iosApp:
+    build:
+      targets:
+        iosApp: all
+        iosAppTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - iosAppTests
+targets:
+  iosApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: iosApp
+    dependencies:
+      - package: MapLibre
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: ZWL
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSLocationWhenInUseUsageDescription: "Aplikacja potrzebuje dostępu do lokalizacji, aby sprawdzić, czy znajdujesz się w strefie Zanocuj w Lesie."
+        NSLocationAlwaysUsageDescription: "Aplikacja potrzebuje dostępu do lokalizacji, aby sprawdzić, czy znajdujesz się w strefie Zanocuj w Lesie."
+    preBuildScripts:
+      - name: Build Shared KMP framework
+        script: |
+          cd "$SRCROOT/.."
+          ./gradlew :shared:embedAndSignAppleFrameworkForXcode
+        basedOnDependencyAnalysis: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.indiana.zwl.iosApp
+        PRODUCT_NAME: ZWL
+        FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS: "$(inherited) -framework shared -lsqlite3"
+        SWIFT_VERSION: "5.0"
+        INFOPLIST_FILE: Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+
+  iosAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: iosAppTests
+    preBuildScripts:
+      - name: Build Shared KMP framework
+        script: |
+          cd "$SRCROOT/.."
+          ./gradlew :shared:embedAndSignAppleFrameworkForXcode
+        basedOnDependencyAnalysis: false
+    info:
+      path: iosAppTests/Info.plist
+      properties: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.indiana.zwl.iosAppTests
+        FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS: "$(inherited) -framework shared -lsqlite3"

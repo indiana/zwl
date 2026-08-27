@@ -3,7 +3,11 @@ plugins {
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.sqldelight)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.skie)
 }
+
+val hostOs = System.getProperty("os.name")
+val isMacOsHost = hostOs?.startsWith("macOS") == true || hostOs?.startsWith("Mac") == true
 
 kotlin {
     android {
@@ -16,10 +20,18 @@ kotlin {
         }
     }
 
-    // TODO: Re-enable iOS targets when building on macOS (CI or Mac)
-    // listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
-    //     target.binaries.framework { baseName = "shared"; isStatic = true }
-    // }
+    if (isMacOsHost) {
+        listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
+            target.binaries.framework {
+                baseName = "shared"
+                isStatic = true
+            }
+            target.compilations.getByName("main").defaultSourceSet.dependencies {
+                implementation(libs.ktor.client.darwin)
+                implementation(libs.sqldelight.native.driver)
+            }
+        }
+    }
 
     sourceSets {
         val commonMain = getByName("commonMain") {
@@ -54,13 +66,6 @@ kotlin {
                 implementation(libs.koin.android)
             }
         }
-        // TODO: Uncomment when iOS targets are enabled
-        // val iosMain by getting {
-        //     dependencies {
-        //         implementation(libs.ktor.client.darwin)
-        //         implementation(libs.sqldelight.native.driver)
-        //     }
-        // }
     }
 }
 

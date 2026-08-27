@@ -5,7 +5,7 @@ import com.indiana.zwl.domain.model.Poi
 enum class PoiCategory { SHELTER, FIREPLACE, OTHER }
 
 fun Poi.classify(): PoiCategory {
-    val nameLower = name.lowercase(java.util.Locale.getDefault())
+    val nameLower = name.lowercase()
     return when {
         nameLower.contains("wiata") || nameLower.contains("altan") ||
             nameLower.contains("szałas") || nameLower.contains("shelter") -> PoiCategory.SHELTER
