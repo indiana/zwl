@@ -3,8 +3,11 @@ package com.indiana.zwl.presentation.map
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.indiana.zwl.presentation.DownloadEvent
+import com.indiana.zwl.shared.offline.MbtilesTilePackager
+import com.indiana.zwl.shared.offline.Region
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,11 +57,13 @@ class MapViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                OfflineMapDownloader.downloadArea(
-                    latSouth = latSouth, latNorth = latNorth,
-                    lonWest = lonWest, lonEast = lonEast,
-                    cacheDir = cacheDir,
-                    client = okHttpClient,
+                val packer = MbtilesTilePackager(
+                    fetcher = OkHttpTileFetcher(okHttpClient),
+                    store = SqliteMbtilesStore(File(cacheDir, "map.mbtiles")),
+                    dispatcher = Dispatchers.IO
+                )
+                packer.download(
+                    region = Region(latSouth, latNorth, lonWest, lonEast),
                     onProgress = { progress, text ->
                         _isDownloadingArea.value = true
                         _downloadProgress.value = progress
