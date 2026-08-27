@@ -13,6 +13,8 @@
 .cxx
 /build
 **/build
+iosApp/iosApp.xcodeproj
+*.xcresult
 *.apk
 *.aar
 *.log
