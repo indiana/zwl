@@ -5,17 +5,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
-
-sealed class DownloadStatus {
-    data class Start(val total: Int) : DownloadStatus()
-    data class Progress(val progress: Float, val text: String) : DownloadStatus()
-    data class Finished(val successCount: Int, val total: Int) : DownloadStatus()
-    data class Message(val msg: String) : DownloadStatus()
-}
 
 object OfflineMapDownloader {
 
@@ -45,7 +37,7 @@ object OfflineMapDownloader {
         return "https://$host/$z/$x/$y.png"
     }
 
-    fun downloadArea(
+    suspend fun downloadArea(
         latSouth: Double, latNorth: Double,
         lonWest: Double, lonEast: Double,
         cacheDir: File,
@@ -53,8 +45,7 @@ object OfflineMapDownloader {
         onProgress: (Float, String) -> Unit,
         onSuccess: (Int) -> Unit,
         onError: (String) -> Unit
-    ) {
-        val downloadJob = kotlinx.coroutines.GlobalScope.async(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO) {
             val zoomLevels = 10..16
             val tiles = mutableListOf<Triple<Int, Int, Int>>()
             for (z in zoomLevels) {
@@ -76,12 +67,12 @@ object OfflineMapDownloader {
             val total = tiles.size
             if (total == 0) {
                 onError("Obszar nie zawiera żadnych kafelków.")
-                return@async
+                return@withContext
             }
 
             if (total > 500) {
                 onError("Obszar jest zbyt duży! Przybliż mapę, aby pobrać mniejszy wycinek (maksymalnie 500 kafelków, aktualnie: $total).")
-                return@async
+                return@withContext
             }
 
             onProgress(0f, "Rozpoczynanie pobierania...")
@@ -120,13 +111,12 @@ object OfflineMapDownloader {
 
                 if (batchFailed) {
                     onError("Błąd połączenia sieciowego podczas pobierania. Przerywam.")
-                    return@async
+                    return@withContext
                 }
             }
 
             onSuccess(successCount)
         }
-    }
 
     private suspend fun downloadTile(
         tile: Triple<Int, Int, Int>,
