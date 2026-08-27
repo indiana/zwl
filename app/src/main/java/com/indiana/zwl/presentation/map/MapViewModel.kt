@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.indiana.zwl.presentation.DownloadEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +29,9 @@ class MapViewModel @Inject constructor(
     private val _downloadText = MutableStateFlow("")
     val downloadText: StateFlow<String> = _downloadText
 
-    private val _downloadEvent = MutableSharedFlow<DownloadEvent>()
+    private val _downloadEvent = MutableSharedFlow<DownloadEvent>(
+        extraBufferCapacity = 8
+    )
     val downloadEvent = _downloadEvent.asSharedFlow()
 
     var savedMapCenterLat: Double? = null
@@ -50,30 +53,42 @@ class MapViewModel @Inject constructor(
         cacheDir: File
     ) {
         viewModelScope.launch {
-            OfflineMapDownloader.downloadArea(
-                latSouth = latSouth, latNorth = latNorth,
-                lonWest = lonWest, lonEast = lonEast,
-                cacheDir = cacheDir,
-                client = okHttpClient,
-                onProgress = { progress, text ->
-                    _isDownloadingArea.value = true
-                    _downloadProgress.value = progress
-                    _downloadText.value = text
-                },
-                onSuccess = { count ->
-                    _isDownloadingArea.value = false
-                    _downloadEvent.tryEmit(
-                        DownloadEvent.ToastMessage(
-                            "Pobrano pomyślnie $count kafelków do cache offline!",
-                            isLong = true
+            try {
+                OfflineMapDownloader.downloadArea(
+                    latSouth = latSouth, latNorth = latNorth,
+                    lonWest = lonWest, lonEast = lonEast,
+                    cacheDir = cacheDir,
+                    client = okHttpClient,
+                    onProgress = { progress, text ->
+                        _isDownloadingArea.value = true
+                        _downloadProgress.value = progress
+                        _downloadText.value = text
+                    },
+                    onSuccess = { count ->
+                        _isDownloadingArea.value = false
+                        _downloadEvent.tryEmit(
+                            DownloadEvent.ToastMessage(
+                                "Pobrano pomyślnie $count kafelków do cache offline!",
+                                isLong = true
+                            )
                         )
+                    },
+                    onError = { msg ->
+                        _isDownloadingArea.value = false
+                        _downloadEvent.tryEmit(DownloadEvent.ToastMessage(msg, isLong = true))
+                    }
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _isDownloadingArea.value = false
+                _downloadEvent.tryEmit(
+                    DownloadEvent.ToastMessage(
+                        "Błąd podczas pobierania: ${e.message ?: e.javaClass.simpleName}",
+                        isLong = true
                     )
-                },
-                onError = { msg ->
-                    _isDownloadingArea.value = false
-                    _downloadEvent.tryEmit(DownloadEvent.ToastMessage(msg, isLong = true))
-                }
-            )
+                )
+            }
         }
     }
 }
