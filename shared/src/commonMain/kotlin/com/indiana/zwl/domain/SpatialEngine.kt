@@ -16,6 +16,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.PI
+import kotlin.concurrent.Volatile
 
 class SpatialEngine {
 
