@@ -26,6 +26,10 @@ kotlin {
                 baseName = "shared"
                 isStatic = true
             }
+            target.compilations.getByName("main").defaultSourceSet.dependencies {
+                implementation(libs.ktor.client.darwin)
+                implementation(libs.sqldelight.native.driver)
+            }
         }
     }
 
@@ -60,14 +64,6 @@ kotlin {
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.sqldelight.android.driver)
                 implementation(libs.koin.android)
-            }
-        }
-        if (isMacOsHost) {
-            val iosMain by getting {
-                dependencies {
-                    implementation(libs.ktor.client.darwin)
-                    implementation(libs.sqldelight.native.driver)
-                }
             }
         }
     }
