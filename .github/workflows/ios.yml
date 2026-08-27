@@ -48,14 +48,14 @@ jobs:
       - name: Run XCTest unit tests (simulator)
         run: |
           SIM_NAME=$(xcrun simctl list devices available -j | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for devices in data.get('devices', {}).values():
-    for device in devices:
-        if device.get('isAvailable'):
-            print(device['name'])
-            sys.exit(0)
-" )
+          import json, sys
+          data = json.load(sys.stdin)
+          for devices in data.get('devices', {}).values():
+              for device in devices:
+                  if device.get('isAvailable'):
+                      print(device['name'])
+                      sys.exit(0)
+          " )
           echo "Selected simulator: $SIM_NAME"
           xcodebuild test \
             -project iosApp.xcodeproj \
