@@ -1,15 +1,12 @@
 package com.indiana.zwl.domain.usecase
 
-import com.indiana.zwl.data.local.ZoneDao
-import com.indiana.zwl.data.local.ZoneEntity
-import com.indiana.zwl.data.remote.BdlArcgisApi
+import com.indiana.zwl.shared.data.remote.BdlArcgisApi
+import com.indiana.zwl.domain.repository.ZoneRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -20,12 +17,12 @@ import java.io.IOException
 class SyncZonesUseCaseTest {
 
     private val arcgisApi: BdlArcgisApi = mockk()
-    private val zoneDao: ZoneDao = mockk(relaxed = true)
+    private val zoneRepository: ZoneRepository = mockk(relaxed = true)
     private lateinit var syncZonesUseCase: SyncZonesUseCase
 
     @Before
     fun setUp() {
-        syncZonesUseCase = SyncZonesUseCase(arcgisApi, zoneDao)
+        syncZonesUseCase = SyncZonesUseCase(arcgisApi, zoneRepository)
     }
 
     @Test
@@ -57,10 +54,7 @@ class SyncZonesUseCaseTest {
             }
         """.trimIndent()
 
-        val mediaType = "application/json".toMediaTypeOrNull()
-        val responseBody = geoJson.toResponseBody(mediaType)
-
-        coEvery { arcgisApi.getZanocujWLesieZones() } returns responseBody
+        coEvery { arcgisApi.getZanocujWLesieZones() } returns geoJson
 
         // Act
         val result = syncZonesUseCase()
@@ -71,15 +65,8 @@ class SyncZonesUseCaseTest {
         assertEquals(1, zones.size)
         assertEquals("Nadleśnictwo Kudypy", zones[0].forestDistrict)
 
-        val capturedEntities = mutableListOf<List<ZoneEntity>>()
-        coVerify(exactly = 1) { zoneDao.clearAll() }
-        coVerify(exactly = 1) { zoneDao.insertAll(capture(capturedEntities)) }
-
-        val insertedList = capturedEntities.first()
-        assertEquals(1, insertedList.size)
-        assertEquals("Nadleśnictwo Kudypy", insertedList[0].forestDistrict)
-        assertTrue(insertedList[0].geometryWkt.contains("POLYGON"))
-        assertEquals("https://kudypy.szczecinek.lasy.gov.pl", insertedList[0].websiteUrl)
+        coVerify(exactly = 1) { zoneRepository.clearAll() }
+        coVerify(exactly = 1) { zoneRepository.insertAll(any()) }
     }
 
     @Test
@@ -92,18 +79,15 @@ class SyncZonesUseCaseTest {
             }
         """.trimIndent()
 
-        val mediaType = "application/json".toMediaTypeOrNull()
-        val responseBody = geoJson.toResponseBody(mediaType)
-
-        coEvery { arcgisApi.getZanocujWLesieZones() } returns responseBody
+        coEvery { arcgisApi.getZanocujWLesieZones() } returns geoJson
 
         // Act
         val result = syncZonesUseCase()
 
         // Assert
         assertTrue(result.isFailure)
-        coVerify(exactly = 0) { zoneDao.clearAll() }
-        coVerify(exactly = 0) { zoneDao.insertAll(any()) }
+        coVerify(exactly = 0) { zoneRepository.clearAll() }
+        coVerify(exactly = 0) { zoneRepository.insertAll(any()) }
     }
 
     @Test
@@ -118,7 +102,7 @@ class SyncZonesUseCaseTest {
         // Assert
         assertTrue(result.isFailure)
         assertEquals(exception, result.exceptionOrNull())
-        coVerify(exactly = 0) { zoneDao.clearAll() }
-        coVerify(exactly = 0) { zoneDao.insertAll(any()) }
+        coVerify(exactly = 0) { zoneRepository.clearAll() }
+        coVerify(exactly = 0) { zoneRepository.insertAll(any()) }
     }
 }

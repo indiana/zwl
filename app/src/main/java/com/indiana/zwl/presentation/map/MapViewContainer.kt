@@ -22,48 +22,48 @@ import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.presentation.MainUiState
 import com.indiana.zwl.presentation.MainViewModel
+import com.indiana.zwl.presentation.ZoneDetailViewModel
+import com.indiana.zwl.presentation.map.MapViewModel
 import com.indiana.zwl.presentation.DownloadEvent
-import com.indiana.zwl.presentation.SelectedZoneDetails
-import com.indiana.zwl.presentation.SelectedPoiDetails
-import com.indiana.zwl.data.local.PoiEntity
+import com.indiana.zwl.domain.model.Poi
+import com.indiana.zwl.domain.util.PoiCategory
+import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.presentation.theme.ZwlTheme
-import com.indiana.zwl.presentation.theme.ForestGreenAccent
+import com.indiana.zwl.shared.map.MapStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.locationtech.jts.io.WKTReader
-import org.mapsforge.core.graphics.Style
-import org.mapsforge.core.model.LatLong
-import org.mapsforge.core.model.Tile
-import org.mapsforge.map.android.graphics.AndroidGraphicFactory
-import org.mapsforge.map.android.view.MapView
-import org.mapsforge.map.layer.cache.TileCache
-import org.mapsforge.map.layer.download.DownloadJob
-import org.mapsforge.map.layer.download.TileDownloadLayer
-import org.mapsforge.map.layer.download.tilesource.OnlineTileSource
-import org.mapsforge.map.layer.overlay.Marker
-import java.net.URL
+import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMapOptions
+import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.FillLayer
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.RasterLayer
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.android.style.sources.RasterSource
 import java.io.File
-import org.mapsforge.map.layer.overlay.Polygon
-import kotlin.math.ln
-import kotlin.math.tan
-import kotlin.math.cos
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.indiana.zwl.presentation.map.util.isOnline
 import com.indiana.zwl.presentation.map.util.rememberIsOnline
-import com.indiana.zwl.presentation.map.util.createUserLocationArrowBitmap
-import com.indiana.zwl.presentation.map.util.cleanupCorruptedCacheFiles
+import com.indiana.zwl.presentation.map.util.GeometryCache
+import com.indiana.zwl.presentation.map.util.buildZoneGeoJson
+import com.indiana.zwl.presentation.map.util.buildBanGeoJson
+import com.indiana.zwl.presentation.map.util.buildPoiGeoJson
+import com.indiana.zwl.presentation.map.util.buildUserArrowGeoJson
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -80,14 +80,16 @@ import androidx.compose.material.icons.filled.MyLocation
 @Composable
 fun MapViewContainer(
     viewModel: MainViewModel,
+    zoneDetailViewModel: ZoneDetailViewModel,
+    mapViewModel: MapViewModel,
     zones: List<Zone>,
     isActive: Boolean
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
-    val selectedZone by viewModel.selectedZoneDetails.collectAsState()
-    val selectedPoi by viewModel.selectedPoiDetails.collectAsState()
+    val selectedZone by zoneDetailViewModel.selectedZoneDetails.collectAsState()
+    val selectedPoi by zoneDetailViewModel.selectedPoiDetails.collectAsState()
     val pois by viewModel.pois.collectAsState()
     val showFireplaces by viewModel.showFireplaces.collectAsState()
     val showShelters by viewModel.showShelters.collectAsState()
@@ -95,21 +97,26 @@ fun MapViewContainer(
     val showForestBans by viewModel.showForestBans.collectAsState()
     val forestBans by viewModel.forestBans.collectAsState()
 
-    var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
-    val tileCache by produceState<TileCache?>(initialValue = null, context) {
-        val cache = MapTileCache.create(context)
-        value = cache
-        awaitDispose {
-            runCatching { cache.destroy() }
-        }
+    val rememberedMapView = remember {
+        MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true))
     }
+    var mapboxMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+    var styleInstance by remember { mutableStateOf<Style?>(null) }
+    var banSource by remember { mutableStateOf<GeoJsonSource?>(null) }
+    var poiSource by remember { mutableStateOf<GeoJsonSource?>(null) }
+    var userSource by remember { mutableStateOf<GeoJsonSource?>(null) }
+
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
+    val geometryCache = remember { GeometryCache() }
+    var zoneGeoJson by remember { mutableStateOf<String?>(null) }
+    var banGeoJson by remember { mutableStateOf<String?>(null) }
+    var lastAppliedPois by remember { mutableStateOf<List<Poi>?>(null) }
 
-    LaunchedEffect(mapViewInstance, isActive, uiState) {
-        val mv = mapViewInstance ?: return@LaunchedEffect
+    LaunchedEffect(rememberedMapView, isActive, uiState) {
+        val map = mapboxMapInstance ?: return@LaunchedEffect
         if (!isActive || hasCenteredOnStartup) return@LaunchedEffect
-        if (viewModel.savedMapCenter != null) {
+        if (mapViewModel.savedMapCenterLat != null) {
             hasCenteredOnStartup = true
             return@LaunchedEffect
         }
@@ -118,148 +125,133 @@ fun MapViewContainer(
             val lat = state.latitude
             val lon = state.longitude
             if (lat != null && lon != null) {
-                mv.setCenter(LatLong(lat, lon))
-                mv.setZoomLevel(15)
+                map.cameraPosition = CameraPosition.Builder()
+                    .target(LatLng(lat, lon))
+                    .zoom(15.0)
+                    .build()
                 hasCenteredOnStartup = true
             }
         }
     }
 
-    var downloadLayerInstance by remember { mutableStateOf<TileDownloadLayer?>(null) }
-    var poiFolderOverlay by remember { mutableStateOf<org.mapsforge.map.layer.GroupLayer?>(null) }
-    var banFolderOverlay by remember { mutableStateOf<org.mapsforge.map.layer.GroupLayer?>(null) }
-
-    LaunchedEffect(isActive, downloadLayerInstance) {
-        downloadLayerInstance?.let { layer ->
-            if (isActive) {
-                layer.onResume()
-            } else {
-                layer.onPause()
+    LaunchedEffect(forestBans) {
+        if (forestBans.isEmpty()) return@LaunchedEffect
+        val prep = withContext(Dispatchers.Default) {
+            val cache = GeometryCache()
+            for (ban in forestBans) {
+                cache.addBanPolygon(ban.id, ban.geometryWkt)
             }
+            cache.buildBanIndex()
+            val json = buildBanGeoJson(cache, forestBans.map { it.id })
+            cache to json
         }
+        geometryCache.adoptBansFrom(prep.first)
+        banGeoJson = prep.second
     }
 
-    LaunchedEffect(forestBans, showForestBans, banFolderOverlay, mapViewInstance) {
-        val folder = banFolderOverlay ?: return@LaunchedEffect
-        val mv = mapViewInstance ?: return@LaunchedEffect
-
+    LaunchedEffect(showForestBans, forestBans, banGeoJson, styleInstance) {
+        val style = styleInstance ?: return@LaunchedEffect
+        val hasLayers = style.getLayer("bans-fill") != null
         if (!showForestBans || forestBans.isEmpty()) {
-            synchronized(folder) {
-                folder.layers.clear()
+            if (hasLayers) {
+                style.removeLayer("bans-fill")
+                style.removeLayer("bans-line")
             }
-            folder.requestRedraw()
-            return@LaunchedEffect
+        } else {
+            val json = banGeoJson
+            if (json != null) {
+                banSource?.setGeoJson(json)
+            }
+            if (!hasLayers) {
+                style.addLayerBelow(
+                    FillLayer("bans-fill", "bans-source").withProperties(
+                        PropertyFactory.fillColor("#D32F2F"),
+                        PropertyFactory.fillOpacity(0.35f)
+                    ),
+                    "poi-layer"
+                )
+                style.addLayerBelow(
+                    LineLayer("bans-line", "bans-source").withProperties(
+                        PropertyFactory.lineColor("#FFB71C1C"),
+                        PropertyFactory.lineWidth(2f)
+                    ),
+                    "poi-layer"
+                )
+            }
         }
-
-        val newLayers = withContext(Dispatchers.Default) {
-            createForestBanPolygons(
-                context = context,
-                mapView = mv,
-                bans = forestBans,
-                onBanClick = { ban ->
-                    viewModel.selectForestBan(ban)
-                },
-                onError = { errorMsg ->
-                    viewModel.setDebugError(errorMsg)
-                }
-            )
-        }
-
-        synchronized(folder) {
-            folder.layers.clear()
-            folder.layers.addAll(newLayers)
-        }
-        folder.requestRedraw()
     }
 
-    LaunchedEffect(pois, poiFolderOverlay, mapViewInstance) {
-        val folder = poiFolderOverlay ?: return@LaunchedEffect
-        val mv = mapViewInstance ?: return@LaunchedEffect
-        
-        val shelterDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_shelter)
-        val fireplaceDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_fireplace)
-        val genericDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.indiana.zwl.R.drawable.ic_generic_point)
-        
-        val shelterBitmap = shelterDrawable?.let { drawable ->
-            androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#4E342E")) // Brown 800
-            AndroidGraphicFactory.convertToBitmap(drawable)
-        }
-
-        val fireplaceBitmap = fireplaceDrawable?.let { drawable ->
-            androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#E65100")) // Orange 900
-            AndroidGraphicFactory.convertToBitmap(drawable)
-        }
-
-        val genericBitmap = genericDrawable?.let { drawable ->
-            androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#1976D2")) // Blue 700
-            AndroidGraphicFactory.convertToBitmap(drawable)
-        }
-
-        val newMarkers = mutableListOf<Marker>()
-        for (poi in pois) {
-            val nameLower = poi.name.lowercase(java.util.Locale.getDefault())
-            val isWiata = nameLower.contains("wiata") || nameLower.contains("altan") ||
-                    nameLower.contains("szałas") || nameLower.contains("shelter")
-            val isFireplace = nameLower.contains("ognis") || nameLower.contains("palenis") ||
-                    nameLower.contains("fire")
-            
-            val bitmap = if (isWiata) {
-                shelterBitmap
-            } else if (isFireplace) {
-                fireplaceBitmap
-            } else {
-                genericBitmap
-            }
-
-            val dotColor = if (isWiata) {
-                android.graphics.Color.parseColor("#4E342E")
-            } else if (isFireplace) {
-                android.graphics.Color.parseColor("#E65100")
-            } else {
-                android.graphics.Color.parseColor("#1976D2")
-            }
-
-            if (bitmap != null) {
-                val marker = object : ZoomAwareMarker(
-                    LatLong(poi.latitude, poi.longitude),
-                    bitmap,
-                    0,
-                    0,
-                    dotColor
-                ) {
-                    override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
-                        if (tapXY != null) {
-                            val projection = org.mapsforge.map.util.MapViewProjection(mv)
-                            val center = projection.toPixels(LatLong(poi.latitude, poi.longitude))
-                            if (center != null && contains(center, tapXY, mv)) {
-                                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                    viewModel.selectPoi(poi)
-                                }
-                                return true
-                            }
-                        }
-                        return false
-                    }
-                }
-                marker.setDisplayModel(mv.model.displayModel)
-                newMarkers.add(marker)
+    val filteredPois = remember(pois, showFireplaces, showShelters, showOthers) {
+        pois.filter { poi ->
+            val cat = poi.classify()
+            when (cat) {
+                PoiCategory.SHELTER -> showShelters
+                PoiCategory.FIREPLACE -> showFireplaces
+                PoiCategory.OTHER -> showOthers
             }
         }
-
-        synchronized(folder) {
-            folder.layers.clear()
-            folder.layers.addAll(newMarkers)
-        }
-        folder.requestRedraw()
     }
 
-    // Download state from ViewModel
-    val isDownloadingArea by viewModel.isDownloadingArea.collectAsState()
-    val downloadProgress by viewModel.downloadProgress.collectAsState()
-    val downloadText by viewModel.downloadText.collectAsState()
+    LaunchedEffect(zones) {
+        if (zones.isEmpty()) return@LaunchedEffect
+        val prep = withContext(Dispatchers.Default) {
+            val cache = GeometryCache()
+            for (zone in zones) {
+                cache.addZonePolygon(zone.id, zone.geometryWkt)
+            }
+            cache.buildZoneIndex()
+            val json = buildZoneGeoJson(cache, zones.map { it.id })
+            cache to json
+        }
+        geometryCache.adoptZonesFrom(prep.first)
+        zoneGeoJson = prep.second
+    }
 
-    LaunchedEffect(viewModel) {
-        viewModel.downloadEvent.collect { event ->
+    LaunchedEffect(zoneGeoJson, styleInstance) {
+        val style = styleInstance ?: return@LaunchedEffect
+        val json = zoneGeoJson ?: return@LaunchedEffect
+        if (style.getLayer("zones-fill") != null) {
+            (style.getSource("zones-source") as? GeoJsonSource)?.setGeoJson(json)
+        } else {
+            style.addSource(GeoJsonSource("zones-source").apply { setGeoJson(json) })
+            style.addLayer(FillLayer("zones-fill", "zones-source").withProperties(
+                PropertyFactory.fillColor("#1B5E20"),
+                PropertyFactory.fillOpacity(0.35f)
+            ))
+            style.addLayer(LineLayer("zones-line", "zones-source").withProperties(
+                PropertyFactory.lineColor("#FF1B5E20"),
+                PropertyFactory.lineWidth(2f)
+            ))
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, rememberedMapView) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_CREATE -> rememberedMapView.onCreate(null)
+                Lifecycle.Event.ON_START -> rememberedMapView.onStart()
+                Lifecycle.Event.ON_RESUME -> rememberedMapView.onResume()
+                Lifecycle.Event.ON_PAUSE -> rememberedMapView.onPause()
+                Lifecycle.Event.ON_STOP -> rememberedMapView.onStop()
+                Lifecycle.Event.ON_DESTROY -> rememberedMapView.onDestroy()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            rememberedMapView.onDestroy()
+        }
+    }
+
+    val isDownloadingArea by mapViewModel.isDownloadingArea.collectAsState()
+    val downloadProgress by mapViewModel.downloadProgress.collectAsState()
+    val downloadText by mapViewModel.downloadText.collectAsState()
+
+    LaunchedEffect(mapViewModel) {
+        mapViewModel.downloadEvent.collect { event ->
             when (event) {
                 is DownloadEvent.ToastMessage -> {
                     Toast.makeText(
@@ -272,637 +264,613 @@ fun MapViewContainer(
         }
     }
 
-    LaunchedEffect(context) {
-        withContext(Dispatchers.IO) {
-            cleanupCorruptedCacheFiles(File(context.externalCacheDir, "mapcache"))
+    var lastAzimuth by remember { mutableFloatStateOf(0f) }
+    var lastAzimuthTs by remember { mutableLongStateOf(0L) }
+    var currentZoom by remember { mutableFloatStateOf(15f) }
+    LaunchedEffect(viewModel) {
+        viewModel.azimuth.collect { az ->
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (kotlin.math.abs(az - lastAzimuth) >= 0.5f || now - lastAzimuthTs >= 300L) {
+                lastAzimuth = az
+                lastAzimuthTs = now
+            }
         }
     }
+    val userLat = (uiState as? MainUiState.Success)?.latitude
+    val userLon = (uiState as? MainUiState.Success)?.longitude
 
-
-
-    var userMarker by remember { mutableStateOf<RotatingMarker?>(null) }
-
-    LaunchedEffect(viewModel) {
-        viewModel.azimuth.collect { azimuth ->
-            userMarker?.let { marker ->
-                marker.azimuth = azimuth
-                marker.requestRedraw()
+    LaunchedEffect(userLat, userLon, lastAzimuth, currentZoom, userSource) {
+        val style = styleInstance ?: return@LaunchedEffect
+        if (userLat == null || userLon == null) return@LaunchedEffect
+        val lat = userLat
+        val latRad = Math.toRadians(lat)
+        val metersPerPixel = 156543.03392 * Math.cos(latRad) / Math.pow(2.0, currentZoom.toDouble())
+        val scaleMeters = 15.0 * metersPerPixel / 20.0
+        var src = userSource
+        if (src == null) {
+            src = GeoJsonSource("user-source").apply {
+                setGeoJson(buildUserArrowGeoJson(lat, userLon!!, lastAzimuth, scaleMeters))
             }
+            userSource = src
+            style.addSource(src)
+            style.addLayer(
+                FillLayer("user-layer", "user-source").withProperties(
+                    PropertyFactory.fillColor("#007AFF"),
+                    PropertyFactory.fillOpacity(1f)
+                )
+            )
+            style.addLayer(
+                LineLayer("user-layer-outline", "user-source").withProperties(
+                    PropertyFactory.lineColor("#FFFFFF"),
+                    PropertyFactory.lineWidth(3f)
+                )
+            )
+        } else {
+            src.setGeoJson(buildUserArrowGeoJson(lat, userLon!!, lastAzimuth, scaleMeters))
         }
     }
 
     val isOnlineState by rememberIsOnline()
-
     val isInZone = (uiState as? MainUiState.Success)?.locationStatus is LocationStatus.InZone
+
+    val offlineContext = LocalContext.current
+    LaunchedEffect(isOnlineState, styleInstance) {
+        val style = styleInstance ?: return@LaunchedEffect
+        val offlineLayerId = "osm-offline-layer"
+        val existing = style.getLayer(offlineLayerId)
+        if (isOnlineState) {
+            if (existing != null) {
+                style.removeLayer(offlineLayerId)
+                style.removeSource("osm-offline")
+            }
+        } else {
+            if (existing == null) {
+                val cacheRoot = File(offlineContext.externalCacheDir ?: offlineContext.cacheDir, "mapcache")
+                val dbFile = File(cacheRoot, "map.mbtiles")
+                val localUrl = "mbtiles://file://${dbFile.absolutePath}"
+                style.addSource(RasterSource("osm-offline", localUrl, 256))
+                style.addLayerBelow(RasterLayer(offlineLayerId, "osm-offline"), "osm")
+            }
+        }
+    }
 
     ZwlTheme(isInZone = isInZone) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        val readyCache = tileCache
-        if (readyCache == null) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = ForestGreenAccent)
-            }
-        } else {
-        AndroidView(
-            factory = { ctx ->
-                MapView(ctx).apply {
-                    isClickable = true
-                    getMapScaleBar().isVisible = true
-                    setBuiltInZoomControls(true)
+            AndroidView(
+                factory = { ctx ->
+                    rememberedMapView.apply {
+                        getMapAsync { map ->
+                            mapboxMapInstance = map
 
-                    this.model.frameBufferModel.overdrawFactor = MapTileCache.OVERDRAW_FACTOR
+                            map.setMinZoomPreference(MapStyle.MIN_ZOOM)
+                            map.setMaxZoomPreference(MapStyle.MAX_ZOOM)
 
-                    this.mapZoomControls.setZoomLevelMin(8)
-                    this.mapZoomControls.setZoomLevelMax(20)
+                            map.uiSettings.isRotateGesturesEnabled = false
+                            map.uiSettings.isTiltGesturesEnabled = false
 
-                    val tileSource = OfflineMapDownloader.createOnlineTileSource()
-
-                    val downloadLayer = TileDownloadLayer(
-                        readyCache,
-                        this.model.mapViewPosition,
-                        tileSource,
-                        AndroidGraphicFactory.INSTANCE
-                    )
-                    this.layerManager.layers.add(downloadLayer)
-                    downloadLayer.onResume()
-                    downloadLayerInstance = downloadLayer
-
-                    // Add background tap interceptor to clear selection when tapping empty areas of the map
-                    this.layerManager.layers.add(MapTapInterceptor(ctx) {
-                        viewModel.clearSelectedZone()
-                        viewModel.clearSelectedPoi()
-                        viewModel.clearSelectedForestBan()
-                    })
-
-                    val savedCenter = viewModel.savedMapCenter
-                    if (savedCenter != null) {
-                        this.setCenter(savedCenter)
-                        viewModel.savedMapZoom?.let { this.setZoomLevel(it) }
-                    } else {
-                        this.setCenter(LatLong(52.23, 21.01))
-                        this.setZoomLevel(15)
-                    }
-
-                    drawZonePolygons(
-                        context = ctx,
-                        mapView = this,
-                        zones = zones,
-                        onZoneClick = { zone, geom, latLong ->
-                            viewModel.selectZone(zone, geom, latLong.latitude, latLong.longitude)
-                        },
-                        onZoneError = { errorMsg ->
-                            viewModel.setDebugError(errorMsg)
-                        }
-                    )
-
-                    val banFolder = org.mapsforge.map.layer.GroupLayer()
-                    this.layerManager.layers.add(banFolder)
-                    banFolderOverlay = banFolder
-
-                    val poiFolder = org.mapsforge.map.layer.GroupLayer()
-                    this.layerManager.layers.add(poiFolder)
-                    poiFolderOverlay = poiFolder
-
-                    // Initialize user location marker
-                    val userLocBitmap = createUserLocationArrowBitmap(ctx)
-                    val marker = RotatingMarker(LatLong(52.23, 21.01), userLocBitmap, 0, 0)
-                    userMarker = marker
-
-                    mapViewInstance = this
-                }
-            },
-            modifier = Modifier.fillMaxSize(),
-            update = { mapView ->
-                val state = uiState
-                if (state is MainUiState.Success) {
-                    val lat = state.latitude
-                    val lon = state.longitude
-                    if (lat != null && lon != null) {
-                        userMarker?.let { marker ->
-                            marker.latLong = LatLong(lat, lon)
-                            marker.requestRedraw()
-                            if (!mapView.layerManager.layers.contains(marker)) {
-                                mapView.layerManager.layers.add(marker)
+                            map.addOnCameraIdleListener {
+                                map.cameraPosition?.zoom?.let { currentZoom = it.toFloat() }
                             }
-                        }
-                    } else {
-                        userMarker?.let { marker ->
-                            if (mapView.layerManager.layers.contains(marker)) {
-                                mapView.layerManager.layers.remove(marker)
-                            }
-                        }
-                    }
-                }
-            },
-            onRelease = { mapView ->
-                val position = mapView.model.mapViewPosition
-                viewModel.saveMapState(position.center, position.zoomLevel)
-                mapView.destroyAll()
-            }
-        )
-        }
 
-        // Top-right UI controls (Download button / Offline status badge)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            contentAlignment = Alignment.TopEnd
-        ) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    AnimatedVisibility(
-                        visible = !isOnlineState,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
-                            shape = RoundedCornerShape(12.dp),
-                            shadowElevation = 6.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OfflineIcon(modifier = Modifier.size(16.dp), color = Color.White)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Tryb offline",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    letterSpacing = 0.5.sp
+                            val savedLat = mapViewModel.savedMapCenterLat
+                            val savedLng = mapViewModel.savedMapCenterLng
+                            val savedZoom = mapViewModel.savedMapZoom
+
+                            map.cameraPosition = CameraPosition.Builder()
+                                .target(
+                                    LatLng(
+                                        savedLat ?: MapStyle.DEFAULT_LAT,
+                                        savedLng ?: MapStyle.DEFAULT_LNG
+                                    )
                                 )
-                            }
-                        }
-                    }
+                                .zoom(savedZoom ?: MapStyle.DEFAULT_ZOOM)
+                                .build()
 
-                    FloatingActionButton(
-                        onClick = {
-                            val state = uiState
-                            if (state is MainUiState.Success) {
-                                val lat = state.latitude
-                                val lon = state.longitude
-                                if (lat != null && lon != null) {
-                                    mapViewInstance?.setCenter(LatLong(lat, lon))
-                                    mapViewInstance?.setZoomLevel(15)
-                                } else {
-                                    Toast.makeText(context, "Oczekiwanie na sygnał GPS...", Toast.LENGTH_SHORT).show()
+                            map.setStyle(Style.Builder().fromJson(MapStyle.OSM_STYLE_JSON)) { style ->
+                                styleInstance = style
+
+                                val ps = GeoJsonSource("poi-source").apply {
+                                    setGeoJson(buildPoiGeoJson(filteredPois))
+                                }
+                                poiSource = ps
+                                style.addSource(ps)
+                                style.addLayer(
+                                    CircleLayer("poi-layer", "poi-source").withProperties(
+                                        PropertyFactory.circleColor(
+                                            Expression.match(
+                                                Expression.get("category"),
+                                                Expression.literal("#1976D2"),
+                                                Expression.stop("SHELTER", Expression.literal("#4E342E")),
+                                                Expression.stop("FIREPLACE", Expression.literal("#E65100"))
+                                            )
+                                        ),
+                                        PropertyFactory.circleRadius(
+                                            Expression.step(
+                                                Expression.zoom(),
+                                                Expression.literal(2f),
+                                                Expression.literal(11.0),
+                                                Expression.literal(3f),
+                                                Expression.literal(12.5),
+                                                Expression.literal(5f),
+                                                Expression.literal(14.0),
+                                                Expression.literal(8f),
+                                                Expression.literal(16.0),
+                                                Expression.literal(12f)
+                                            )
+                                        ),
+                                        PropertyFactory.circleStrokeWidth(1.5f),
+                                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                                        PropertyFactory.circleOpacity(0.9f)
+                                    )
+                                )
+
+                                val initialBanGeoJson = buildBanGeoJson(geometryCache, forestBans.map { it.id })
+                                val bs = GeoJsonSource("bans-source").apply { setGeoJson(initialBanGeoJson) }
+                                banSource = bs
+                                style.addSource(bs)
+
+                                map.addOnMapClickListener { point ->
+                                    val clickedPoint = geometryCache.createPoint(point.longitude, point.latitude)
+
+                                    val hitZoneId = geometryCache.findZoneIdAt(clickedPoint)
+                                    if (hitZoneId != null) {
+                                        val zone = zones.firstOrNull { it.id == hitZoneId }
+                                        val jtsPoly = zone?.let { geometryCache.parse(it.geometryWkt)?.jtsPolygons?.firstOrNull() }
+                                        if (zone != null && jtsPoly != null) {
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                val successState = uiState as? MainUiState.Success
+                                                zoneDetailViewModel.selectZone(
+                                                    zone, jtsPoly,
+                                                    point.latitude, point.longitude,
+                                                    successState?.latitude, successState?.longitude
+                                                )
+                                            }
+                                        }
+                                        return@addOnMapClickListener true
+                                    }
+
+                                    val hitBanId = geometryCache.findBanIdAt(clickedPoint)
+                                    if (hitBanId != null) {
+                                        val ban = forestBans.firstOrNull { it.id == hitBanId }
+                                        if (ban != null) {
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                viewModel.selectForestBan(ban)
+                                            }
+                                        }
+                                        return@addOnMapClickListener true
+                                    }
+
+                                    val screenPoint = map.projection.toScreenLocation(point)
+                                    val hitFeatures = map.queryRenderedFeatures(
+                                        android.graphics.RectF(
+                                            screenPoint.x - 24f, screenPoint.y - 24f,
+                                            screenPoint.x + 24f, screenPoint.y + 24f
+                                        ),
+                                        "poi-layer"
+                                    )
+                                    if (hitFeatures.isNotEmpty()) {
+                                        val props = hitFeatures[0].properties()
+                                        val poiId = props?.get("id")?.asLong
+                                        val poi = pois.firstOrNull { it.id == poiId }
+                                        if (poi != null) {
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                val successState = uiState as? MainUiState.Success
+                                                zoneDetailViewModel.selectPoi(
+                                                    poi,
+                                                    successState?.latitude,
+                                                    successState?.longitude
+                                                )
+                                            }
+                                            return@addOnMapClickListener true
+                                        }
+                                    }
+
+                                    false
                                 }
                             }
-                        },
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.size(48.dp),
-                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MyLocation,
-                            contentDescription = "Moja lokalizacja"
-                        )
+                        }
                     }
+                },
+                modifier = Modifier.fillMaxSize(),
+                onRelease = { mapView ->
+                    mapboxMapInstance?.let { map ->
+                        val pos = map.cameraPosition
+                        mapViewModel.saveMapState(pos.target?.latitude, pos.target?.longitude, pos.zoom)
+                    }
+                }
+            )
 
-                    FloatingActionButton(
-                        onClick = { isSettingsOpen = !isSettingsOpen },
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.size(48.dp),
-                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Ustawienia mapy"
+            LaunchedEffect(filteredPois, poiSource) {
+                val style = styleInstance ?: return@LaunchedEffect
+                val src = poiSource ?: return@LaunchedEffect
+                if (filteredPois.isEmpty()) {
+                    lastAppliedPois = filteredPois
+                    if (style.getLayer("poi-layer") != null) {
+                        style.removeLayer("poi-layer")
+                    }
+                } else {
+                    if (lastAppliedPois === filteredPois) return@LaunchedEffect
+                    val json = withContext(Dispatchers.Default) { buildPoiGeoJson(filteredPois) }
+                    src.setGeoJson(json)
+                    lastAppliedPois = filteredPois
+                    if (style.getLayer("poi-layer") == null) {
+                        style.addLayerBelow(
+                            CircleLayer("poi-layer", "poi-source").withProperties(
+                                PropertyFactory.circleColor(
+                                    Expression.match(
+                                        Expression.get("category"),
+                                        Expression.literal("#1976D2"),
+                                        Expression.stop("SHELTER", Expression.literal("#4E342E")),
+                                        Expression.stop("FIREPLACE", Expression.literal("#E65100"))
+                                    )
+                                ),
+                                PropertyFactory.circleRadius(
+                                    Expression.step(
+                                        Expression.zoom(),
+                                        Expression.literal(2f),
+                                        Expression.literal(11.0),
+                                        Expression.literal(3f),
+                                        Expression.literal(12.5),
+                                        Expression.literal(5f),
+                                        Expression.literal(14.0),
+                                        Expression.literal(8f),
+                                        Expression.literal(16.0),
+                                        Expression.literal(12f)
+                                    )
+                                ),
+                                PropertyFactory.circleStrokeWidth(1.5f),
+                                PropertyFactory.circleStrokeColor("#FFFFFF"),
+                                PropertyFactory.circleOpacity(0.9f)
+                            ),
+                            "zones-fill"
                         )
                     }
                 }
+            }
 
-                AnimatedVisibility(
-                    visible = isSettingsOpen,
-                    enter = fadeIn() + slideInVertically(initialOffsetY = { -20 }),
-                    exit = fadeOut() + slideOutVertically(targetOffsetY = { -20 })
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.TopEnd
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        AnimatedVisibility(
+                            visible = !isOnlineState,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                                shape = RoundedCornerShape(12.dp),
+                                shadowElevation = 6.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OfflineIcon(modifier = Modifier.size(16.dp), color = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Tryb offline",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        FloatingActionButton(
+                            onClick = {
+                                val state = uiState
+                                if (state is MainUiState.Success) {
+                                    val lat = state.latitude
+                                    val lon = state.longitude
+                                    if (lat != null && lon != null) {
+                                        mapboxMapInstance?.cameraPosition = CameraPosition.Builder()
+                                            .target(LatLng(lat, lon))
+                                            .zoom(15.0)
+                                            .build()
+                                    } else {
+                                        Toast.makeText(context, "Oczekiwanie na sygnał GPS...", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                            contentColor = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.size(48.dp),
+                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MyLocation,
+                                contentDescription = "Moja lokalizacja"
+                            )
+                        }
+
+                        Box {
+                            FloatingActionButton(
+                                onClick = { isSettingsOpen = true },
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.size(48.dp),
+                                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Ustawienia mapy"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = isSettingsOpen,
+                                onDismissRequest = { isSettingsOpen = false },
+                                shape = RoundedCornerShape(16.dp),
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                                modifier = Modifier.width(240.dp),
+                                offset = androidx.compose.ui.unit.DpOffset(x = (-196).dp, y = 4.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text(
+                                        text = "Ustawienia Mapy",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+
+                                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
+
+                                    Text(
+                                        text = "Wyświetlaj na mapie:",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+
+                                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Checkbox(
+                                                checked = showForestBans,
+                                                onCheckedChange = { viewModel.setShowForestBans(it) },
+                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.error)
+                                            )
+                                            Text(
+                                                text = "Zakazy wstępu do lasu",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Checkbox(
+                                                checked = showShelters,
+                                                onCheckedChange = { viewModel.setShowShelters(it) },
+                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                            )
+                                            Text(
+                                                text = "Wiaty i wiatopodobne",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Checkbox(
+                                                checked = showFireplaces,
+                                                onCheckedChange = { viewModel.setShowFireplaces(it) },
+                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                            )
+                                            Text(
+                                                text = "Miejsca na ognisko",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Checkbox(
+                                                checked = showOthers,
+                                                onCheckedChange = { viewModel.setShowOthers(it) },
+                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                            )
+                                            Text(
+                                                text = "Inne punkty",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+
+                                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
+
+                                    if (isOnlineState) {
+                                        Button(
+                                            onClick = {
+                                                isSettingsOpen = false
+                                                if (!isOnline(context)) {
+                                                    Toast.makeText(context, "Jesteś w trybie offline", Toast.LENGTH_SHORT).show()
+                                                    return@Button
+                                                }
+                                                val map = mapboxMapInstance
+                                                val mv = rememberedMapView
+                                                if (map != null) {
+                                                    val pos = map.cameraPosition
+                                                    val center = pos.target
+                                                    val zoom = pos.zoom
+                                                    if (center != null) {
+                                                        val width = mv.width.toDouble()
+                                                        val height = mv.height.toDouble()
+                                                        val latRad = Math.toRadians(center.latitude)
+                                                        val metersPerPixel = 156543.03392 * Math.cos(latRad) / Math.pow(2.0, zoom)
+                                                        val latSpan = (height / 2) * metersPerPixel / 111320.0
+                                                        val lngSpan = (width / 2) * metersPerPixel / (111320.0 * Math.cos(latRad))
+
+                                                        mapViewModel.downloadMapArea(
+                                                            latSouth = center.latitude - latSpan,
+                                                            latNorth = center.latitude + latSpan,
+                                                            lonWest = center.longitude - lngSpan,
+                                                            lonEast = center.longitude + lngSpan,
+                                                            cacheDir = File(context.externalCacheDir, "mapcache")
+                                                        )
+                                                    } else {
+                                                        Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                } else {
+                                                    Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            enabled = !isDownloadingArea,
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.CloudDownload,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Pobierz obszar",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                color = Color.White
+                                            )
+                                        }
+                                    } else {
+                                        Text(
+                                            text = "Pobieranie niedostępne w trybie offline",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.error,
+                                            lineHeight = 16.sp
+                                        )
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            isSettingsOpen = false
+                                            coroutineScope.launch {
+                                                val success = withContext(Dispatchers.IO) {
+                                                    val cacheDir = File(context.externalCacheDir, "mapcache")
+                                                    if (cacheDir.exists()) {
+                                                        cacheDir.deleteRecursively()
+                                                    } else {
+                                                        false
+                                                    }
+                                                }
+                                                Toast.makeText(
+                                                    context,
+                                                    if (success) "Pamięć podręczna została wyczyszczona" else "Brak pamięci podręcznej do wyczyszczenia",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Wyczyść cache",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (isDownloadingArea) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.TopStart
                 ) {
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                         ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.width(220.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "Ustawienia Mapy",
+                                text = "Pobieranie mapy offline...",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
+                                fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            
-                            HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
-
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Wyświetlaj na mapie:",
-                                fontWeight = FontWeight.SemiBold,
+                                text = downloadText,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-
-                            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Checkbox(
-                                        checked = showForestBans,
-                                        onCheckedChange = { viewModel.setShowForestBans(it) },
-                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.error)
-                                    )
-                                    Text(
-                                        text = "Zakazy wstępu do lasu",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Checkbox(
-                                        checked = showShelters,
-                                        onCheckedChange = { viewModel.setShowShelters(it) },
-                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                    )
-                                    Text(
-                                        text = "Wiaty i wiatopodobne",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Checkbox(
-                                        checked = showFireplaces,
-                                        onCheckedChange = { viewModel.setShowFireplaces(it) },
-                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                    )
-                                    Text(
-                                        text = "Miejsca na ognisko",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Checkbox(
-                                        checked = showOthers,
-                                        onCheckedChange = { viewModel.setShowOthers(it) },
-                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                    )
-                                    Text(
-                                        text = "Inne punkty",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-
-                            HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
-
-                            if (isOnlineState) {
-                                Button(
-                                    onClick = {
-                                        isSettingsOpen = false
-                                        if (!isOnline(context)) {
-                                            Toast.makeText(context, "Jesteś w trybie offline", Toast.LENGTH_SHORT).show()
-                                            return@Button
-                                        }
-                                        val mv = mapViewInstance
-                                        val tc = tileCache
-                                        if (mv != null && tc != null) {
-                                            val bbox = mv.boundingBox
-                                            if (bbox != null) {
-                                                viewModel.downloadMapArea(
-                                                    bbox = bbox,
-                                                    tileSize = mv.model.displayModel.tileSize,
-                                                    tileCache = tc
-                                                )
-                                            } else {
-                                                Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
-                                            }
-                                        } else {
-                                            Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CloudDownload,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Pobierz obszar",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp,
-                                        color = Color.White
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = "Pobieranie niedostępne w trybie offline",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.error,
-                                    lineHeight = 16.sp
-                                )
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    isSettingsOpen = false
-                                    coroutineScope.launch {
-                                        val success = withContext(Dispatchers.IO) {
-                                            val cacheDir = File(context.externalCacheDir, "mapcache")
-                                            if (cacheDir.exists()) {
-                                                cacheDir.deleteRecursively()
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                        Toast.makeText(
-                                            context,
-                                            if (success) "Pamięć podręczna została wyczyszczona" else "Brak pamięci podręcznej do wyczyszczenia",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                },
-                                shape = RoundedCornerShape(8.dp),
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { downloadProgress },
                                 modifier = Modifier.fillMaxWidth(),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Wyczyść cache",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
             }
-        }
-        // Silent background download card in the top-left
-        if (isDownloadingArea) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                contentAlignment = Alignment.TopStart
+
+            AnimatedVisibility(
+                visible = selectedPoi != null,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { height -> height / 2 }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { height -> height / 2 }),
+                modifier = Modifier.align(Alignment.BottomCenter)
             ) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.width(220.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "Pobieranie mapy offline...",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = downloadText,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LinearProgressIndicator(
-                            progress = downloadProgress,
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = selectedPoi != null,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { height -> height / 2 }),
-            exit = fadeOut() + slideOutVertically(targetOffsetY = { height -> height / 2 }),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            selectedPoi?.let { details ->
-                PoiDetailsCard(
-                    details = details,
-                    onClose = { viewModel.clearSelectedPoi() },
-                    modifier = Modifier.padding(bottom = 88.dp)
-                )
-            }
-        }
-
-        val debugError by viewModel.debugError.collectAsState()
-        debugError?.let { errorMsg ->
-            AlertDialog(
-                onDismissRequest = { viewModel.clearDebugError() },
-                title = { Text("Błąd Debugowania (Crash Log)") },
-                text = {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 300.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        Text(
-                            text = errorMsg,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { viewModel.clearDebugError() }) {
-                        Text("Zamknij")
-                    }
-                }
-            )
-        }    }
-    }
-}
-
-
-private fun drawZonePolygons(
-    context: Context,
-    mapView: MapView,
-    zones: List<Zone>,
-    onZoneClick: (Zone, org.locationtech.jts.geom.Polygon, LatLong) -> Unit,
-    onZoneError: (String) -> Unit
-) {
-    val graphicFactory = AndroidGraphicFactory.INSTANCE
-    val wktReader = WKTReader()
-
-    val fillPaint = graphicFactory.createPaint().apply {
-        color = graphicFactory.createColor(0x4D, 0x2E, 0x7D, 0x32)
-        setStyle(Style.FILL)
-    }
-
-    val strokePaint = graphicFactory.createPaint().apply {
-        color = graphicFactory.createColor(0xFF, 0x1B, 0x5E, 0x20)
-        setStyle(Style.STROKE)
-        strokeWidth = 2f * context.resources.displayMetrics.density
-    }
-
-    for (zone in zones) {
-        try {
-            var geom = wktReader.read(zone.geometryWkt)
-            if (!geom.isValid) {
-                try {
-                    geom = geom.buffer(0.0)
-                } catch (e: Throwable) {
-                    e.printStackTrace()
-                }
-            }
-            val numGeoms = geom.numGeometries
-            for (g in 0 until numGeoms) {
-                val subGeom = geom.getGeometryN(g)
-                if (subGeom is org.locationtech.jts.geom.Polygon) {
-                    val shell = subGeom.exteriorRing
-                    val mfPoints = ArrayList<LatLong>()
-                    for (c in shell.coordinates) {
-                        mfPoints.add(LatLong(c.y, c.x))
-                    }
-
-                    val clickablePolygon = ClickablePolygon(
-                        mapView = mapView,
-                        zone = zone,
-                        jtsPolygon = subGeom,
-                        fillPaint = fillPaint,
-                        strokePaint = strokePaint,
-                        graphicFactory = graphicFactory,
-                        onClick = onZoneClick,
-                        onError = onZoneError
+                selectedPoi?.let { details ->
+                    PoiDetailsCard(
+                        details = details,
+                        onClose = { zoneDetailViewModel.clearSelectedPoi() },
+                        modifier = Modifier.padding(bottom = 88.dp)
                     )
-                    clickablePolygon.setPoints(mfPoints)
-                    mapView.layerManager.layers.add(clickablePolygon)
                 }
             }
-        } catch (e: Throwable) {
-            onZoneError("drawZonePolygons error:\n" + e.stackTraceToString())
         }
     }
 }
-
-class ClickablePolygon(
-    private val mapView: MapView,
-    private val zone: Zone,
-    private val jtsPolygon: org.locationtech.jts.geom.Polygon,
-    fillPaint: org.mapsforge.core.graphics.Paint,
-    strokePaint: org.mapsforge.core.graphics.Paint,
-    graphicFactory: org.mapsforge.core.graphics.GraphicFactory,
-    private val onClick: (Zone, org.locationtech.jts.geom.Polygon, LatLong) -> Unit,
-    private val onError: (String) -> Unit
-) : SafePolygon(fillPaint, strokePaint, graphicFactory) {
-    override fun safeOnTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
-        try {
-            if (tapLatLong == null) {
-                return false
-            }
-            val gf = org.locationtech.jts.geom.GeometryFactory()
-            val clickedPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(tapLatLong.longitude, tapLatLong.latitude))
-            val contains = try {
-                jtsPolygon.contains(clickedPoint)
-            } catch (e: Throwable) {
-                try {
-                    jtsPolygon.buffer(0.0).contains(clickedPoint)
-                } catch (e2: Throwable) {
-                    false
-                }
-            }
-
-            if (contains) {
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    try {
-                        onClick(zone, jtsPolygon, tapLatLong)
-                    } catch (e: Throwable) {
-                        e.printStackTrace()
-                        onError("onClick posted execution error:\n" + e.stackTraceToString())
-                    }
-                }
-                return true
-            }
-        } catch (e: Throwable) {
-            e.printStackTrace()
-        }
-        return false
-    }
-}
-
-class MapTapInterceptor(private val context: Context, private val onMapTap: () -> Unit) : SafeLayer() {
-    override fun draw(
-        boundingBox: org.mapsforge.core.model.BoundingBox?,
-        zoomLevel: Byte,
-        canvas: org.mapsforge.core.graphics.Canvas?,
-        topLeftPoint: org.mapsforge.core.model.Point?,
-        rotation: org.mapsforge.core.model.Rotation?
-    ) {
-        // Nothing to draw
-    }
-
-    override fun safeOnTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
-        onMapTap()
-        return false
-    }
-}
-
-private fun formatDistance(meters: Double): String {
-    return if (meters < 100.0) {
-        "${meters.toInt()} m"
-    } else {
-        val km = meters / 1000.0
-        String.format(java.util.Locale.US, "%.1f km", km)
-    }
-}
-
-
-
 
 @Composable
 private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
@@ -937,114 +905,3 @@ private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.Whit
         )
     }
 }
-
-private fun createForestBanPolygons(
-    context: Context,
-    mapView: MapView,
-    bans: List<ForestBan>,
-    onBanClick: (ForestBan) -> Unit,
-    onError: (String) -> Unit
-): List<org.mapsforge.map.layer.Layer> {
-    val graphicFactory = AndroidGraphicFactory.INSTANCE
-    val wktReader = WKTReader()
-
-    val fillPaint = graphicFactory.createPaint().apply {
-        color = graphicFactory.createColor(0x4D, 0xD3, 0x2F, 0x2F) // Semi-transparent Red
-        setStyle(Style.FILL)
-    }
-
-    val strokePaint = graphicFactory.createPaint().apply {
-        color = graphicFactory.createColor(0xFF, 0xB7, 0x1C, 0x1C) // Deep Red 900
-        setStyle(Style.STROKE)
-        strokeWidth = 2f * context.resources.displayMetrics.density
-    }
-
-    val resultLayers = mutableListOf<org.mapsforge.map.layer.Layer>()
-
-    for (ban in bans) {
-        try {
-            var geom = wktReader.read(ban.geometryWkt)
-            if (!geom.isValid) {
-                try {
-                    geom = geom.buffer(0.0)
-                } catch (e: Throwable) {
-                    e.printStackTrace()
-                }
-            }
-            val numGeoms = geom.numGeometries
-            for (g in 0 until numGeoms) {
-                val subGeom = geom.getGeometryN(g)
-                if (subGeom is org.locationtech.jts.geom.Polygon) {
-                    val shell = subGeom.exteriorRing
-                    val mfPoints = ArrayList<LatLong>()
-                    for (c in shell.coordinates) {
-                        mfPoints.add(LatLong(c.y, c.x))
-                    }
-
-                    val clickablePolygon = ClickableBanPolygon(
-                        mapView = mapView,
-                        ban = ban,
-                        jtsPolygon = subGeom,
-                        fillPaint = fillPaint,
-                        strokePaint = strokePaint,
-                        graphicFactory = graphicFactory,
-                        onClick = onBanClick,
-                        onError = onError
-                    )
-                    clickablePolygon.setPoints(mfPoints)
-                    clickablePolygon.setDisplayModel(mapView.model.displayModel)
-                    resultLayers.add(clickablePolygon)
-                }
-            }
-        } catch (e: Throwable) {
-            onError("createForestBanPolygons error:\n" + e.stackTraceToString())
-        }
-    }
-    return resultLayers
-}
-
-class ClickableBanPolygon(
-    private val mapView: MapView,
-    private val ban: ForestBan,
-    private val jtsPolygon: org.locationtech.jts.geom.Polygon,
-    fillPaint: org.mapsforge.core.graphics.Paint,
-    strokePaint: org.mapsforge.core.graphics.Paint,
-    graphicFactory: org.mapsforge.core.graphics.GraphicFactory,
-    private val onClick: (ForestBan) -> Unit,
-    private val onError: (String) -> Unit
-) : SafePolygon(fillPaint, strokePaint, graphicFactory) {
-    override fun safeOnTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
-        try {
-            if (tapLatLong == null) {
-                return false
-            }
-            val gf = org.locationtech.jts.geom.GeometryFactory()
-            val clickedPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(tapLatLong.longitude, tapLatLong.latitude))
-            val contains = try {
-                jtsPolygon.contains(clickedPoint)
-            } catch (e: Throwable) {
-                try {
-                    jtsPolygon.buffer(0.0).contains(clickedPoint)
-                } catch (e2: Throwable) {
-                    false
-                }
-            }
-
-            if (contains) {
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    try {
-                        onClick(ban)
-                    } catch (e: Throwable) {
-                        e.printStackTrace()
-                        onError("onClick posted execution error:\n" + e.stackTraceToString())
-                    }
-                }
-                return true
-            }
-        } catch (e: Throwable) {
-            e.printStackTrace()
-        }
-        return false
-    }
-}
-

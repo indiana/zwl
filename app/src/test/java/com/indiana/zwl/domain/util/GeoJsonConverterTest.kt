@@ -1,122 +1,85 @@
 package com.indiana.zwl.domain.util
 
+import com.indiana.zwl.shared.data.remote.GeoJsonToWkt
+import com.indiana.zwl.shared.data.remote.model.GeoJsonGeometry
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.locationtech.jts.geom.Polygon
-import org.locationtech.jts.geom.MultiPolygon
-import java.io.StringReader
 
 class GeoJsonConverterTest {
 
     @Test
-    fun `parseFeatureCollectionStream should parse Polygon correctly`() {
-        val geoJson = """
-            {
-              "type": "FeatureCollection",
-              "features": [
-                {
-                  "type": "Feature",
-                  "properties": {
-                    "link": "kudypy.szczecinek.lasy.gov.pl",
-                    "nzw_ob": "Kudypy"
-                  },
-                  "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [
-                      [
-                        [19.123, 52.123],
-                        [19.124, 52.123],
-                        [19.124, 52.124],
-                        [19.123, 52.123]
-                      ]
-                    ]
-                  }
-                }
-              ]
-            }
-        """.trimIndent()
+    fun `geometryToWkt should convert Polygon correctly`() {
+        val geometry = GeoJsonGeometry(
+            type = "Polygon",
+            coordinates = JsonArray(listOf(
+                JsonArray(listOf(
+                    JsonArray(listOf(JsonPrimitive(19.123), JsonPrimitive(52.123))),
+                    JsonArray(listOf(JsonPrimitive(19.124), JsonPrimitive(52.123))),
+                    JsonArray(listOf(JsonPrimitive(19.124), JsonPrimitive(52.124))),
+                    JsonArray(listOf(JsonPrimitive(19.123), JsonPrimitive(52.123)))
+                ))
+            ))
+        )
 
-        val parsedProperties = mutableListOf<Map<String, String>>()
-        val parsedGeometries = mutableListOf<org.locationtech.jts.geom.Geometry>()
+        val wkt = GeoJsonToWkt.geometryToWkt(geometry)
 
-        GeoJsonConverter.parseFeatureCollectionStream(StringReader(geoJson)) { properties, geometry ->
-            parsedProperties.add(properties)
-            parsedGeometries.add(geometry)
-        }
-
-        assertEquals(1, parsedProperties.size)
-        assertEquals("kudypy.szczecinek.lasy.gov.pl", parsedProperties[0]["link"])
-        assertEquals("Kudypy", parsedProperties[0]["nzw_ob"])
-
-        assertEquals(1, parsedGeometries.size)
-        assertTrue(parsedGeometries[0] is Polygon)
-        val polygon = parsedGeometries[0] as Polygon
-        assertEquals(4, polygon.exteriorRing.numPoints)
-        assertEquals(19.123, polygon.exteriorRing.coordinates[0].x, 0.0001)
-        assertEquals(52.123, polygon.exteriorRing.coordinates[0].y, 0.0001)
+        assertEquals("POLYGON ((19.123 52.123, 19.124 52.123, 19.124 52.124, 19.123 52.123))", wkt)
     }
 
     @Test
-    fun `parseFeatureCollectionStream should parse MultiPolygon correctly`() {
-        val geoJson = """
-            {
-              "type": "FeatureCollection",
-              "features": [
-                {
-                  "type": "Feature",
-                  "properties": {
-                    "nzw_ob": "MultiZone"
-                  },
-                  "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [
-                      [
-                        [
-                          [19.0, 52.0],
-                          [19.1, 52.0],
-                          [19.1, 52.1],
-                          [19.0, 52.0]
-                        ]
-                      ],
-                      [
-                        [
-                          [20.0, 53.0],
-                          [20.1, 53.0],
-                          [20.1, 53.1],
-                          [20.0, 53.0]
-                        ]
-                      ]
-                    ]
-                  }
-                }
-              ]
-            }
-        """.trimIndent()
+    fun `geometryToWkt should convert MultiPolygon correctly`() {
+        val geometry = GeoJsonGeometry(
+            type = "MultiPolygon",
+            coordinates = JsonArray(listOf(
+                JsonArray(listOf(
+                    JsonArray(listOf(
+                        JsonArray(listOf(JsonPrimitive(19.0), JsonPrimitive(52.0))),
+                        JsonArray(listOf(JsonPrimitive(19.1), JsonPrimitive(52.0))),
+                        JsonArray(listOf(JsonPrimitive(19.1), JsonPrimitive(52.1))),
+                        JsonArray(listOf(JsonPrimitive(19.0), JsonPrimitive(52.0)))
+                    ))
+                )),
+                JsonArray(listOf(
+                    JsonArray(listOf(
+                        JsonArray(listOf(JsonPrimitive(20.0), JsonPrimitive(53.0))),
+                        JsonArray(listOf(JsonPrimitive(20.1), JsonPrimitive(53.0))),
+                        JsonArray(listOf(JsonPrimitive(20.1), JsonPrimitive(53.1))),
+                        JsonArray(listOf(JsonPrimitive(20.0), JsonPrimitive(53.0)))
+                    ))
+                ))
+            ))
+        )
 
-        val parsedProperties = mutableListOf<Map<String, String>>()
-        val parsedGeometries = mutableListOf<org.locationtech.jts.geom.Geometry>()
+        val wkt = GeoJsonToWkt.geometryToWkt(geometry)
 
-        GeoJsonConverter.parseFeatureCollectionStream(StringReader(geoJson)) { properties, geometry ->
-            parsedProperties.add(properties)
-            parsedGeometries.add(geometry)
-        }
+        assertEquals(
+            "MULTIPOLYGON (((19.0 52.0, 19.1 52.0, 19.1 52.1, 19.0 52.0)), ((20.0 53.0, 20.1 53.0, 20.1 53.1, 20.0 53.0)))",
+            wkt
+        )
+    }
 
-        assertEquals(1, parsedProperties.size)
-        assertEquals("MultiZone", parsedProperties[0]["nzw_ob"])
+    @Test
+    fun `geometryToWkt should return null for unsupported geometry type`() {
+        val geometry = GeoJsonGeometry(
+            type = "LineString",
+            coordinates = JsonArray(listOf(
+                JsonArray(listOf(JsonPrimitive(19.0), JsonPrimitive(52.0))),
+                JsonArray(listOf(JsonPrimitive(19.1), JsonPrimitive(52.1)))
+            ))
+        )
 
-        assertEquals(1, parsedGeometries.size)
-        assertTrue(parsedGeometries[0] is MultiPolygon)
-        val multiPolygon = parsedGeometries[0] as MultiPolygon
-        assertEquals(2, multiPolygon.numGeometries)
+        val wkt = GeoJsonToWkt.geometryToWkt(geometry)
+
+        assertNull(wkt)
     }
 
     @Test
     fun `extractForestDistrict should extract from link correct format`() {
         val props = mapOf("link" to "kudypy.lasy.gov.pl")
-        val district = GeoJsonConverter.extractForestDistrict(props)
+        val district = GeoJsonToWkt.extractForestDistrict(props)
         assertEquals("Nadleśnictwo Kudypy", district)
     }
 
@@ -126,7 +89,7 @@ class GeoJsonConverterTest {
             "link" to "",
             "nadlesnictwo" to "Nadleśnictwo Spychowo"
         )
-        val district = GeoJsonConverter.extractForestDistrict(props)
+        val district = GeoJsonToWkt.extractForestDistrict(props)
         assertEquals("Nadleśnictwo Spychowo", district)
     }
 
@@ -135,26 +98,26 @@ class GeoJsonConverterTest {
         val props = mapOf(
             "nzw_ob" to "Nadleśnictwo Jedwabno"
         )
-        val district = GeoJsonConverter.extractForestDistrict(props)
+        val district = GeoJsonToWkt.extractForestDistrict(props)
         assertEquals("Nadleśnictwo Jedwabno", district)
     }
 
     @Test
     fun `extractForestDistrict should return unknown fallback`() {
         val props = emptyMap<String, String>()
-        val district = GeoJsonConverter.extractForestDistrict(props)
+        val district = GeoJsonToWkt.extractForestDistrict(props)
         assertEquals("Nadleśnictwo (Nieznane)", district)
     }
 
     @Test
     fun `extractWebsiteUrl returns https root for bare host`() {
-        val url = GeoJsonConverter.extractWebsiteUrl(mapOf("link" to "kudypy.szczecinek.lasy.gov.pl"))
+        val url = GeoJsonToWkt.extractWebsiteUrl(mapOf("link" to "kudypy.szczecinek.lasy.gov.pl"))
         assertEquals("https://kudypy.szczecinek.lasy.gov.pl", url)
     }
 
     @Test
     fun `extractWebsiteUrl strips path from full link`() {
-        val url = GeoJsonConverter.extractWebsiteUrl(
+        val url = GeoJsonToWkt.extractWebsiteUrl(
             mapOf("link" to "https://kaliska.gdansk.lasy.gov.pl/program-zanocuj-w-lesie-")
         )
         assertEquals("https://kaliska.gdansk.lasy.gov.pl", url)
@@ -162,8 +125,8 @@ class GeoJsonConverterTest {
 
     @Test
     fun `extractWebsiteUrl returns null when link missing or invalid`() {
-        assertNull(GeoJsonConverter.extractWebsiteUrl(emptyMap()))
-        assertNull(GeoJsonConverter.extractWebsiteUrl(mapOf("link" to "")))
-        assertNull(GeoJsonConverter.extractWebsiteUrl(mapOf("link" to "not a valid url")))
+        assertNull(GeoJsonToWkt.extractWebsiteUrl(emptyMap()))
+        assertNull(GeoJsonToWkt.extractWebsiteUrl(mapOf("link" to "")))
+        assertNull(GeoJsonToWkt.extractWebsiteUrl(mapOf("link" to "not a valid url")))
     }
 }

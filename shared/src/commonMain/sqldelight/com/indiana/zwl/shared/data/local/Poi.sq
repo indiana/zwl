@@ -1,0 +1,18 @@
+CREATE TABLE IF NOT EXISTS Poi (
+    id INTEGER NOT NULL DEFAULT 0 PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL,
+    description TEXT NOT NULL,
+    name TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL
+);
+
+selectAll:
+SELECT * FROM Poi;
+
+insertAll:
+INSERT INTO Poi(code, description, name, latitude, longitude)
+VALUES (?, ?, ?, ?, ?);
+
+deleteAll:
+DELETE FROM Poi;

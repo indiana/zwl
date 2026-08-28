@@ -1,0 +1,61 @@
+name: iOS Signing (one-off)
+
+on:
+  workflow_dispatch:
+    inputs:
+      cert_type:
+        description: 'Distribution type (appstore for TestFlight / release)'
+        required: true
+        default: 'appstore'
+        type: choice
+        options:
+          - appstore
+      devices:
+        description: 'Optional ad-hoc devices "Name=UDID,Name=UDID" (unused for appstore)'
+        required: false
+        type: string
+
+concurrency:
+  group: ios-signing
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare App Store Connect API key
+        run: |
+          mkdir -p ~/.appstoreconnect
+          printf '%s\n' "$API_KEY" > ~/.appstoreconnect/AuthKey_${KEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/AuthKey_${KEY_ID}.p8
+        env:
+          API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+
+      - name: Create certificate + provisioning profile
+        run: |
+          python3 .github/scripts/appstore_cert.py \
+            --key-id "$KEY_ID" \
+            --issuer-id "$ISSUER_ID" \
+            --private-key ~/.appstoreconnect/AuthKey_${KEY_ID}.p8 \
+            --bundle-id com.indiana.zwl.iosApp \
+            --cert-type ${{ github.event.inputs.cert_type }} \
+            --devices "${{ github.event.inputs.devices }}" \
+            --output-dir build/signing
+
+      - name: Upload signing material artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-signing-material
+          path: |
+            build/signing/cert.p12.b64
+            build/signing/p12_password.txt
+            build/signing/profile.b64
+            build/signing/SETUP.md
+          if-no-files-found: error

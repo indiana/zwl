@@ -1,48 +1,32 @@
 package com.indiana.zwl.domain.usecase
 
-import com.indiana.zwl.data.local.ZoneDao
-import com.indiana.zwl.data.local.ZoneEntity
-import com.indiana.zwl.data.mapper.toDomainModel
-import com.indiana.zwl.data.remote.BdlArcgisApi
 import com.indiana.zwl.domain.model.Zone
-import com.indiana.zwl.domain.util.GeoJsonConverter
-import org.locationtech.jts.io.WKTWriter
+import com.indiana.zwl.domain.repository.ZoneRepository
+import com.indiana.zwl.shared.data.remote.BdlArcgisApi
+import com.indiana.zwl.shared.data.remote.ZoneSyncParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import com.indiana.zwl.shared.data.remote.model.GeoJsonCollection
 import javax.inject.Inject
 
 class SyncZonesUseCase @Inject constructor(
     private val arcgisApi: BdlArcgisApi,
-    private val zoneDao: ZoneDao
+    private val zoneRepository: ZoneRepository
 ) {
     suspend operator fun invoke(): Result<List<Zone>> = withContext(Dispatchers.IO) {
         try {
-            val responseBody = arcgisApi.getZanocujWLesieZones()
-            val wktWriter = WKTWriter()
-            val entities = mutableListOf<ZoneEntity>()
+            val responseStr = arcgisApi.getZanocujWLesieZones()
+            val collection = Json.decodeFromString<GeoJsonCollection>(responseStr)
+            val zones = ZoneSyncParser.parse(collection)
 
-            responseBody.use { body ->
-                GeoJsonConverter.parseFeatureCollectionStream(body.charStream()) { properties, geometry ->
-                    val wkt = wktWriter.write(geometry)
-                    val forestDistrict = GeoJsonConverter.extractForestDistrict(properties)
-                    val websiteUrl = GeoJsonConverter.extractWebsiteUrl(properties)
-                    entities.add(
-                        ZoneEntity(
-                            forestDistrict = forestDistrict,
-                            geometryWkt = wkt,
-                            websiteUrl = websiteUrl
-                        )
-                    )
-                }
-            }
-
-            if (entities.isNotEmpty()) {
-                zoneDao.clearAll()
-                zoneDao.insertAll(entities)
-                Result.success(entities.map { it.toDomainModel() })
+            if (zones.isNotEmpty()) {
+                zoneRepository.clearAll()
+                zoneRepository.insertAll(zones)
+                Result.success(zones)
             } else {
-                Result.failure(Exception("Otrzymano pustą listę stref od API ArcGis."))
+                Result.failure(Exception("Otrzymano pusta liste stref od API ArcGis."))
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e

@@ -22,21 +22,19 @@ jobs:
         cache: gradle
 
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        gradle-version: '8.7'
+      uses: gradle/actions/setup-gradle@v4
 
     - name: Run Unit Tests
-      run: gradle :app:testDebugUnitTest --stacktrace
+      run: ./gradlew :app:testDebugUnitTest --stacktrace
 
     - name: Build APKs and Bundle
       run: |
         if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ]]; then
           echo "Building debug and release..."
-          gradle :app:assembleDebug :app:assembleRelease :app:bundleRelease --stacktrace > build_log.txt 2>&1 || (cat build_log.txt; exit 1)
+          ./gradlew :app:assembleDebug :app:assembleRelease :app:bundleRelease --stacktrace > build_log.txt 2>&1 || (cat build_log.txt; exit 1)
         else
           echo "Building debug only..."
-          gradle :app:assembleDebug --stacktrace > build_log.txt 2>&1 || (cat build_log.txt; exit 1)
+          ./gradlew :app:assembleDebug --stacktrace > build_log.txt 2>&1 || (cat build_log.txt; exit 1)
         fi
       shell: bash
 

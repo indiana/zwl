@@ -2,22 +2,21 @@ package com.indiana.zwl.presentation
 
 import android.location.Location
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.indiana.zwl.data.local.ZoneDao
+import com.indiana.zwl.domain.repository.ZoneRepository
+import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.Zone
-import com.indiana.zwl.data.local.PoiDao
-import com.indiana.zwl.data.local.PoiEntity
+import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
-import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
-import com.google.gson.Gson
+import com.indiana.zwl.domain.util.PoiCategory
+import com.indiana.zwl.domain.util.classify
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
@@ -30,25 +29,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
-import okhttp3.OkHttpClient
 import javax.inject.Inject
-import com.indiana.zwl.presentation.map.OfflineMapDownloader
-import com.indiana.zwl.presentation.map.DownloadStatus
-import org.mapsforge.core.model.BoundingBox
-import org.mapsforge.core.model.LatLong
-import org.mapsforge.map.layer.cache.TileCache
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import org.locationtech.jts.io.WKTReader
-import org.locationtech.jts.operation.distance.DistanceOp
 
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.usecase.GetForestBansUseCase
@@ -64,14 +51,14 @@ data class SelectedZoneDetails(
 )
 
 data class SelectedPoiDetails(
-    val poi: PoiEntity,
+    val poi: Poi,
     val distanceMeters: Double?
 )
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    private val zoneDao: ZoneDao,
-    private val poiDao: PoiDao,
+    private val zoneRepository: ZoneRepository,
+    private val poiRepository: PoiRepository,
     private val locationRepository: LocationRepository,
     private val compassRepository: CompassRepository,
     private val syncZonesUseCase: SyncZonesUseCase,
@@ -79,10 +66,8 @@ class MainViewModel @Inject constructor(
     private val syncForestBansUseCase: SyncForestBansUseCase,
     private val getForestBansUseCase: GetForestBansUseCase,
     private val getFireRiskUseCase: GetFireRiskUseCase,
-    private val getForestStandUseCase: GetForestStandUseCase,
     private val getZonesUseCase: GetZonesUseCase,
     private val spatialEngine: SpatialEngine,
-    private val okHttpClient: OkHttpClient,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -91,24 +76,6 @@ class MainViewModel @Inject constructor(
 
     private val _azimuth = MutableStateFlow(0f)
     val azimuth: StateFlow<Float> = _azimuth.asStateFlow()
-
-    private val _isDownloadingArea = MutableStateFlow(false)
-    val isDownloadingArea: StateFlow<Boolean> = _isDownloadingArea
-
-    private val _downloadProgress = MutableStateFlow(0f)
-    val downloadProgress: StateFlow<Float> = _downloadProgress
-
-    private val _downloadText = MutableStateFlow("")
-    val downloadText: StateFlow<String> = _downloadText
-
-    private val _downloadEvent = MutableSharedFlow<DownloadEvent>()
-    val downloadEvent = _downloadEvent.asSharedFlow()
-
-    private val _selectedZoneDetails = MutableStateFlow<SelectedZoneDetails?>(null)
-    val selectedZoneDetails: StateFlow<SelectedZoneDetails?> = _selectedZoneDetails
-
-    private val _selectedPoiDetails = MutableStateFlow<SelectedPoiDetails?>(null)
-    val selectedPoiDetails: StateFlow<SelectedPoiDetails?> = _selectedPoiDetails
 
     private val _selectedForestBan = MutableStateFlow<ForestBan?>(null)
     val selectedForestBan: StateFlow<ForestBan?> = _selectedForestBan
@@ -141,10 +108,10 @@ class MainViewModel @Inject constructor(
     fun debugOverrideLocationToBan(ban: ForestBan) {
         if (!com.indiana.zwl.BuildConfig.DEBUG) return
         viewModelScope.launch(Dispatchers.Default) {
-            val geom = org.locationtech.jts.io.WKTReader().read(ban.geometryWkt)
-            val centroid = geom.centroid
-            val lat = centroid.y
-            val lon = centroid.x
+            val geom = org.locationtech.jts.io.WKTReader().read(ban.geometryWkt)!!
+            val centroid = geom.getCentroid()
+            val lat = centroid.getY()
+            val lon = centroid.getX()
             val status = spatialEngine.checkLocation(lat, lon)
             _debugForestBanOverride.value = DebugLocationOverride(
                 locationStatus = status,
@@ -178,22 +145,18 @@ class MainViewModel @Inject constructor(
     private val _showOthers = MutableStateFlow(sharedPrefs.getBoolean("show_others", true))
     val showOthers: StateFlow<Boolean> = _showOthers
 
-    val pois: StateFlow<List<PoiEntity>> = combine(
-        poiDao.getAllPois(),
+    val pois: StateFlow<List<Poi>> = combine(
+        poiRepository.getAllPois(),
         _showFireplaces,
         _showShelters,
         _showOthers
     ) { allPois, showFireplaces, showShelters, showOthers ->
         allPois.filter { poi ->
-            val nameLower = poi.name.lowercase(java.util.Locale.getDefault())
-            val isWiata = nameLower.contains("wiata") || nameLower.contains("altan") ||
-                    nameLower.contains("szałas") || nameLower.contains("shelter")
-            val isFireplace = nameLower.contains("ognis") || nameLower.contains("palenis") ||
-                    nameLower.contains("fire")
-            
-            if (isWiata) showShelters
-            else if (isFireplace) showFireplaces
-            else showOthers
+            when (poi.classify()) {
+                PoiCategory.SHELTER -> showShelters
+                PoiCategory.FIREPLACE -> showFireplaces
+                PoiCategory.OTHER -> showOthers
+            }
         }
     }.stateIn(
         scope = viewModelScope,
@@ -228,16 +191,6 @@ class MainViewModel @Inject constructor(
     var zones: List<Zone> = emptyList()
         private set
 
-    var savedMapCenter: LatLong? = null
-        private set
-    var savedMapZoom: Byte? = null
-        private set
-
-    fun saveMapState(center: LatLong?, zoom: Byte?) {
-        if (center != null) savedMapCenter = center
-        if (zoom != null) savedMapZoom = zoom
-    }
-
     init {
         loadZonesAndInitializeEngine()
     }
@@ -259,7 +212,6 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = MainUiState.Loading
 
-            // Asynchroniczne pobieranie punktów POI w tle
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     syncPoiUseCase()
@@ -269,17 +221,18 @@ class MainViewModel @Inject constructor(
                 }
             }
 
-            // Asynchroniczne ładowanie i pobieranie zakazów wstępu do lasu w tle
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val localBans = getForestBansUseCase()
                     withContext(Dispatchers.Default) {
                         spatialEngine.initializeBans(localBans)
                     }
-                    syncForestBansUseCase()
-                    val updatedBans = getForestBansUseCase()
-                    withContext(Dispatchers.Default) {
-                        spatialEngine.initializeBans(updatedBans)
+                    val syncResult = syncForestBansUseCase()
+                    if (syncResult.isSuccess) {
+                        val updatedBans = syncResult.getOrNull() ?: emptyList()
+                        withContext(Dispatchers.Default) {
+                            spatialEngine.initializeBans(updatedBans)
+                        }
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
@@ -288,7 +241,7 @@ class MainViewModel @Inject constructor(
             }
 
             try {
-                val count = withContext(Dispatchers.IO) { zoneDao.getZonesCount() }
+                val count = zoneRepository.getZonesCount()
                 if (count == 0) {
                     val syncResult = syncZonesUseCase()
                     if (syncResult.isSuccess) {
@@ -333,6 +286,7 @@ class MainViewModel @Inject constructor(
         compassRepository.startListening()
 
         @Suppress("UNCHECKED_CAST")
+        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
         val locationWithStatusFlow = (locationRepository.locationFlow as Flow<Location?>)
             .onStart { emit(null) }
             .mapLatest { location ->
@@ -342,12 +296,8 @@ class MainViewModel @Inject constructor(
                         val bn = spatialEngine.checkForestBan(location.latitude, location.longitude)
                         st to bn
                     }
-                    val lastLoc = lastFireRiskLocation
-                    if (lastLoc == null || location.distanceTo(lastLoc) > 1000f) {
-                        fetchFireHazard(location, status)
-                    }
-                    data class LocationData(val location: Location, val status: LocationStatus, val fireRisk: Int, val ban: ForestBan?)
-                    LocationData(location, status, currentFireRisk, ban)
+                    data class LocationData(val location: Location, val status: LocationStatus, val ban: ForestBan?)
+                    LocationData(location, status, ban)
                 } else {
                     null
                 }
@@ -359,22 +309,18 @@ class MainViewModel @Inject constructor(
                     locationWithStatusFlow.collect { data ->
                         if (data != null) {
                             val location = data.location
-                            // Aktualizujemy odległość do wybranego POI na żywo w tle
-                            _selectedPoiDetails.value?.let { currentPoiDetails ->
-                                val results = FloatArray(1)
-                                Location.distanceBetween(
-                                    location.latitude, location.longitude,
-                                    currentPoiDetails.poi.latitude, currentPoiDetails.poi.longitude,
-                                    results
-                                )
-                                _selectedPoiDetails.value = currentPoiDetails.copy(distanceMeters = results[0].toDouble())
+                            val lastLoc = lastFireRiskLocation
+                            if (lastLoc == null || location.distanceTo(lastLoc) > 1000f) {
+                                launch(Dispatchers.IO) {
+                                    fetchFireHazard(location, data.status)
+                                }
                             }
 
                             _uiState.value = MainUiState.Success(
                                 locationStatus = data.status,
-                                fireRiskLevel = data.fireRisk,
-                                latitude = location.latitude,
-                                longitude = location.longitude,
+                                fireRiskLevel = currentFireRisk,
+                                latitude = data.location.latitude,
+                                longitude = data.location.longitude,
                                 currentForestBan = data.ban
                             )
                         } else {
@@ -405,7 +351,7 @@ class MainViewModel @Inject constructor(
     }
 
     private suspend fun fetchFireHazard(location: Location, status: LocationStatus) {
-        val result = getFireRiskUseCase(location)
+        val result = getFireRiskUseCase(location.latitude, location.longitude)
         val district = when (status) {
             is LocationStatus.InZone -> status.forestDistrict
             is LocationStatus.OutsideZone -> status.nearestDistrict
@@ -418,7 +364,7 @@ class MainViewModel @Inject constructor(
             if (district != null && code in 0..3) {
                 val timestamp = System.currentTimeMillis()
                 withContext(Dispatchers.IO) {
-                    zoneDao.updateFireRisk(district, code, timestamp)
+                    zoneRepository.updateFireRisk(district, code, timestamp)
                 }
                 updateZoneFireRiskInMemory(district, code, timestamp)
             }
@@ -431,7 +377,7 @@ class MainViewModel @Inject constructor(
             }
             if (isNetworkException(exception)) {
                 val cached = if (district != null) {
-                    withContext(Dispatchers.IO) { zoneDao.getByForestDistrict(district) }
+                    withContext(Dispatchers.IO) { zoneRepository.getByForestDistrict(district) }
                 } else {
                     null
                 }
@@ -471,224 +417,9 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    private fun loadCachedForestStand(zone: Zone): com.indiana.zwl.domain.model.ForestStandSummary? {
-        val json = zone.forestStandJson ?: return null
-        return try {
-            Gson().fromJson(json, com.indiana.zwl.domain.model.ForestStandSummary::class.java)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    private fun initialZoneDetails(zone: Zone) = SelectedZoneDetails(
-        zone = zone,
-        distanceMeters = null,
-        fireRiskLevel = -1,
-        isLoadingFireRisk = true,
-        forestStand = null,
-        isLoadingForestStand = true
-    )
-
-    private fun isForestStandCacheStale(zone: Zone): Boolean {
-        val timestamp = zone.forestStandTimestamp ?: return true
-        return System.currentTimeMillis() - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
-    }
-
-    private fun updateZoneForestStandInMemory(forestDistrict: String, json: String, timestamp: Long) {
-        zones = zones.map { zone ->
-            if (zone.forestDistrict.equals(forestDistrict, ignoreCase = true)) {
-                zone.copy(forestStandJson = json, forestStandTimestamp = timestamp)
-            } else {
-                zone
-            }
-        }
-    }
-
     override fun onCleared() {
         super.onCleared()
         stopTracking()
-    }
-
-    fun downloadMapArea(bbox: BoundingBox, tileSize: Int, tileCache: TileCache) {
-        viewModelScope.launch {
-            OfflineMapDownloader.downloadArea(bbox, tileSize, tileCache, okHttpClient).collect { status ->
-                when (status) {
-                    is DownloadStatus.Start -> {
-                        _isDownloadingArea.value = true
-                        _downloadProgress.value = 0f
-                        _downloadText.value = "Rozpoczynanie pobierania..."
-                    }
-                    is DownloadStatus.Progress -> {
-                        _downloadProgress.value = status.progress
-                        _downloadText.value = status.text
-                    }
-                    is DownloadStatus.Finished -> {
-                        _isDownloadingArea.value = false
-                        _downloadEvent.emit(DownloadEvent.ToastMessage(
-                            "Pobrano pomyślnie ${status.successCount} z ${status.total} kafelków do cache offline!",
-                            isLong = true
-                        ))
-                    }
-                    is DownloadStatus.Message -> {
-                        _isDownloadingArea.value = false
-                        _downloadEvent.emit(DownloadEvent.ToastMessage(status.msg, isLong = true))
-                    }
-                }
-            }
-        }
-    }
-
-    fun selectZone(zone: Zone, jtsPolygon: org.locationtech.jts.geom.Geometry, clickLat: Double, clickLon: Double) {
-        _selectedZoneDetails.value = initialZoneDetails(zone)
-        viewModelScope.launch {
-            try {
-                _selectedPoiDetails.value = null
-                val currentLoc = (uiState.value as? MainUiState.Success)?.let { successState ->
-                    val lat = successState.latitude
-                    val lon = successState.longitude
-                    if (lat != null && lon != null) {
-                        Location("").apply {
-                            latitude = lat
-                            longitude = lon
-                        }
-                    } else {
-                        null
-                    }
-                }
-
-                val distance = currentLoc?.let { loc ->
-                    withContext(Dispatchers.Default) {
-                        try {
-                            val gf = org.locationtech.jts.geom.GeometryFactory()
-                            val userPoint = gf.createPoint(org.locationtech.jts.geom.Coordinate(loc.longitude, loc.latitude))
-                            val targetGeom = if (!jtsPolygon.isValid) {
-                                try { jtsPolygon.buffer(0.0) } catch (_: Throwable) { jtsPolygon }
-                            } else jtsPolygon
-                            val distanceOp = DistanceOp(targetGeom, userPoint)
-                            val nearestCoords = distanceOp.nearestPoints()
-                            val targetCoord = nearestCoords[0]
-                            val results = FloatArray(1)
-                            Location.distanceBetween(
-                                loc.latitude, loc.longitude,
-                                targetCoord.y, targetCoord.x,
-                                results
-                            )
-                            results[0].toDouble()
-                        } catch (e: Throwable) {
-                            if (e is CancellationException) throw e
-                            e.printStackTrace()
-                            _debugError.value = "Distance calculation error:\n" + e.stackTraceToString()
-                            null
-                        }
-                    }
-                }
-
-                val cachedForestStand = loadCachedForestStand(zone)
-                val needsForestStandRefresh = cachedForestStand == null || isForestStandCacheStale(zone)
-
-                if (_selectedZoneDetails.value?.zone?.id == zone.id) {
-                    _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
-                        distanceMeters = distance,
-                        forestStand = cachedForestStand,
-                        isLoadingForestStand = needsForestStandRefresh
-                    )
-                }
-
-                val tempLoc = Location("").apply {
-                    latitude = clickLat
-                    longitude = clickLon
-                }
-
-                val fireRiskResult = getFireRiskUseCase(tempLoc)
-                val riskCode = if (fireRiskResult.isSuccess) {
-                    val code = fireRiskResult.getOrDefault(-1)
-                    if (code in 0..3) {
-                        val timestamp = System.currentTimeMillis()
-                        withContext(Dispatchers.IO) {
-                            zoneDao.updateFireRisk(zone.forestDistrict, code, timestamp)
-                        }
-                        updateZoneFireRiskInMemory(zone.forestDistrict, code, timestamp)
-                    }
-                    code
-                } else {
-                    val exception = fireRiskResult.exceptionOrNull()
-                    if (!isNetworkException(exception)) {
-                        _debugError.value = "selectZone fire risk API error:\n" + exception?.stackTraceToString()
-                    } else {
-                        exception?.printStackTrace()
-                    }
-                    if (isNetworkException(exception)) {
-                        val freshZone = withContext(Dispatchers.IO) { zoneDao.getByForestDistrict(zone.forestDistrict) }
-                        resolveCachedFireRisk(freshZone?.fireRiskLevel, freshZone?.fireRiskTimestamp)
-                    } else {
-                        -1
-                    }
-                }
-
-                if (_selectedZoneDetails.value?.zone?.id == zone.id) {
-                    _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
-                        fireRiskLevel = riskCode,
-                        isLoadingFireRisk = false
-                    )
-                }
-
-                if (needsForestStandRefresh) {
-                    val forestStandResult = getForestStandUseCase(zone)
-                    if (_selectedZoneDetails.value?.zone?.id == zone.id) {
-                        if (forestStandResult.isSuccess) {
-                            val summary = forestStandResult.getOrNull()
-                            if (summary != null) {
-                                val json = Gson().toJson(summary)
-                                val timestamp = System.currentTimeMillis()
-                                withContext(Dispatchers.IO) {
-                                    zoneDao.updateForestStand(zone.forestDistrict, json, timestamp)
-                                }
-                                updateZoneForestStandInMemory(zone.forestDistrict, json, timestamp)
-                            }
-                            _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
-                                forestStand = summary,
-                                isLoadingForestStand = false
-                            )
-                        } else {
-                            val exception = forestStandResult.exceptionOrNull()
-                            if (!isNetworkException(exception)) {
-                                _debugError.value = "selectZone forest stand API error:\n" + exception?.stackTraceToString()
-                            }
-                            _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
-                                isLoadingForestStand = false
-                            )
-                        }
-                    }
-                }
-            } catch (e: Throwable) {
-                if (e is CancellationException) throw e
-                e.printStackTrace()
-                _debugError.value = "selectZone coroutine error:\n" + e.stackTraceToString()
-            }
-        }
-    }
-
-    fun selectZoneByDistrict(districtName: String) {
-        val zone = zones.firstOrNull { it.forestDistrict.equals(districtName, ignoreCase = true) } ?: return
-        _selectedZoneDetails.value = initialZoneDetails(zone)
-        viewModelScope.launch {
-            try {
-                val (jtsPolygon, lat, lon) = withContext(Dispatchers.Default) {
-                    val polygon = WKTReader().read(zone.geometryWkt)
-                    val centroid = polygon.centroid
-                    val successState = uiState.value as? MainUiState.Success
-                    val useLat = successState?.latitude ?: centroid.y
-                    val useLon = successState?.longitude ?: centroid.x
-                    Triple(polygon, useLat, useLon)
-                }
-                selectZone(zone, jtsPolygon, lat, lon)
-            } catch (e: Throwable) {
-                if (e is CancellationException) throw e
-                e.printStackTrace()
-                _debugError.value = "selectZoneByDistrict error:\n" + e.stackTraceToString()
-            }
-        }
     }
 
     fun setDebugError(msg: String) {
@@ -699,53 +430,11 @@ class MainViewModel @Inject constructor(
         _debugError.value = null
     }
 
-    fun clearSelectedZone() {
-        _selectedZoneDetails.value = null
-    }
-
-    fun selectPoi(poi: PoiEntity) {
-        viewModelScope.launch {
-            _selectedZoneDetails.value = null
-            val currentLoc = (uiState.value as? MainUiState.Success)?.let { successState ->
-                val lat = successState.latitude
-                val lon = successState.longitude
-                if (lat != null && lon != null) {
-                    Location("").apply {
-                        latitude = lat
-                        longitude = lon
-                    }
-                } else {
-                    null
-                }
-            }
-
-            val distance = currentLoc?.let { loc ->
-                val results = FloatArray(1)
-                Location.distanceBetween(
-                    loc.latitude, loc.longitude,
-                    poi.latitude, poi.longitude,
-                    results
-                )
-                results[0].toDouble()
-            }
-
-            _selectedPoiDetails.value = SelectedPoiDetails(
-                poi = poi,
-                distanceMeters = distance
-            )
-        }
-    }
-
-    fun clearSelectedPoi() {
-        _selectedPoiDetails.value = null
-    }
-
     companion object {
         private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
-        private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
     }
 }
 
-sealed class DownloadEvent {
-    data class ToastMessage(val message: String, val isLong: Boolean = false) : DownloadEvent()
+sealed interface DownloadEvent {
+    data class ToastMessage(val message: String, val isLong: Boolean = false) : DownloadEvent
 }

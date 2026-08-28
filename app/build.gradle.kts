@@ -1,13 +1,14 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.devtools.ksp)
     alias(libs.plugins.hilt.android)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
     namespace = "com.indiana.zwl"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.indiana.zwl"
@@ -36,15 +37,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.11"
     }
     packaging {
         resources {
@@ -61,7 +56,14 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
+    implementation(project(":shared"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -75,24 +77,18 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
 
-    // Room DB
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
-
-    // Retrofit & OkHttp
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.converter.gson)
+    // OkHttp (used for API calls)
     implementation(libs.okhttp)
-    implementation(libs.okhttp.logging.interceptor)
 
-    // JTS (Spatial Calculations)
-    implementation(libs.jts.core)
+    // MapLibre
+    implementation(libs.maplibre.sdk)
 
-    // Mapsforge (Map rendering)
-    implementation("com.caverock:androidsvg:1.4")
-    implementation(libs.mapsforge.map)
-    implementation(libs.mapsforge.themes)
+    // KTS spatial (JTS KMP-compatible — used directly in ViewModels)
+    implementation(libs.kts.core)
+    implementation(libs.kts.io.wkt)
+
+    // JSON serialization (kotlinx.serialization — replaces Gson)
+    implementation(libs.kotlinx.serialization.json)
 
     // Google Play Services Location
     implementation(libs.play.services.location)
@@ -106,6 +102,9 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
     ksp(libs.hilt.ext.compiler)
+
+    // Koin (for shared module bridge)
+    implementation(libs.koin.android)
 
     // Testing
     testImplementation(libs.junit)

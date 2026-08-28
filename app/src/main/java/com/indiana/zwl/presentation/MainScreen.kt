@@ -40,7 +40,9 @@ import androidx.compose.material.icons.filled.Map
 
 @Composable
 fun MainScreen(
-    viewModel: MainViewModel
+    viewModel: MainViewModel,
+    zoneDetailViewModel: ZoneDetailViewModel,
+    mapViewModel: com.indiana.zwl.presentation.map.MapViewModel
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -217,7 +219,7 @@ fun MainScreen(
         }
 
         is MainUiState.Success -> {
-            val selectedZoneDetails by viewModel.selectedZoneDetails.collectAsStateWithLifecycle()
+            val selectedZoneDetails by zoneDetailViewModel.selectedZoneDetails.collectAsStateWithLifecycle()
             val selectedForestBan by viewModel.selectedForestBan.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
 
@@ -241,6 +243,13 @@ fun MainScreen(
             val displayForestBan = debugBanOverride?.forestBan ?: state.currentForestBan
 
             ZwlTheme(isInZone = isInZone) {
+                LaunchedEffect(state.latitude, state.longitude) {
+                    val lat = state.latitude
+                    val lon = state.longitude
+                    if (lat != null && lon != null) {
+                        zoneDetailViewModel.updateDistanceFromUser(lat, lon)
+                    }
+                }
                 Scaffold(
                     bottomBar = {
                         NavigationBar(
@@ -290,7 +299,12 @@ fun MainScreen(
                                         fireRiskLevel = state.fireRiskLevel,
                                         currentForestBan = displayForestBan,
                                         onViewDetailsClick = {
-                                            viewModel.selectZoneByDistrict(status.forestDistrict)
+                                            zoneDetailViewModel.selectZoneByDistrict(
+                                                status.forestDistrict,
+                                                viewModel.zones,
+                                                state.latitude,
+                                                state.longitude
+                                            )
                                         },
                                         onBanDetailsClick = {
                                             displayForestBan?.let { viewModel.selectForestBan(it) }
@@ -308,7 +322,12 @@ fun MainScreen(
                                         azimuth = azimuth,
                                         currentForestBan = displayForestBan,
                                         onViewDetailsClick = {
-                                            viewModel.selectZoneByDistrict(status.nearestDistrict)
+                                            zoneDetailViewModel.selectZoneByDistrict(
+                                                status.nearestDistrict,
+                                                viewModel.zones,
+                                                state.latitude,
+                                                state.longitude
+                                            )
                                         },
                                         onBanDetailsClick = {
                                             displayForestBan?.let { viewModel.selectForestBan(it) }
@@ -360,6 +379,8 @@ fun MainScreen(
                             Box(modifier = Modifier.fillMaxSize()) {
                                 MapViewContainer(
                                     viewModel = viewModel,
+                                    zoneDetailViewModel = zoneDetailViewModel,
+                                    mapViewModel = mapViewModel,
                                     zones = viewModel.zones,
                                     isActive = true
                                 )
@@ -369,7 +390,7 @@ fun MainScreen(
                         selectedZoneDetails?.let { details ->
                             ZoneDetailsScreen(
                                 details = details,
-                                onClose = { viewModel.clearSelectedZone() }
+                                onClose = { zoneDetailViewModel.clearSelectedZone() }
                             )
                         }
 

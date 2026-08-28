@@ -274,7 +274,9 @@ internal fun fireRiskStatusText(level: Int): String = when (level) {
     11 -> "STOPNIEŃ 1 (Niskie - archiwalne offline)"
     12 -> "STOPNIEŃ 2 (Średnie - archiwalne offline)"
     13 -> "STOPNIEŃ 3 (WYSOKIE - archiwalne offline)"
-    else -> "Status pożarowy: Brak danych"   // UNIFIED: covers -2 and any unknown level
+    -2 -> "Brak danych z serwisu"
+    -1 -> "Brak połączenia"
+    else -> "Status pożarowy: Nieznany"
 }
 
 internal fun shouldPulse(isActive: Boolean, animatorDurationScale: Float): Boolean =

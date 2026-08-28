@@ -130,12 +130,13 @@ fun ForestBanDetailsScreen(
                         textAlign = TextAlign.Center
                     )
 
-                    if (!ban.description.isNullOrBlank()) {
+                    val desc = ban.description
+                    if (!desc.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(10.dp))
                         HorizontalDivider(color = ErrorRedAccent.copy(alpha = 0.3f), thickness = 1.dp)
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = ban.description,
+                            text = desc,
                             fontSize = 14.sp,
                             color = Color.White.copy(alpha = 0.9f),
                             textAlign = TextAlign.Center,

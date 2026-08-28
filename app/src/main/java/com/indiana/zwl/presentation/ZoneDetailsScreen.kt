@@ -199,8 +199,9 @@ fun ZoneDetailsScreen(
                                 11 -> "STOPIEŃ 1 (Niskie - offline)"
                                 12 -> "STOPIEŃ 2 (Średnie - offline)"
                                 13 -> "STOPIEŃ 3 (WYSOKIE - offline)"
-                                -2 -> "Nieznany (brak sieci)"
-                                else -> "Brak danych"
+                                -2 -> "Brak danych z serwisu"
+                                -1 -> "Brak połączenia"
+                                else -> "Nieznany"
                             }
                             val riskColor = when (details.fireRiskLevel) {
                                 0, 10 -> RiskLevelNone
