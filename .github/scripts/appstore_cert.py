@@ -200,6 +200,9 @@ def main():
             "-out", p12,
             "-passout", f"pass:{p12_password}",
             "-name", "ZWL iOS Distribution",
+            "-keypbe", "PBE-SHA1-3DES",
+            "-certpbe", "PBE-SHA1-3DES",
+            "-macalg", "sha1",
         ]
     )
     with open(p12, "rb") as f:
