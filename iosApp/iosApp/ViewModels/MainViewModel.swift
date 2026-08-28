@@ -45,6 +45,9 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var userLongitude: Double?
     @Published var visibleRegion: MapRegion?
 
+    // Increment to ask the map to re-center on the user position
+    @Published var recenterSignal: Int = 0
+
     // Compass heading (degrees, 0 = north)
     @Published var azimuth: Float = 0
 
@@ -199,6 +202,10 @@ final class MainViewModel: NSObject, ObservableObject {
     }
 
     // MARK: - Offline download
+
+    func recenterMap() {
+        recenterSignal += 1
+    }
 
     func downloadVisibleArea() {
         guard let region = visibleRegion else { return }

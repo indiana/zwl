@@ -10,11 +10,6 @@ struct OutsideZoneView: View {
     let ban: ForestBan?
     let onBanTap: () -> Void
     let onDistrictTap: () -> Void
-    let isDownloading: Bool
-    let downloadProgress: Float
-    let downloadText: String
-    let downloadFinished: Bool
-    let onDownload: () -> Void
 
     private let compassSize: CGFloat = 220
 
@@ -50,12 +45,6 @@ struct OutsideZoneView: View {
 
                 nearestZoneCard
                     .padding(.bottom, 24)
-
-                OfflineDownloadSection(isDownloading: isDownloading,
-                                       downloadProgress: downloadProgress,
-                                       downloadText: downloadText,
-                                       downloadFinished: downloadFinished,
-                                       onDownload: onDownload)
             }
             .padding(24)
             .frame(maxWidth: .infinity)

@@ -12,6 +12,9 @@ struct MapView: UIViewRepresentable {
     let showShelters: Bool
     let showFireplaces: Bool
     let showOthers: Bool
+    let userLatitude: Double?
+    let userLongitude: Double?
+    let recenterSignal: Int
     let onTapZone: (String?) -> Void
     let onTapBan: (Int64) -> Void
     let onTapPoi: (String) -> Void
@@ -23,10 +26,10 @@ struct MapView: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> MLNMapView {
-        let map = MLNMapView(frame: .zero, styleURL: nil)
-        if let styleFile = Self.writeStyleToTemporaryFile(MapStyle.shared.OSM_STYLE_JSON) {
-            map.styleURL = styleFile
-        }
+        // Load our OSM raster style directly from JSON at init time to avoid
+        // both a default-style flash and the iOS race where styleJSON set right
+        // after init gets overwritten by the still-loading default style.
+        let map = MLNMapView(frame: .zero, styleJSON: MapStyle.shared.OSM_STYLE_JSON)
         map.delegate = context.coordinator
         map.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         map.minimumZoomLevel = MapStyle.shared.MIN_ZOOM
@@ -34,7 +37,6 @@ struct MapView: UIViewRepresentable {
         map.showsUserLocation = true
         map.allowsRotating = false
         map.userTrackingMode = .follow
-
         context.coordinator.mapView = map
         map.setCenter(
             CLLocationCoordinate2D(latitude: MapStyle.shared.DEFAULT_LAT,
@@ -46,17 +48,6 @@ struct MapView: UIViewRepresentable {
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         map.addGestureRecognizer(tap)
         return map
-    }
-
-    private static func writeStyleToTemporaryFile(_ json: String) -> URL? {
-        guard let data = json.data(using: .utf8) else { return nil }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("zwl-style.json")
-        do {
-            try data.write(to: url)
-            return url
-        } catch {
-            return nil
-        }
     }
 
     func updateUIView(_ map: MLNMapView, context: Context) {
@@ -74,6 +65,9 @@ struct MapView: UIViewRepresentable {
         coordinator.onTapBackground = onTapBackground
         coordinator.onVisibleRegionChange = onVisibleRegionChange
         coordinator.applySourcesIfReady()
+        coordinator.handleCentering(userLatitude: userLatitude,
+                                    userLongitude: userLongitude,
+                                    recenterSignal: recenterSignal)
     }
 
     // MARK: - Coordinator
@@ -97,6 +91,8 @@ struct MapView: UIViewRepresentable {
         private var zoneSource: MLNShapeSource?
         private var banSource: MLNShapeSource?
         private var poiSource: MLNShapeSource?
+        private var hasCenteredOnStartup = false
+        private var lastRecenterSignal = 0
 
         private let zoneFillId = "zone-fill-layer"
         private let zoneLineId = "zone-line-layer"
@@ -228,6 +224,41 @@ struct MapView: UIViewRepresentable {
                 style.layer(withIdentifier: banFillId)?.isVisible = showBans
                 style.layer(withIdentifier: banLineId)?.isVisible = showBans
             }
+        }
+
+        // MARK: Camera centering
+
+        /// Centers the camera on the user position, once after the first fix and
+        /// again on every explicit recenter request (Android parity).
+        func handleCentering(userLatitude: Double?, userLongitude: Double?, recenterSignal: Int) {
+            guard let mapView = mapView else { return }
+            if userLatitude != nil, userLongitude != nil, !hasCenteredOnStartup {
+                hasCenteredOnStartup = true
+                centerOnUser(latitude: userLatitude, longitude: userLongitude, animated: false)
+                return
+            }
+            if recenterSignal != lastRecenterSignal {
+                lastRecenterSignal = recenterSignal
+                centerOnUser(latitude: userLatitude, longitude: userLongitude, animated: true)
+            }
+        }
+
+        private func centerOnUser(latitude: Double?, longitude: Double?, animated: Bool) {
+            guard let lat = latitude, let lon = longitude, let mapView = mapView else { return }
+            mapView.userTrackingMode = .none
+            mapView.setCenter(
+                CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                zoomLevel: MapStyle.shared.DEFAULT_ZOOM,
+                animated: animated
+            )
+            mapView.userTrackingMode = .follow
+            let bounds = mapView.visibleCoordinateBounds
+            onVisibleRegionChange(
+                MapRegion(latSouth: bounds.sw.latitude,
+                          latNorth: bounds.ne.latitude,
+                          lonWest: bounds.sw.longitude,
+                          lonEast: bounds.ne.longitude)
+            )
         }
 
         // MARK: Tap handling

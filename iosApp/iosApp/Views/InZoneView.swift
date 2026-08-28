@@ -8,11 +8,6 @@ struct InZoneView: View {
     let ban: ForestBan?
     let onBanTap: () -> Void
     let onDistrictTap: () -> Void
-    let isDownloading: Bool
-    let downloadProgress: Float
-    let downloadText: String
-    let downloadFinished: Bool
-    let onDownload: () -> Void
 
     var body: some View {
         ScrollView {
@@ -64,13 +59,6 @@ struct InZoneView: View {
 
                 fireRiskCard
                     .padding(.vertical, 24)
-
-                OfflineDownloadSection(isDownloading: isDownloading,
-                                       downloadProgress: downloadProgress,
-                                       downloadText: downloadText,
-                                       downloadFinished: downloadFinished,
-                                       onDownload: onDownload)
-                    .padding(.bottom, 24)
             }
             .padding(24)
             .frame(maxWidth: .infinity)

@@ -7,7 +7,9 @@ import CoreLocation
 enum GeoJsonToFeatures {
 
     static func features(from json: String) -> [MLNShape] {
-        guard let data = json.data(using: .utf8),
+        let trimmed = json.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let data = trimmed.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let featureArray = obj["features"] as? [[String: Any]] else {
             return []

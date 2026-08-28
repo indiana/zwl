@@ -1,41 +1,32 @@
 import SwiftUI
 
-/// Compact offline-area download section (iOS feature) styled for the dark status screens.
-struct OfflineDownloadSection: View {
+/// In-map progress card shown while downloading an offline area (Android
+/// `MapViewContainer` parity). Displays status text and a linear progress bar.
+struct MapDownloadCard: View {
+    let text: String
+    let progress: Float
     let isDownloading: Bool
-    let downloadProgress: Float
-    let downloadText: String
-    let downloadFinished: Bool
-    let onDownload: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
-            if isDownloading {
-                ProgressView(value: downloadProgress)
-                    .progressViewStyle(.linear)
-                    .accentColor(ZWL.forestGreenAccent)
-                Text(downloadText)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } else if !downloadText.isEmpty {
-                Text(downloadText)
-                    .font(.caption)
-                    .foregroundColor(downloadFinished ? ZWL.forestGreenAccent : .secondary)
-            }
-        }
+        VStack(alignment: .leading, spacing: 6) {
+            Label(isDownloading ? "Pobieranie mapy offline..." : "Pobieranie zakończone",
+                  systemImage: isDownloading ? "arrow.down.circle" : "checkmark.circle.fill")
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(.primary)
 
-        Button(action: onDownload) {
-            Label(isDownloading ? "Pobieranie..." : "Pobierz obszar do trybu offline",
-                  systemImage: "arrow.down.circle")
-                .font(.subheadline.weight(.medium))
-                .padding(.vertical, 6)
-                .padding(.horizontal, 14)
-                .background(ZWL.greenPrimary.opacity(0.35))
-                .clipShape(Capsule())
-                .foregroundColor(.white)
+            if isDownloading {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .tint(ZWL.forestGreenAccent)
+            }
+
+            Text(text)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .lineLimit(2)
         }
-        .buttonStyle(.plain)
-        .disabled(isDownloading)
-        .opacity(isDownloading ? 0.6 : 1)
+        .padding(12)
+        .frame(width: 220)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 }

@@ -64,12 +64,7 @@ struct MainView: View {
                 fireRisk: viewModel.fireRiskLevel,
                 ban: viewModel.activeForestBan,
                 onBanTap: { viewModel.openActiveBan() },
-                onDistrictTap: { viewModel.selectZone(named: inZone.forestDistrict) },
-                isDownloading: viewModel.isDownloading,
-                downloadProgress: viewModel.downloadProgress,
-                downloadText: viewModel.downloadStatusText,
-                downloadFinished: viewModel.downloadFinished,
-                onDownload: { viewModel.downloadVisibleArea() }
+                onDistrictTap: { viewModel.selectZone(named: inZone.forestDistrict) }
             )
         } else if let outside = viewModel.currentOutsideZone {
             OutsideZoneView(
@@ -79,12 +74,7 @@ struct MainView: View {
                 azimuth: viewModel.azimuth,
                 ban: viewModel.activeForestBan,
                 onBanTap: { viewModel.openActiveBan() },
-                onDistrictTap: { viewModel.selectZone(named: outside.nearestDistrict) },
-                isDownloading: viewModel.isDownloading,
-                downloadProgress: viewModel.downloadProgress,
-                downloadText: viewModel.downloadStatusText,
-                downloadFinished: viewModel.downloadFinished,
-                onDownload: { viewModel.downloadVisibleArea() }
+                onDistrictTap: { viewModel.selectZone(named: outside.nearestDistrict) }
             )
         } else {
             GpsLocatingView()
@@ -96,9 +86,45 @@ struct MainView: View {
     private var mapTab: some View {
         ZStack {
             map
+
             VStack {
                 topBar
+                    .padding([.horizontal, .top])
                 Spacer()
+            }
+
+            VStack {
+                Spacer().frame(height: 56)
+                HStack {
+                    if viewModel.isDownloading || !viewModel.downloadStatusText.isEmpty {
+                        MapDownloadCard(text: viewModel.downloadStatusText,
+                                        progress: viewModel.downloadProgress,
+                                        isDownloading: viewModel.isDownloading)
+                            .padding(.leading, 16)
+                    }
+                    Spacer()
+                }
+                Spacer()
+            }
+
+            VStack {
+                Spacer().frame(height: 56)
+                HStack {
+                    Spacer()
+                    settingsMenuButton
+                        .padding(.trailing, 16)
+                }
+                Spacer()
+            }
+
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    myLocationButton
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 24)
+                }
             }
         }
     }
@@ -112,6 +138,9 @@ struct MainView: View {
             showShelters: viewModel.showShelters,
             showFireplaces: viewModel.showFireplaces,
             showOthers: viewModel.showOthers,
+            userLatitude: viewModel.userLatitude,
+            userLongitude: viewModel.userLongitude,
+            recenterSignal: viewModel.recenterSignal,
             onTapZone: { viewModel.selectZone(named: $0) },
             onTapBan: { viewModel.selectBan(byRemoteId: $0) },
             onTapPoi: { viewModel.selectPoi(named: $0) },
@@ -127,31 +156,65 @@ struct MainView: View {
                 .font(.headline)
                 .padding(.horizontal, 4)
             Spacer()
-            toggleChip("Zakazy", isOn: $viewModel.showBans)
-            toggleChip("Wiaty", isOn: $viewModel.showShelters)
-            toggleChip("Ogniska", isOn: $viewModel.showFireplaces)
-            toggleChip("Inne", isOn: $viewModel.showOthers)
             Button(action: { viewModel.refreshAllData() }) {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
+            .disabled(viewModel.isDownloading)
         }
         .padding(8)
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding([.horizontal, .top])
     }
 
-    private func toggleChip(_ label: String, isOn: Binding<Bool>) -> some View {
-        Button(action: { isOn.wrappedValue.toggle() }) {
-            Text(label)
+    /// Dropdown with layer toggles + offline download (Android settings dropdown parity).
+    private var settingsMenuButton: some View {
+        Menu {
+            Text("Wyświetlaj na mapie")
                 .font(.caption)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(isOn.wrappedValue ? Color.accentColor.opacity(0.2) : Color.clear)
-                .clipShape(Capsule())
+                .foregroundColor(.secondary)
+
+            Button { viewModel.showBans.toggle() } label: {
+                menuCheckLabel("Zakazy wstępu do lasu", checked: viewModel.showBans)
+            }
+            Button { viewModel.showShelters.toggle() } label: {
+                menuCheckLabel("Wiaty", checked: viewModel.showShelters)
+            }
+            Button { viewModel.showFireplaces.toggle() } label: {
+                menuCheckLabel("Ogniska", checked: viewModel.showFireplaces)
+            }
+            Button { viewModel.showOthers.toggle() } label: {
+                menuCheckLabel("Inne", checked: viewModel.showOthers)
+            }
+
+            Divider()
+
+            Button { viewModel.downloadVisibleArea() } label: {
+                Label("Pobierz obszar offline", systemImage: "arrow.down.circle")
+            }
+            .disabled(viewModel.isDownloading)
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 17, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .foregroundColor(.primary)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
         }
-        .buttonStyle(.plain)
+    }
+
+    private func menuCheckLabel(_ title: String, checked: Bool) -> some View {
+        Label(title, systemImage: checked ? "checkmark.circle.fill" : "circle")
+    }
+
+    private var myLocationButton: some View {
+        Button(action: { viewModel.recenterMap() }) {
+            Image(systemName: "location.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .foregroundColor(.blue)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .disabled(viewModel.userLatitude == nil)
     }
 
     // MARK: - Sheet bindings
