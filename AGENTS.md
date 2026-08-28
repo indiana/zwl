@@ -10,10 +10,12 @@
 
 ## Project Conventions
 
-- Integration branch: `multiplatform` (FAZY 0-3 merged). Current phase: FAZA 4 (iOS) — branch off `multiplatform` (e.g. `multiplatform/ios-app`).
+- Integration branch: `multiplatform` (FAZY 0-5 merged). Current phase: FAZA 5.2 (TestFlight/device) — branch off `multiplatform` (e.g. `multiplatform-ios-app`).
 - `multiplatform-PLAN.md` and `FAZY3-plan.md` are in .gitignore — never commit them.
 - Hilt kept alongside Koin — Hilt for UI DI, Koin for shared module.
-- No local Mac: iOS is CI-only. **Simulator-only for now** (no Apple Developer/TestFlight); device QA (compass/GPS/perf) deferred.
+- No local Mac: iOS is CI-only. **Simulator-only build** + **TestFlight** via GitHub Actions (`ios-release.yml`); device builds/QA (compass/GPS/perf) happen on the user's own iPhone/iPad through TestFlight.
+- Signing/provisioning is fully CI-driven (no Apple ID on any machine): one-off `ios-signing.yml` creates the distribution cert + App Store profile via App Store Connect API (key secrets `APP_STORE_CONNECT_API_KEY/KEY_ID/ISSUER_ID`); release signing uses secrets `APPLE_CERTIFICATE`, `APPLE_CERT_PASSWORD`, `APPLE_PROVISIONING_PROFILE`, `APPLE_DEVELOPMENT_TEAM`. Signing material = `ios-signing-material` artifact; never committed, never echoed.
+- `TARGETED_DEVICE_FAMILY` is `"1,2"` (iPhone + iPad).
 - iOS toolchain decisions (see plan FAZA 4): **XcodeGen** (`xcodegen generate` on the runner, no committed `.xcodeproj`); **SKIE** for Swift↔Kotlin flows/suspend; MapLibre iOS via SPM; shared KMP framework via `:shared:embedAndSignAppleFrameworkForXcode`, `baseName = "shared"`, `isStatic = true`.
 - Offline tiles: shared packer lives in `shared/.../shared/offline/` (`MbtilesTilePackager`, `TileMath`); platform adapters per platform — `:app` has `OkHttpTileFetcher` + `SqliteMbtilesStore`. iOS will add its own adapters.
 - OSM raster style JSON + camera constants live in `shared/.../shared/map/MapStyle.kt`.

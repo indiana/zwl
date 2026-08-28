@@ -54,7 +54,7 @@ targets:
         OTHER_LDFLAGS: "$(inherited) -framework shared -lsqlite3"
         SWIFT_VERSION: "5.0"
         INFOPLIST_FILE: Info.plist
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         IPHONEOS_DEPLOYMENT_TARGET: "16.0"
 
   iosAppTests:
