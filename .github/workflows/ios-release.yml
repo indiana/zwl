@@ -75,28 +75,44 @@ jobs:
 
       - name: Generate app icons
         run: |
-          SRC="${{ github.workspace }}/assets/app_icon.png"
-          OUT="${{ github.workspace }}/iosApp/iosApp/Assets.xcassets/AppIcon.appiconset"
-          gen() { sips -s format png -z "$2" "$1" "$SRC" --out "$OUT/$3" >/dev/null; }
-          gen 40 40 AppIcon20x20@2x.png
-          gen 60 60 AppIcon20x20@3x.png
-          gen 58 58 AppIcon29x29@2x.png
-          gen 87 87 AppIcon29x29@3x.png
-          gen 80 80 AppIcon40x40@2x.png
-          gen 120 120 AppIcon40x40@3x.png
-          gen 120 120 AppIcon60x60@2x.png
-          gen 180 180 AppIcon60x60@3x.png
-          gen 20 20 AppIcon20x20~ipad.png
-          gen 40 40 AppIcon20x20@2x~ipad.png
-          gen 29 29 AppIcon29x29~ipad.png
-          gen 58 58 AppIcon29x29@2x~ipad.png
-          gen 40 40 AppIcon40x40~ipad.png
-          gen 80 80 AppIcon40x40@2x~ipad.png
-          gen 76 76 AppIcon76x76~ipad.png
-          gen 152 152 AppIcon76x76@2x~ipad.png
-          gen 167 167 AppIcon83.5x83.5@2x~ipad.png
-          gen 1024 1024 AppIcon1024.png
-          ls -la "$OUT"
+          python3 -m pip install --quiet pillow
+          python3 - "${{ github.workspace }}" <<'PY'
+import os
+import sys
+from PIL import Image
+
+root = sys.argv[1]
+src = Image.open(os.path.join(root, "assets", "app_icon.png")).convert("RGBA")
+rgb = Image.new("RGB", src.size, (255, 255, 255))
+rgb.paste(src, mask=src.split()[3])
+
+outdir = os.path.join(root, "iosApp", "iosApp", "Assets.xcassets", "AppIcon.appiconset")
+sizes = {
+    "AppIcon20x20@2x.png": 40,
+    "AppIcon20x20@3x.png": 60,
+    "AppIcon29x29@2x.png": 58,
+    "AppIcon29x29@3x.png": 87,
+    "AppIcon40x40@2x.png": 80,
+    "AppIcon40x40@3x.png": 120,
+    "AppIcon60x60@2x.png": 120,
+    "AppIcon60x60@3x.png": 180,
+    "AppIcon20x20~ipad.png": 20,
+    "AppIcon20x20@2x~ipad.png": 40,
+    "AppIcon29x29~ipad.png": 29,
+    "AppIcon29x29@2x~ipad.png": 58,
+    "AppIcon40x40~ipad.png": 40,
+    "AppIcon40x40@2x~ipad.png": 80,
+    "AppIcon76x76~ipad.png": 76,
+    "AppIcon76x76@2x~ipad.png": 152,
+    "AppIcon83.5x83.5@2x~ipad.png": 167,
+    "AppIcon1024.png": 1024,
+}
+for name, px in sizes.items():
+    img = rgb.resize((px, px), Image.LANCZOS)
+    img.convert("RGB").save(os.path.join(outdir, name), "PNG")
+print("Generated", len(sizes), "icons")
+PY
+          ls -la iosApp/iosApp/Assets.xcassets/AppIcon.appiconset
 
       - name: Archive (device signing)
         run: |

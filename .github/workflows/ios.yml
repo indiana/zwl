@@ -2,9 +2,9 @@ name: iOS Build
 
 on:
   push:
-    branches: [multiplatform-ios-app, multiplatform-cicd, multiplatform]
+    branches: [main]
   pull_request:
-    branches: [multiplatform]
+    branches: [main]
 
 concurrency:
   group: ios-${{ github.ref }}
