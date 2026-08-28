@@ -36,6 +36,7 @@ targets:
       properties:
         CFBundleDisplayName: ZWL
         UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
