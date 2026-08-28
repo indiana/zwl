@@ -38,6 +38,14 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSLocationWhenInUseUsageDescription: "Aplikacja potrzebuje dostępu do lokalizacji, aby sprawdzić, czy znajdujesz się w strefie Zanocuj w Lesie."
         NSLocationAlwaysUsageDescription: "Aplikacja potrzebuje dostępu do lokalizacji, aby sprawdzić, czy znajdujesz się w strefie Zanocuj w Lesie."
     preBuildScripts:
@@ -56,6 +64,7 @@ targets:
         INFOPLIST_FILE: Info.plist
         TARGETED_DEVICE_FAMILY: "1,2"
         IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   iosAppTests:
     type: bundle.unit-test
