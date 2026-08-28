@@ -92,7 +92,10 @@ def api(token: str, method: str, path: str, body: dict = None) -> dict:
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
-    data = json.dumps(body).encode() if body is not None else None
+    data = (
+        json.dumps({"data": body}).encode() if body is not None and method == "POST"
+        else json.dumps(body).encode() if body is not None else None
+    )
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req) as resp:
