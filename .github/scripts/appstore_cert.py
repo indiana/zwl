@@ -172,7 +172,7 @@ def main():
         "/v1/certificates",
         {
             "type": "certificates",
-            "attributes": {"name": args.name, "certificateType": cert_type, "csrContent": csr_content},
+            "attributes": {"certificateType": cert_type, "csrContent": csr_content},
         },
     )
     cert = created["data"]
