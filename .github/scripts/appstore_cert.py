@@ -182,8 +182,15 @@ def main():
 
     # 3. .p12
     cer = os.path.join(args.output_dir, "cert.cer")
-    with open(cer, "w") as f:
-        f.write(cert_content)
+    if "BEGIN CERTIFICATE" in cert_content:
+        with open(cer, "w") as f:
+            f.write(cert_content)
+    else:
+        blob = base64.b64decode(cert_content)
+        b64 = base64.b64encode(blob).decode()
+        wrapped = "\n".join(b64[i : i + 64] for i in range(0, len(b64), 64))
+        with open(cer, "w") as f:
+            f.write("-----BEGIN CERTIFICATE-----\n" + wrapped + "\n-----END CERTIFICATE-----\n")
     p12 = os.path.join(args.output_dir, "cert.p12")
     p12_password = pyrandom.token_urlsafe(18)
     run(
