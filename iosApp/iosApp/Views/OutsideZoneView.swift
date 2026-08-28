@@ -167,7 +167,7 @@ struct CompassNeedle: Shape {
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY * 0.75))
         path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.close()
+        path.closeSubpath()
         return path
     }
 }
