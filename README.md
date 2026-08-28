@@ -2,7 +2,7 @@
 
 **Legalny Bushcraft** to nowoczesna aplikacja mobilna na system Android, stworzona z myślą o miłośnikach bushcraftu, survivalu i turystyki leśnej. Jej głównym celem jest natychmiastowe i w pełni niezawodne (również w trybie offline) udzielenie odpowiedzi na pytanie, czy użytkownik znajduje się wewnątrz oficjalnej strefy programu **„Zanocuj w lesie" (ZwL)** Lasów Państwowych, oraz jakie zasady bezpieczeństwa pożarowego obowiązują w danej lokalizacji.
 
-> **Wersja:** 1.4 (versionCode 5) | **Minimalna wersja Androida:** 8.0 (API 26)
+> **Minimalna wersja Androida:** 8.0 (API 26)
 
 ---
 
