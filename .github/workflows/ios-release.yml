@@ -59,7 +59,12 @@ jobs:
         run: |
           PROFILE_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
           mkdir -p "$PROFILE_DIR"
-          echo "${{ secrets.APPLE_PROVISIONING_PROFILE }}" | base64 --decode > "$PROFILE_DIR/ZWL.mobileprovision"
+          echo "${{ secrets.APPLE_PROVISIONING_PROFILE }}" | base64 --decode > "$RUNNER_TEMP/ZWL.mobileprovision"
+          PROFILE_UUID=$(security cms -D -i "$RUNNER_TEMP/ZWL.mobileprovision" | plutil -extract UUID raw -)
+          PROFILE_NAME=$(security cms -D -i "$RUNNER_TEMP/ZWL.mobileprovision" | plutil -extract Name raw -)
+          cp "$RUNNER_TEMP/ZWL.mobileprovision" "$PROFILE_DIR/$PROFILE_UUID.mobileprovision"
+          printf 'PROFILE_UUID=%s\nPROFILE_NAME=%s\n' "$PROFILE_UUID" "$PROFILE_NAME" >> "$RUNNER_TEMP/ios.env"
+          echo "Installed provisioning profile: $PROFILE_NAME ($PROFILE_UUID)"
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -70,6 +75,7 @@ jobs:
 
       - name: Archive (device signing)
         run: |
+          source "$RUNNER_TEMP/ios.env"
           IDENTITY=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Distribution:.*\)"/\1/p' | head -n 1)
           echo "Using identity: $IDENTITY"
           xcodebuild archive \
@@ -81,11 +87,13 @@ jobs:
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="$IDENTITY" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
             CODE_SIGNING_REQUIRED=YES
         working-directory: iosApp
 
       - name: Export IPA
         run: |
+          source "$RUNNER_TEMP/ios.env"
           mkdir -p build/export
           printf '%s\n' \
             '<?xml version="1.0" encoding="UTF-8"?>' \
@@ -98,6 +106,11 @@ jobs:
             '  <string>manual</string>' \
             '  <key>teamID</key>' \
             '  <string>TEMPLATE_TEAM_ID</string>' \
+            '  <key>provisioningProfiles</key>' \
+            '  <dict>' \
+            '    <key>com.indiana.zwl.iosApp</key>' \
+            '    <string>TEMPLATE_PROFILE_NAME</string>' \
+            '  </dict>' \
             '  <key>manageAppVersionAndBuildNumber</key>' \
             '  <false/>' \
             '  <key>uploadBitcode</key>' \
@@ -108,6 +121,7 @@ jobs:
             '</plist>' \
             > build/exportOptions.plist
           sed -i '' "s/TEMPLATE_TEAM_ID/$TEAM_ID/" build/exportOptions.plist
+          sed -i '' "s/TEMPLATE_PROFILE_NAME/$PROFILE_NAME/" build/exportOptions.plist
           xcodebuild -exportArchive \
             -archivePath build/ZWL.xcarchive \
             -exportPath build/export \
