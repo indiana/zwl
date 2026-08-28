@@ -1,30 +1,48 @@
 import SwiftUI
 
+/// Mirrors Android `PermissionsScreen.kt`: dark card over the dark forest background.
 struct PermissionsView: View {
     let onRequestPermission: () -> Void
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack {
             Spacer()
-            Image(systemName: "location.slash.fill")
-                .font(.system(size: 56))
-                .foregroundColor(.orange)
-            Text("Brak dostępu do lokalizacji")
-                .font(.title2.bold())
-                .multilineTextAlignment(.center)
-            Text("Aby sprawdzić, czy znajdujesz się w strefie Zanocuj w Lesie, aplikacja potrzebuje dostępu do Twojej lokalizacji.")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-            Button(action: onRequestPermission) {
-                Label("Przyznaj dostęp", systemImage: "location")
-                    .font(.headline)
+
+            VStack(spacing: 0) {
+                Text("Wymagane Uprawnienia Lokalizacyjne")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+
+                Text("Aplikacja \"Legalny Bushcraft\" wymaga dostępu do precyzyjnej lokalizacji GPS w celu sprawdzania czy znajdujesz się w legalnej strefie biwakowania oraz do nawigacji kompasem offline w terenie.")
+                    .font(.system(size: 14))
+                    .foregroundColor(ZWL.forestGreenSubtext)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .padding(.top, 12)
+
+                Button(action: onRequestPermission) {
+                    Text("Zezwól na dostęp")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(ZWL.greenPrimary)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 24)
             }
-            .buttonStyle(.borderedProminent)
-            .padding(.top)
+            .padding(24)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
+            .background(ZWL.darkForestSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .padding(24)
+
             Spacer()
         }
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ZWL.darkForestBackground.ignoresSafeArea())
     }
 }

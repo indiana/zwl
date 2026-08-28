@@ -45,6 +45,12 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var userLongitude: Double?
     @Published var visibleRegion: MapRegion?
 
+    // Compass heading (degrees, 0 = north)
+    @Published var azimuth: Float = 0
+
+    // Active forest ban covering the current position (nil if none)
+    @Published var activeForestBan: ForestBan?
+
     // Fire risk
     @Published var fireRiskLevel: Int = -1
 
@@ -116,6 +122,7 @@ final class MainViewModel: NSObject, ObservableObject {
         switch locationManager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
             locationManager.startUpdatingLocation()
+            locationManager.startUpdatingHeading()
             if phase == .permissionsRequired {
                 phase = .ready
             }
@@ -131,8 +138,12 @@ final class MainViewModel: NSObject, ObservableObject {
     }
 
     func computeLocationStatus() {
-        guard let lat = userLatitude, let lon = userLongitude else { return }
+        guard let lat = userLatitude, let lon = userLongitude else {
+            activeForestBan = nil
+            return
+        }
         let newStatus = app.checkLocation(latitude: lat, longitude: lon)
+        activeForestBan = app.checkForestBan(latitude: lat, longitude: lon)
         let district = (newStatus as? LocationStatusInZone)?.forestDistrict
         if district != lastInZoneDistrict {
             lastInZoneDistrict = district
@@ -174,6 +185,11 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedPoi = app.cachedPois().first { $0.name == name }
         selectedZone = nil
         selectedBan = nil
+    }
+
+    func openActiveBan() {
+        guard let ban = activeForestBan else { return }
+        selectedBan = ban
     }
 
     func clearSelection() {
@@ -232,6 +248,11 @@ final class MainViewModel: NSObject, ObservableObject {
 
     var currentInZone: LocationStatusInZone? { locationStatus as? LocationStatusInZone }
     var currentOutsideZone: LocationStatusOutsideZone? { locationStatus as? LocationStatusOutsideZone }
+
+    /// True when we have no usable fix yet (GPS locating screen).
+    var isLocationEmpty: Bool {
+        locationStatus == nil || locationStatus is LocationStatusEmptyData
+    }
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -250,6 +271,13 @@ extension MainViewModel: CLLocationManagerDelegate {
         userLongitude = loc.coordinate.longitude
         computeLocationStatus()
         Task { await self.refreshFireRiskIfNeeded() }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        guard newHeading.headingAccuracy >= 0 else { return }
+        let trueHeading = newHeading.trueHeading
+        let magneticHeading = newHeading.magneticHeading
+        azimuth = Float(trueHeading >= 0 ? trueHeading : magneticHeading)
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

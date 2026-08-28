@@ -14,6 +14,7 @@ struct ZWLApp: App {
     var body: some Scene {
         WindowGroup {
             MainView(viewModel: viewModel)
+                .preferredColorScheme(.dark)
         }
     }
 }
