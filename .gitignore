@@ -22,5 +22,6 @@ iosApp/iosApp.xcodeproj
 .agents/
 multiplatform-PLAN.md
 AGENTS.md
+__pycache__/
 
 FAZY3-plan.md
