@@ -53,3 +53,7 @@
 -keep class * extends androidx.room.RoomDatabase
 -keepclassmembers class * extends androidx.room.RoomDatabase { *; }
 
+# SLF4J static binding resolver is not bundled on Android; R8 would fail on the
+# missing org.slf4j.impl.StaticLoggerBinder referenced by LoggerFactory
+-dontwarn org.slf4j.impl.**
+
