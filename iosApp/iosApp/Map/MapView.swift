@@ -26,7 +26,11 @@ struct MapView: UIViewRepresentable {
     let onDiagnostics: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        let coordinator = Coordinator(self)
+        // Start the freeze meter before the map is even constructed so the
+        // diagnostics capture the MapLibre init / styleJSON parse block too.
+        coordinator.startStallProbe()
+        return coordinator
     }
 
     func makeUIView(context: Context) -> MLNMapView {
@@ -62,7 +66,6 @@ struct MapView: UIViewRepresentable {
         map.addGestureRecognizer(tap)
 
         context.coordinator.scheduleStyleProbe()
-        context.coordinator.startStallProbe()
         return map
     }
 
@@ -138,6 +141,13 @@ struct MapView: UIViewRepresentable {
         private var stallProbeTimer: Timer?
         private var lastStallProbe = Date()
         private var maxStall: TimeInterval = 0
+        /// Startup phase timestamps (seconds since the coordinator was created),
+        /// to localize the startup mega-stall: style loaded / data files ready /
+        /// overlay sources installed.
+        private let startTimestamp = Date()
+        private var tStyle: TimeInterval?
+        private var tData: TimeInterval?
+        private var tOverlay: TimeInterval?
         private var layersReady = false
         private var layersApplied = false
         private var zoneFeatureCount = 0
@@ -231,6 +241,7 @@ struct MapView: UIViewRepresentable {
             guard !styleLoaded else { return }
             styleLoaded = true
             styleFinishCount += 1
+            tStyle = Date().timeIntervalSince(startTimestamp)
             installRasterIfCatalogReady()
             applySourcesIfReady()
             stopStyleProbe()
@@ -472,6 +483,7 @@ struct MapView: UIViewRepresentable {
                 layersApplied = true
                 layersReady = true
                 lastInstalledZoom = catalog.zMin
+                tOverlay = Date().timeIntervalSince(startTimestamp)
             }
             refreshLayerVisibility()
         }
@@ -563,6 +575,7 @@ struct MapView: UIViewRepresentable {
 
         private func applyFiles(_ files: GeoJsonFileWriter.Files) {
             dataFiles = files
+            tData = Date().timeIntervalSince(startTimestamp)
             zoneFeatureCount = files.zoneCount
             banFeatureCount = files.banCount
             poiFeatureCount = files.shelterCount + files.fireplaceCount + files.otherCount
@@ -629,6 +642,7 @@ struct MapView: UIViewRepresentable {
             }
             let text = """
             style=\(styleState) fail=\(fail) layers=\(layersState) stall=\(String(format: "%.1f", maxStall))s
+            phases s=\(fmt(tStyle)) d=\(fmt(tData)) o=\(fmt(tOverlay))
             overlay: \(overlayText)
             zones: json \(jsonByteCount.zones) feat \(zoneFeatureCount)
             bans:  json \(jsonByteCount.bans) feat \(banFeatureCount)
@@ -641,6 +655,11 @@ struct MapView: UIViewRepresentable {
                 lastDiagnosticsText = text
                 onDiagnostics(text)
             }
+        }
+
+        private func fmt(_ t: TimeInterval?) -> String {
+            guard let t = t else { return "-" }
+            return String(format: "%.1f", t)
         }
 
         /// Resets the freeze meter whenever the A/B configuration changes, so
