@@ -192,7 +192,7 @@ struct MapView: UIViewRepresentable {
 
         /// Polls for the style loading. Fragile parts of this map code path only
         /// run after the style exists; never fail silently again.
-        private func scheduleStyleProbe() {
+        fileprivate func scheduleStyleProbe() {
             styleProbeTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
                 if self.styleLoaded {
@@ -364,7 +364,7 @@ struct MapView: UIViewRepresentable {
         /// Centers the camera on the user position, once after the first fix and
         /// again on every explicit recenter request (Android parity).
         func handleCentering(userLatitude: Double?, userLongitude: Double?, recenterSignal: Int) {
-            guard let mapView = mapView else { return }
+            guard mapView != nil else { return }
             if userLatitude != nil, userLongitude != nil, !hasCenteredOnStartup {
                 hasCenteredOnStartup = true
                 centerOnUser(latitude: userLatitude, longitude: userLongitude, animated: false)

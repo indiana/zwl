@@ -236,7 +236,7 @@ final class MainViewModel: NSObject, ObservableObject {
             // Polygon -> [ [lng,lat], ... ] (ring); MultiPolygon -> [ [ring], ... ].
             let firstRing: [Any]
             if let polygons = raw.first as? [[[Any]]],
-               let ring = polygons.first as? [[Any]] {
+               let ring = polygons.first {
                 firstRing = ring
             } else if let ring = raw.first as? [[Any]] {
                 firstRing = ring
