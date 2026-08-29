@@ -104,18 +104,21 @@ struct MapView: UIViewRepresentable {
         var overlayEnabled = true {
             didSet {
                 guard oldValue != overlayEnabled else { return }
+                resetStallMeter()
                 applyOverlayEnabled()
             }
         }
         var followsUser = true {
             didSet {
                 guard oldValue != followsUser else { return }
+                resetStallMeter()
                 mapView?.userTrackingMode = followsUser ? .follow : .none
             }
         }
         var showHeading = true {
             didSet {
                 guard oldValue != showHeading else { return }
+                resetStallMeter()
                 mapView?.showsUserHeadingIndicator = showHeading
             }
         }
@@ -638,6 +641,14 @@ struct MapView: UIViewRepresentable {
                 lastDiagnosticsText = text
                 onDiagnostics(text)
             }
+        }
+
+        /// Resets the freeze meter whenever the A/B configuration changes, so
+        /// `stall=` always reflects the CURRENT state on the diagnostics line
+        /// instead of the whole app session.
+        private func resetStallMeter() {
+            maxStall = 0
+            lastStallProbe = Date()
         }
 
         // MARK: Camera centering
