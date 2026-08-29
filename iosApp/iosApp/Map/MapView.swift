@@ -118,6 +118,7 @@ struct MapView: UIViewRepresentable {
         private var parsedBanFeatures: [MLNShape] = []
         private var parsedPoiFeatures: [MLNShape] = []
         private var lastJsonSignature = ""
+        private var lastToggleSignature = ""
         private var lastDiagnosticsText = ""
 
         private let zoneFillId = "zone-fill-layer"
@@ -332,22 +333,32 @@ struct MapView: UIViewRepresentable {
                 poiShelterCount = parsedPoiFeatures.filter { poiCategoryKey($0) == "shelter" }.count
                 poiFireplaceCount = parsedPoiFeatures.filter { poiCategoryKey($0) == "fireplace" }.count
                 poiOtherCount = poiFeatureCount - poiShelterCount - poiFireplaceCount
+
+                // Fresh data: force the toggle-filters below to run once.
+                lastToggleSignature = ""
             }
 
-            // Cheap per-update work: re-filter POIs for the current toggles and
-            // sync ban layer visibility.
-            let filteredPois = parsedPoiFeatures.filter { feature in
-                switch poiCategoryKey(feature) {
-                case "shelter": return showShelters
-                case "fireplace": return showFireplaces
-                default: return showOthers
+            // Cheap per-update work only when a toggle actually changed:
+            // re-filter the POIs for the current toggles and sync ban layer
+            // visibility. Rebuilding the shape collection (which makes MapLibre
+            // re-ingest the data) on every updateUIView is what made scrolling
+            // stutter.
+            let toggleSignature = "\(showBans)|\(showShelters)|\(showFireplaces)|\(showOthers)"
+            if toggleSignature != lastToggleSignature {
+                lastToggleSignature = toggleSignature
+                let filteredPois = parsedPoiFeatures.filter { feature in
+                    switch poiCategoryKey(feature) {
+                    case "shelter": return showShelters
+                    case "fireplace": return showFireplaces
+                    default: return showOthers
+                    }
                 }
-            }
-            poiSource?.shape = MLNShapeCollectionFeature(shapes: filteredPois)
+                poiSource?.shape = MLNShapeCollectionFeature(shapes: filteredPois)
 
-            if let style = mapView?.style {
-                style.layer(withIdentifier: banFillId)?.isVisible = showBans
-                style.layer(withIdentifier: banLineId)?.isVisible = showBans
+                if let style = mapView?.style {
+                    style.layer(withIdentifier: banFillId)?.isVisible = showBans
+                    style.layer(withIdentifier: banLineId)?.isVisible = showBans
+                }
             }
             publishDiagnostics()
         }

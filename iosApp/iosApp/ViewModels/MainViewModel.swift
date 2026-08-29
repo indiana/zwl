@@ -43,7 +43,10 @@ final class MainViewModel: NSObject, ObservableObject {
     // User location
     @Published var userLatitude: Double?
     @Published var userLongitude: Double?
-    @Published var visibleRegion: MapRegion?
+    // Not `@Published`: it's written on every pan/zoom frame via
+    // regionDidChange, so publishing would force a SwiftUI re-render (and an
+    // updateUIView) per frame and make map scrolling stutter.
+    var visibleRegion: MapRegion?
 
     // Increment to ask the map to re-center on the user position
     @Published var recenterSignal: Int = 0
