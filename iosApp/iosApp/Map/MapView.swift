@@ -285,22 +285,16 @@ struct MapView: UIViewRepresentable {
 
             let poiCircle = MLNCircleStyleLayer(identifier: poiCircleId, source: poiSource)
             // Zoom-scaled radius, mirroring Android: dots shrink when zoomed out
-            // so a whole-country view does not collapse into a blob.
-            poiCircle.circleRadius = NSExpression(
-                forFunction: "mgl_step",
-                arguments: [
-                    NSExpression(forKeyPath: "zoom"),
-                    NSExpression(forConstantValue: 2.0),
-                    NSExpression(forConstantValue: 11.0),
-                    NSExpression(forConstantValue: 3.0),
-                    NSExpression(forConstantValue: 12.5),
-                    NSExpression(forConstantValue: 5.0),
-                    NSExpression(forConstantValue: 14.0),
-                    NSExpression(forConstantValue: 8.0),
-                    NSExpression(forConstantValue: 16.0),
-                    NSExpression(forConstantValue: 12.0)
-                ]
-            )
+            // so a whole-country view does not collapse into a blob. Must use the
+            // style-spec JSON form: the legacy `NSExpression(forFunction: "mgl_step")`
+            // patcher is broken on iOS 15+ and throws at style-build time.
+            poiCircle.circleRadius = NSExpression(mglJSONObject: [
+                "step", ["zoom"], 2,
+                11, 3,
+                12.5, 5,
+                14, 8,
+                16, 12
+            ] as [Any])
             poiCircle.circleColor = colorExpression()
             poiCircle.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
             poiCircle.circleStrokeWidth = NSExpression(forConstantValue: 1.5)
