@@ -180,7 +180,7 @@ enum OverlayRasterizer {
                 }
             case "MultiPolygon":
                 if let polys = geom["coordinates"] as? [[[[Double]]]] {
-                    var rings: [[(Double, Double)]] = []
+                    var rings: [[(lon: Double, lat: Double)]] = []
                     for poly in polys {
                         if let parsed = parseRings(poly) { rings.append(contentsOf: parsed) }
                     }
@@ -194,20 +194,20 @@ enum OverlayRasterizer {
         return result
     }
 
-    private static func parseRings(_ raw: [[[Double]]]?) -> [[(Double, Double)]]? {
+    private static func parseRings(_ raw: [[[Double]]]?) -> [[(lon: Double, lat: Double)]]? {
         guard let raw = raw, !raw.isEmpty else { return nil }
-        var rings: [[(Double, Double)]] = []
+        var rings: [[(lon: Double, lat: Double)]] = []
         for ring in raw {
-            var points: [(Double, Double)] = []
+            var points: [(lon: Double, lat: Double)] = []
             for pair in ring where pair.count >= 2 {
-                points.append((pair[0], pair[1]))
+                points.append((lon: pair[0], lat: pair[1]))
             }
             if points.count >= 3 { rings.append(points) }
         }
         return rings.isEmpty ? nil : rings
     }
 
-    private static func polygon(rings: [[(Double, Double)]], properties: [String: Any]) -> OverlayPolygon {
+    private static func polygon(rings: [[(lon: Double, lat: Double)]], properties: [String: Any]) -> OverlayPolygon {
         var minX = Double.greatestFiniteMagnitude
         var minY = Double.greatestFiniteMagnitude
         var maxX = -Double.greatestFiniteMagnitude
@@ -220,7 +220,9 @@ enum OverlayRasterizer {
                 minY = min(minY, y); maxY = max(maxY, y)
             }
         }
-        return OverlayPolygon(rings: rings, bbox: (minX, minY, maxX, maxY), properties: properties)
+        return OverlayPolygon(rings: rings,
+                              bbox: (minX: minX, minY: minY, maxX: maxX, maxY: maxY),
+                              properties: properties)
     }
 
     private static func parsePoints(url: URL) -> [OverlayPoint] {
@@ -318,7 +320,7 @@ enum OverlayRasterizer {
     /// old layer-priority tap order.
     static func nearestPoi(in catalog: Catalog, lon: Double, lat: Double,
                            maxDeg: Double) -> (name: String, distance: Double)? {
-        var best: (String, Double)? = nil
+        var best: (name: String, distance: Double)? = nil
         for point in catalog.pois {
             let dLat = point.lat - lat
             let dLon = point.lon - lon
@@ -418,7 +420,7 @@ enum OverlayRasterizer {
         }
     }
 
-    private static func polygonPath(rings: [[(Double, Double)]], z: Int, x: Int, y: Int) -> CGPath? {
+    private static func polygonPath(rings: [[(lon: Double, lat: Double)]], z: Int, x: Int, y: Int) -> CGPath? {
         let scale = Double(1 << z)
         let transform: (Double, Double) -> (CGFloat, CGFloat) = { lon, lat in
             (CGFloat(worldX(lon: lon) * scale) * 256.0 - CGFloat(x * 256),
