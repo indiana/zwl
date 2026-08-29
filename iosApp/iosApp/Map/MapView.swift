@@ -120,11 +120,13 @@ struct MapView: UIViewRepresentable {
         private var lastJsonSignature = ""
         private var lastToggleSignature = ""
 
-        // Raster overlay state. The rasterizer renders viewport tiles off-main;
-        // the returned catalog is kept for tap hit-testing and diagnostics.
+        // Raster overlay state. The rasterizer renders ONLY the current integer
+        // zoom for the visible viewport (hundreds of tiles), off-main; neighbor
+        // zooms are top-ups, so builds finish in ~seconds instead of never.
         private var catalog: OverlayRasterizer.Catalog?
         private var rasterTask: Task<Void, Never>?
-        private var pendingRasterRegion: OverlayRasterizer.Region?
+        private var pendingBuild: (region: OverlayRasterizer.Region, zoom: Int)?
+        private var builtZoom = -1
 
         private let zoneRasterId = "zone-raster-layer"
         private let banRasterId = "ban-raster-layer"
@@ -165,8 +167,8 @@ struct MapView: UIViewRepresentable {
                           lonWest: bounds.sw.longitude,
                           lonEast: bounds.ne.longitude)
             )
-            // Backfill any raster overlay tiles the new viewport needs.
-            scheduleRasterBuild(force: false)
+            // Bake (or top up) the overlay tiles the current viewport needs.
+            scheduleRasterBuildFromCamera()
         }
 
         // MARK: Style readiness
@@ -238,26 +240,27 @@ struct MapView: UIViewRepresentable {
         // MARK: Raster overlay lifecycle
 
         /// Single-producer background loop: one raster build at a time, newest
-        /// pending region wins. Never touches the main thread while rendering;
-        /// tiles are file-backed PNGs, so the renderer only decodes rasters.
+        /// pending region+zoom wins. Never touches the main thread while
+        /// rendering; tiles are file-backed PNGs, so the renderer only decodes
+        /// rasters.
         private func startRasterLoop() {
             guard rasterTask == nil else { return }
             guard let files = dataFiles else { return }
-            guard let region = pendingRasterRegion else {
+            guard let pending = pendingBuild else {
                 installRasterIfCatalogReady()
                 return
             }
-            pendingRasterRegion = nil
-            let zMin = max(2, Int(MapStyle.shared.MIN_ZOOM.rounded()))
-            let zMax = min(20, Int(MapStyle.shared.MAX_ZOOM.rounded()))
+            pendingBuild = nil
+            let zoom = pending.zoom
             rasterTask = Task.detached(priority: .utility) {
                 let result = OverlayRasterizer.build(files: files,
-                                                     region: region,
-                                                     zMin: zMin,
-                                                     zMax: zMax)
+                                                     region: pending.region,
+                                                     zMin: zoom,
+                                                     zMax: zoom)
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self.rasterTask = nil
+                    self.builtZoom = zoom
                     self.catalog = result.catalog
                     if result.deltaWritten > 0, self.layersApplied {
                         // New files on disk — bounce the sources so MapLibre
@@ -271,13 +274,25 @@ struct MapView: UIViewRepresentable {
             }
         }
 
-        /// Marks the current viewport as needing tiles. Cheap to call often: the
-        /// rasterizer skips every tile already on disk.
-        private func scheduleRasterBuild(force: Bool) {
-            guard dataFiles != nil else { return }
+        /// Figures out which integer zoom the camera is at and enqueues a build/
+        /// top-up for the visible viewport. Cheap to call often (regionDidChange
+        /// fires on every settle): the rasterizer skips tiles already on disk
+        /// and force-rebuilds only when the camera crossed an integer zoom.
+        private func scheduleRasterBuildFromCamera() {
+            guard let map = mapView, dataFiles != nil else { return }
+            // MapLibre requests tiles at floor(zoomLevel): bake that zoom so the
+            // compositor always finds a file (no rounding-half-up surprises).
+            let zoom = Int(map.zoomLevel.rounded(.down))
             let region = currentBuildRegion()
-            if force || pendingRasterRegion == nil {
-                pendingRasterRegion = region
+            guard OverlayRasterizer.tileCount(region: region, zoom: zoom) <= 4000 else {
+                // Pathological view (e.g. window-sized region at z17+ before the
+                // camera settles): do not spawn a multi-second build.
+                pendingBuild = nil
+                return
+            }
+            let force = zoom != builtZoom
+            if force || pendingBuild == nil {
+                pendingBuild = (region, zoom)
             }
             startRasterLoop()
         }
@@ -287,18 +302,18 @@ struct MapView: UIViewRepresentable {
                 let b = map.visibleCoordinateBounds
                 let s = b.sw
                 let n = b.ne
-                let latSpan = max(n.latitude - s.latitude, 0.1)
-                let lonSpan = max(n.longitude - s.longitude, 0.1)
-                return .init(latSouth: s.latitude - latSpan * 0.3,
-                             latNorth: n.latitude + latSpan * 0.3,
-                             lonWest: s.longitude - lonSpan * 0.3,
-                             lonEast: n.longitude + lonSpan * 0.3)
+                let latPad = max(n.latitude - s.latitude, 0.02) * 0.05
+                let lonPad = max(n.longitude - s.longitude, 0.02) * 0.05
+                return .init(latSouth: s.latitude - latPad,
+                             latNorth: n.latitude + latPad,
+                             lonWest: s.longitude - lonPad,
+                             lonEast: n.longitude + lonPad)
             }
             let lat = MapStyle.shared.DEFAULT_LAT
-            return .init(latSouth: lat - 0.25,
-                         latNorth: lat + 0.25,
-                         lonWest: MapStyle.shared.DEFAULT_LNG - 0.4,
-                         lonEast: MapStyle.shared.DEFAULT_LNG + 0.4)
+            return .init(latSouth: lat - 0.15,
+                         latNorth: lat + 0.15,
+                         lonWest: MapStyle.shared.DEFAULT_LNG - 0.25,
+                         lonEast: MapStyle.shared.DEFAULT_LNG + 0.25)
         }
 
         // MARK: Layers
@@ -412,8 +427,10 @@ struct MapView: UIViewRepresentable {
             catalog = nil
             layersApplied = false
             layersReady = false
+            builtZoom = -1
+            pendingBuild = nil
             OverlayRasterizer.reset()
-            scheduleRasterBuild(force: true)
+            scheduleRasterBuildFromCamera()
             publishDiagnostics()
         }
 

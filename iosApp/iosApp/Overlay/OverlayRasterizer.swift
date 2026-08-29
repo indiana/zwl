@@ -76,9 +76,19 @@ enum OverlayRasterizer {
         try? FileManager.default.removeItem(at: dir)
     }
 
-    /// Renders the given region at every zoom in `lo...hi` for all five layers.
-    /// Existing tiles (file already present) are skipped, so repeat calls only
-    /// top up the missing ones. Returns the written-tile delta and catalog.
+    /// Number of tiles (per layer) that `renderTile` would produce for a
+    /// region at an integer zoom. Used by the coordinator to skip pathological
+    /// builds (e.g. a window-sized region at very high zoom before it settled).
+    static func tileCount(region: Region, zoom: Int) -> Int {
+        let r = tileRange(region: region, zoom: zoom)
+        guard r.maxX >= r.minX, r.maxY >= r.minY else { return 0 }
+        return (r.maxX - r.minX + 1) * (r.maxY - r.minY + 1)
+    }
+
+    /// Renders the current integer zoom for the given region across all five
+    /// layers. Existing tiles are skipped; the region is the visible viewport,
+    /// so this stays at ~hundreds of tiles. Neighbor zooms are top-ups, not
+    /// pyramids.
     static func build(files: GeoJsonFileWriter.Files,
                       region: Region,
                       zMin: Int,
