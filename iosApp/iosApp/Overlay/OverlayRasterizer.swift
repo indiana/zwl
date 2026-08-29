@@ -23,6 +23,12 @@ enum OverlayRasterizer {
     static let fireplaceSourceId = "poi-fireplace-raster"
     static let otherSourceId = "poi-other-raster"
 
+    /// Baked tile pixel size. Rendered at 2x the classic 256 so Retina screens
+    /// get crisp zones/dots at every zoom; the geographic tile grid (z/x/y),
+    /// colors and radius rules are unchanged — only the pixel scale doubles.
+    private static let TILE_PX: CGFloat = 512
+    private static let TILE_PX_D: Double = 512.0
+
     // MARK: Feature model
 
     struct OverlayPolygon {
@@ -355,10 +361,12 @@ enum OverlayRasterizer {
         let fmt = UIGraphicsImageRendererFormat.default()
         fmt.scale = 1
         fmt.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 256, height: 256), format: fmt)
+        let s = Self.TILE_PX
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: s, height: s), format: fmt)
         let image = renderer.image { ctx in
             let cg = ctx.cgContext
-            cg.clear(CGRect(x: 0, y: 0, width: 256, height: 256))
+            let bounds = CGRect(x: 0, y: 0, width: s, height: s)
+            cg.clear(bounds)
             cg.setShouldAntialias(true)
 
             if layer.fill {
@@ -376,7 +384,7 @@ enum OverlayRasterizer {
                 guard !paths.isEmpty else { return }
 
                 cg.saveGState()
-                cg.clip(to: CGRect(x: 0, y: 0, width: 256, height: 256))
+                cg.clip(to: bounds)
                 let fill = layer.fillColor
                 cg.setFillColor(UIColor(red: fill.r, green: fill.g, blue: fill.b, alpha: fill.a).cgColor)
                 let fillPath = CGMutablePath()
@@ -386,7 +394,7 @@ enum OverlayRasterizer {
 
                 if let stroke = layer.strokeColor {
                     cg.setStrokeColor(UIColor(red: stroke.r, green: stroke.g, blue: stroke.b, alpha: stroke.a).cgColor)
-                    cg.setLineWidth(1.5)
+                    cg.setLineWidth(3.0)
                     cg.setLineJoin(.round)
                     let outline = CGMutablePath()
                     for ring in paths { outline.addPath(ring) }
@@ -395,18 +403,19 @@ enum OverlayRasterizer {
                 }
                 cg.restoreGState()
             } else {
-                // POIs: zoom-scaled dots.
+                // POIs: zoom-scaled dots (radius + width double from the 256px
+                // rules so the on-screen size is preserved at 512px tiles).
                 guard let points = features as? [OverlayPoint] else { return }
-                let radius = poiRadius(zoom: z)
-                if radius < 2 { return }
+                let radius = poiRadius(zoom: z) * 2
+                if radius < 4 { return }
                 let rad = Double(radius)
                 let fill = layer.fillColor
                 let color = UIColor(red: fill.r, green: fill.g, blue: fill.b, alpha: fill.a)
                 for point in points {
-                    let px = (worldX(lon: point.lon) * Double(scale)) * 256.0 - Double(x * 256)
-                    let py = (worldY(lat: point.lat) * Double(scale)) * 256.0 - Double(y * 256)
-                    guard px >= -rad, px <= 256.0 + rad,
-                          py >= -rad, py <= 256.0 + rad else { continue }
+                    let px = (worldX(lon: point.lon) * Double(scale)) * Self.TILE_PX_D - Double(x) * Self.TILE_PX_D
+                    let py = (worldY(lat: point.lat) * Double(scale)) * Self.TILE_PX_D - Double(y) * Self.TILE_PX_D
+                    guard px >= -rad, px <= Self.TILE_PX_D + rad,
+                          py >= -rad, py <= Self.TILE_PX_D + rad else { continue }
                     let cx = CGFloat(px)
                     let cy = CGFloat(py)
                     let rect = CGRect(x: cx - radius, y: cy - radius,
@@ -414,7 +423,7 @@ enum OverlayRasterizer {
                     cg.setFillColor(color.cgColor)
                     cg.fillEllipse(in: rect)
                     cg.setStrokeColor(UIColor.white.cgColor)
-                    cg.setLineWidth(1.0)
+                    cg.setLineWidth(2.0)
                     cg.strokeEllipse(in: rect)
                 }
             }
@@ -433,8 +442,8 @@ enum OverlayRasterizer {
     private static func polygonPath(rings: [[(lon: Double, lat: Double)]], z: Int, x: Int, y: Int) -> CGPath? {
         let scale = Double(1 << z)
         let transform: (Double, Double) -> (CGFloat, CGFloat) = { lon, lat in
-            (CGFloat(worldX(lon: lon) * scale) * 256.0 - CGFloat(x * 256),
-             CGFloat(worldY(lat: lat) * scale) * 256.0 - CGFloat(y * 256))
+            (CGFloat(worldX(lon: lon) * scale) * Self.TILE_PX_D - CGFloat(x) * Self.TILE_PX_D,
+             CGFloat(worldY(lat: lat) * scale) * Self.TILE_PX_D - CGFloat(y) * Self.TILE_PX_D)
         }
         var count = 0
         let path = CGMutablePath()

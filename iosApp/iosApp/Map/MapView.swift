@@ -35,6 +35,12 @@ struct MapView: UIViewRepresentable {
         map.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         map.minimumZoomLevel = MapStyle.shared.MIN_ZOOM
         map.maximumZoomLevel = MapStyle.shared.MAX_ZOOM
+        // MapLibre iOS renders on the main thread; on this iPad class 60fps is
+        // unachievable so the renderer alternates smooth bursts with long frame
+        // stalls. Cap at 30 for a uniform rhythm, and stop background tile
+        // prefetch from competing with the visible raster.
+        map.preferredFramesPerSecond = 30
+        map.prefetchesTiles = false
         map.showsUserLocation = true
         map.allowsRotating = false
         map.userTrackingMode = .follow
@@ -129,6 +135,9 @@ struct MapView: UIViewRepresentable {
         private var pendingBuild: (region: OverlayRasterizer.Region, zoom: Int)?
         private var builtZoom = -1
         private var skippedBuildCount = 0
+        private var lastSourceBounceAt = Date.distantPast
+        private var lastInstalledZoom = -1
+        private static let sourceBounceMinInterval: TimeInterval = 2.0
 
         private let zoneRasterId = "zone-raster-layer"
         private let banRasterId = "ban-raster-layer"
@@ -254,20 +263,35 @@ struct MapView: UIViewRepresentable {
             }
             pendingBuild = nil
             let zoom = pending.zoom
+            let zoomHigh = min(zoom + 1, 20)
             rasterTask = Task.detached(priority: .utility) {
                 let result = OverlayRasterizer.build(files: files,
                                                      region: pending.region,
                                                      zMin: zoom,
-                                                     zMax: zoom)
+                                                     zMax: zoomHigh)
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self.rasterTask = nil
                     self.builtZoom = zoom
                     self.catalog = result.catalog
                     if result.deltaWritten > 0, self.layersApplied {
-                        // New files on disk — bounce the sources so MapLibre
-                        // picks up the freshly baked tiles.
-                        self.layersApplied = false
+                        // New files on disk. Bouncing sources makes MapLibre
+                        // re-fetch them — but a full remove/add of five raster
+                        // sources on the main thread is exactly the lift that
+                        // causes periodic stalls. Zip the cost:
+                        //  - zoom was rebuilt (catalog zoom range changed) ->
+                        //    always bounce, or the installed source min/max
+                        //    would freeze the overlay at the old zoom;
+                        //  - same-zoom top-up -> never mid-gesture and at most
+                        //    once per 2s, coalescing the pan's writes.
+                        let zoomChanged = self.lastInstalledZoom != zoom
+                        let now = Date()
+                        let sinceLast = now.timeIntervalSince(self.lastSourceBounceAt)
+                        if zoomChanged
+                            || (!self.cameraGestureActive() && sinceLast >= Self.sourceBounceMinInterval) {
+                            self.lastSourceBounceAt = now
+                            self.layersApplied = false
+                        }
                     }
                     self.installRasterIfCatalogReady()
                     self.publishDiagnostics()
@@ -282,11 +306,14 @@ struct MapView: UIViewRepresentable {
         /// and force-rebuilds only when the camera crossed an integer zoom.
         private func scheduleRasterBuildFromCamera() {
             guard let map = mapView, dataFiles != nil else { return }
-            // MapLibre requests tiles at floor(zoomLevel): bake that zoom so the
-            // compositor always finds a file (no rounding-half-up surprises).
+            // MapLibre requests tiles at floor(zoomLevel): bake that zoom plus
+            // one extra level so the first zoom-in is already crisp (no low-res
+            // upscales while the bake catches up). Four levels up from the
+            // viewport ≈ 5x the base tile count.
             let zoom = Int(map.zoomLevel.rounded(.down))
             let region = currentBuildRegion()
-            guard OverlayRasterizer.tileCount(region: region, zoom: zoom) <= 4000 else {
+            let baseCount = OverlayRasterizer.tileCount(region: region, zoom: zoom)
+            guard baseCount * 5 <= 6000 else {
                 // Pathological view (e.g. window-sized region at z17+ before the
                 // camera settles): do not spawn a multi-second build.
                 skippedBuildCount += 1
@@ -298,6 +325,11 @@ struct MapView: UIViewRepresentable {
                 pendingBuild = (region, zoom)
             }
             startRasterLoop()
+        }
+
+        private func cameraGestureActive() -> Bool {
+            guard let map = mapView, map.isUserInteractionEnabled else { return true }
+            return map.isScrolling || map.isZooming || map.isDecelerating
         }
 
         private func currentBuildRegion() -> OverlayRasterizer.Region {
@@ -348,7 +380,7 @@ struct MapView: UIViewRepresentable {
                 ]
                 for spec in specs {
                     let options: [MLNTileSourceOption: Any] = [
-                        .tileSize: 256,
+                        .tileSize: 512,
                         .minimumZoomLevel: catalog.zMin,
                         .maximumZoomLevel: catalog.zMax
                     ]
@@ -362,6 +394,7 @@ struct MapView: UIViewRepresentable {
                 }
                 layersApplied = true
                 layersReady = true
+                lastInstalledZoom = catalog.zMin
             }
             refreshLayerVisibility()
         }
