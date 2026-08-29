@@ -256,7 +256,7 @@ struct MapView: UIViewRepresentable {
             removeSourceIfPresent("poi-fireplace-source", style: style)
             removeSourceIfPresent("poi-other-source", style: style)
 
-            let zoneSource = MLNShapeSource(identifier: "zone-source", url: files.zonesURL, options: nil)
+            let zoneSource = MLNShapeSource(identifier: "zone-source", url: files.zonesURL, options: shapeSourceOptions)
             style.addSource(zoneSource)
 
             let zoneFill = MLNFillStyleLayer(identifier: zoneFillId, source: zoneSource)
@@ -270,24 +270,23 @@ struct MapView: UIViewRepresentable {
             zoneLine.lineWidth = NSExpression(forConstantValue: 2.0)
             style.addLayer(zoneLine)
 
-            let banSource = MLNShapeSource(identifier: "ban-source", url: files.bansURL, options: nil)
+            let banSource = MLNShapeSource(identifier: "ban-source", url: files.bansURL, options: shapeSourceOptions)
             style.addSource(banSource)
 
             let banFill = MLNFillStyleLayer(identifier: banFillId, source: banSource)
-            banFill.fillColor = NSExpression(forConstantValue: UIColor(red: 0.8, green: 0.1, blue: 0.1, alpha: 0.3))
-            banFill.fillOutlineColor = NSExpression(forConstantValue: UIColor(red: 0.6, green: 0.0, blue: 0.0, alpha: 1.0))
+            banFill.fillColor = NSExpression(forConstantValue: banFillColor(visible: showBans))
+            banFill.fillOutlineColor = NSExpression(forConstantValue: banOutlineColor(visible: showBans))
             banFill.fillAntialiased = NSExpression(forConstantValue: false)
-            banFill.isVisible = showBans
             style.addLayer(banFill)
 
             let banLine = MLNLineStyleLayer(identifier: banLineId, source: banSource)
             banLine.lineColor = NSExpression(forConstantValue: UIColor(red: 0.7, green: 0.05, blue: 0.05, alpha: 0.9))
             banLine.lineWidth = NSExpression(forConstantValue: 2.0)
-            banLine.isVisible = showBans
+            banLine.lineOpacity = NSExpression(forConstantValue: showBans ? 0.9 : 0.0)
             style.addLayer(banLine)
 
-            // One URL source per POI category; toggling a category is a plain
-            // layer-visibility flip, no data rebuild or re-filter.
+            // One URL source per POI category. Layers stay layout-visible
+            // (tiles stay hot) — toggling switches paint opacity only.
             let shelterSource = MLNShapeSource(identifier: "poi-shelter-source",
                                                url: files.shelterURL, options: nil)
             style.addSource(shelterSource)
@@ -295,7 +294,7 @@ struct MapView: UIViewRepresentable {
             let shelterLayer = poiCircleLayer(identifier: poiShelterId,
                                               source: shelterSource,
                                               color: UIColor(red: 0.10, green: 0.65, blue: 0.25, alpha: 1.0),
-                                              isVisible: showShelters)
+                                              isOpaque: showShelters)
             style.addLayer(shelterLayer)
 
             let fireplaceSource = MLNShapeSource(identifier: "poi-fireplace-source",
@@ -305,7 +304,7 @@ struct MapView: UIViewRepresentable {
             let fireplaceLayer = poiCircleLayer(identifier: poiFireplaceId,
                                                 source: fireplaceSource,
                                                 color: UIColor.systemOrange,
-                                                isVisible: showFireplaces)
+                                                isOpaque: showFireplaces)
             style.addLayer(fireplaceLayer)
 
             let otherSource = MLNShapeSource(identifier: "poi-other-source",
@@ -315,16 +314,31 @@ struct MapView: UIViewRepresentable {
             let otherLayer = poiCircleLayer(identifier: poiOtherId,
                                             source: otherSource,
                                             color: UIColor.systemBlue,
-                                            isVisible: showOthers)
+                                            isOpaque: showOthers)
             style.addLayer(otherLayer)
 
             layersReady = true
         }
 
+        /// Aggressive-enough tile simplification for the polygon sources. The
+        /// engine's default (0.375 px) keeps too many vertices country-wide,
+        /// which is what made tile-building lag burst on main.
+        private var shapeSourceOptions: [MLNShapeSourceOption: Any]? {
+            [.simplificationTolerance: 1.0]
+        }
+
+        private func banFillColor(visible: Bool) -> UIColor {
+            visible ? UIColor(red: 0.8, green: 0.1, blue: 0.1, alpha: 0.3) : UIColor.clear
+        }
+
+        private func banOutlineColor(visible: Bool) -> UIColor {
+            visible ? UIColor(red: 0.6, green: 0.0, blue: 0.0, alpha: 1.0) : UIColor.clear
+        }
+
         private func poiCircleLayer(identifier: String,
                                     source: MLNShapeSource,
                                     color: UIColor,
-                                    isVisible: Bool) -> MLNCircleStyleLayer {
+                                    isOpaque: Bool) -> MLNCircleStyleLayer {
             let layer = MLNCircleStyleLayer(identifier: identifier, source: source)
             // Zoom-scaled radius, mirroring Android: dots shrink when zoomed
             // out so a whole-country view does not collapse into a blob.
@@ -338,7 +352,8 @@ struct MapView: UIViewRepresentable {
             layer.circleColor = NSExpression(forConstantValue: color)
             layer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
             layer.circleStrokeWidth = NSExpression(forConstantValue: 1.5)
-            layer.isVisible = isVisible
+            layer.circleOpacity = NSExpression(forConstantValue: isOpaque ? 1.0 : 0.0)
+            layer.circleStrokeOpacity = NSExpression(forConstantValue: isOpaque ? 1.0 : 0.0)
             return layer
         }
 
@@ -407,18 +422,31 @@ struct MapView: UIViewRepresentable {
             publishDiagnostics()
         }
 
-        /// Toggles only flip layer visibility; the data files are never
-        /// touched here.
+        /// Toggles switch paint properties only (layers stay layout-visible, so
+        /// tweets baked by the tile pipeline stay hot and the switch is
+        /// instantaneous — no brick rebuild on reveal).
         private func refreshLayerVisibility() {
             guard let style = mapView?.style, layersReady else { return }
             let signature = "\(showBans)|\(showShelters)|\(showFireplaces)|\(showOthers)"
             guard signature != lastToggleSignature else { return }
             lastToggleSignature = signature
-            style.layer(withIdentifier: banFillId)?.isVisible = showBans
-            style.layer(withIdentifier: banLineId)?.isVisible = showBans
-            style.layer(withIdentifier: poiShelterId)?.isVisible = showShelters
-            style.layer(withIdentifier: poiFireplaceId)?.isVisible = showFireplaces
-            style.layer(withIdentifier: poiOtherId)?.isVisible = showOthers
+
+            if let banFill = style.layer(withIdentifier: banFillId) as? MLNFillStyleLayer {
+                banFill.fillColor = NSExpression(forConstantValue: banFillColor(visible: showBans))
+                banFill.fillOutlineColor = NSExpression(forConstantValue: banOutlineColor(visible: showBans))
+            }
+            if let banLine = style.layer(withIdentifier: banLineId) as? MLNLineStyleLayer {
+                banLine.lineOpacity = NSExpression(forConstantValue: showBans ? 0.9 : 0.0)
+            }
+            for entry in [(poiShelterId, showShelters),
+                          (poiFireplaceId, showFireplaces),
+                          (poiOtherId, showOthers)] {
+                if let layer = style.layer(withIdentifier: entry.0) as? MLNCircleStyleLayer {
+                    let opacity: Double = entry.1 ? 1.0 : 0.0
+                    layer.circleOpacity = NSExpression(forConstantValue: opacity)
+                    layer.circleStrokeOpacity = NSExpression(forConstantValue: opacity)
+                }
+            }
         }
 
         // MARK: Diagnostics
