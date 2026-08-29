@@ -125,8 +125,10 @@ struct MapView: UIViewRepresentable {
         // zooms are top-ups, so builds finish in ~seconds instead of never.
         private var catalog: OverlayRasterizer.Catalog?
         private var rasterTask: Task<Void, Never>?
+        private var writeTask: Task<Void, Never>?
         private var pendingBuild: (region: OverlayRasterizer.Region, zoom: Int)?
         private var builtZoom = -1
+        private var skippedBuildCount = 0
 
         private let zoneRasterId = "zone-raster-layer"
         private let banRasterId = "ban-raster-layer"
@@ -287,6 +289,7 @@ struct MapView: UIViewRepresentable {
             guard OverlayRasterizer.tileCount(region: region, zoom: zoom) <= 4000 else {
                 // Pathological view (e.g. window-sized region at z17+ before the
                 // camera settles): do not spawn a multi-second build.
+                skippedBuildCount += 1
                 pendingBuild = nil
                 return
             }
@@ -398,11 +401,16 @@ struct MapView: UIViewRepresentable {
             let zones = zonesJson
             let bans = bansJson
             let pois = poisJson
-            rasterTask?.cancel()
-            rasterTask = Task.detached(priority: .utility) {
+            // The write task must NOT live in `rasterTask`: it would keep the
+            // build loop permanently blocked behind a stale "busy" reference
+            // (the makeFiles task never cleared itself), leaving the overlay
+            // stuck on "pending" forever.
+            writeTask?.cancel()
+            writeTask = Task.detached(priority: .utility) {
                 let files = GeoJsonFileWriter.makeFiles(zones: zones, bans: bans, pois: pois)
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
+                    self.writeTask = nil
                     if let files = files {
                         self.applyFiles(files)
                     } else {
@@ -424,6 +432,7 @@ struct MapView: UIViewRepresentable {
             // New dataset: drop every baked tile so nothing stale can remain,
             // then rebuild for the current viewport in the background.
             rasterTask?.cancel()
+            writeTask?.cancel()
             catalog = nil
             layersApplied = false
             layersReady = false
@@ -464,7 +473,11 @@ struct MapView: UIViewRepresentable {
             let zMin = catalog?.zMin ?? 0
             let zMax = catalog?.zMax ?? 0
             // Localized "overlay" so QA can tell whether the raster pipeline ran.
-            let overlayText = layersReady ? "tiles=\(tiles) z=\(zMin)-\(zMax)" : "pending"
+            // The "pending" tail exposes the exact gate that is stuck: file
+            // presence, queued zoom, busy task, and budget-skip counter.
+            let overlayText = layersReady
+                ? "tiles=\(tiles) z=\(zMin)-\(zMax)"
+                : "pending files=\(dataFiles != nil) q=\(pendingBuild?.zoom ?? -1) busy=\(rasterTask != nil) skip=\(skippedBuildCount)"
             let text = """
             style=\(styleState) fail=\(fail) layers=\(layersState)
             overlay: \(overlayText)
