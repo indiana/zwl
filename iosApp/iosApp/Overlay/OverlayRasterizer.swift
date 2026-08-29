@@ -387,14 +387,17 @@ enum OverlayRasterizer {
                 guard let points = features as? [OverlayPoint] else { return }
                 let radius = poiRadius(zoom: z)
                 if radius < 2 { return }
+                let rad = Double(radius)
                 let fill = layer.fillColor
                 let color = UIColor(red: fill.r, green: fill.g, blue: fill.b, alpha: fill.a)
                 for point in points {
                     let px = (worldX(lon: point.lon) * Double(scale)) * 256.0 - Double(x * 256)
                     let py = (worldY(lat: point.lat) * Double(scale)) * 256.0 - Double(y * 256)
-                    guard px >= -radius, px <= 256 + radius,
-                          py >= -radius, py <= 256 + radius else { continue }
-                    let rect = CGRect(x: px - radius, y: py - radius,
+                    guard px >= -rad, px <= 256.0 + rad,
+                          py >= -rad, py <= 256.0 + rad else { continue }
+                    let cx = CGFloat(px)
+                    let cy = CGFloat(py)
+                    let rect = CGRect(x: cx - radius, y: cy - radius,
                                       width: radius * 2, height: radius * 2)
                     cg.setFillColor(color.cgColor)
                     cg.fillEllipse(in: rect)
