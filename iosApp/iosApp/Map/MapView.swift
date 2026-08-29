@@ -138,6 +138,7 @@ struct MapView: UIViewRepresentable {
         private var lastSourceBounceAt = Date.distantPast
         private var lastInstalledZoom = -1
         private var isCameraMoving = false
+        private var lastGoodRegion: OverlayRasterizer.Region?
         private static let sourceBounceMinInterval: TimeInterval = 2.0
 
         private let zoneRasterId = "zone-raster-layer"
@@ -281,6 +282,12 @@ struct MapView: UIViewRepresentable {
                     self.rasterTask = nil
                     self.builtZoom = zoom
                     self.catalog = result.catalog
+                    if result.catalog.tilesDone == 0 {
+                        // Degenerate build (empty tile range — camera not fully
+                        // laid out yet): never let this freeze force-rebuilds,
+                        // so the next regionDidChange re-bakes with real bounds.
+                        self.builtZoom = -1
+                    }
                     if result.deltaWritten > 0, self.layersApplied {
                         // New files on disk. Bouncing sources makes MapLibre
                         // re-fetch them — but a full remove/add of five raster
@@ -339,22 +346,36 @@ struct MapView: UIViewRepresentable {
         }
 
         private func currentBuildRegion() -> OverlayRasterizer.Region {
+            var candidate: OverlayRasterizer.Region?
             if let map = mapView {
                 let b = map.visibleCoordinateBounds
                 let s = b.sw
                 let n = b.ne
                 let latPad = max(n.latitude - s.latitude, 0.02) * 0.05
                 let lonPad = max(n.longitude - s.longitude, 0.02) * 0.05
-                return .init(latSouth: s.latitude - latPad,
-                             latNorth: n.latitude + latPad,
-                             lonWest: s.longitude - lonPad,
-                             lonEast: n.longitude + lonPad)
+                candidate = .init(latSouth: s.latitude - latPad,
+                                  latNorth: n.latitude + latPad,
+                                  lonWest: s.longitude - lonPad,
+                                  lonEast: n.longitude + lonPad)
+            } else {
+                let lat = MapStyle.shared.DEFAULT_LAT
+                candidate = .init(latSouth: lat - 0.15,
+                                  latNorth: lat + 0.15,
+                                  lonWest: MapStyle.shared.DEFAULT_LNG - 0.25,
+                                  lonEast: MapStyle.shared.DEFAULT_LNG + 0.25)
             }
-            let lat = MapStyle.shared.DEFAULT_LAT
-            return .init(latSouth: lat - 0.15,
-                         latNorth: lat + 0.15,
-                         lonWest: MapStyle.shared.DEFAULT_LNG - 0.25,
-                         lonEast: MapStyle.shared.DEFAULT_LNG + 0.25)
+            if let candidate = candidate, candidate.isValid {
+                lastGoodRegion = candidate
+                return candidate
+            }
+            // Degenerate viewport (frame not laid out yet): reuse the last valid
+            // region so the bake still covers the previous camera instead of
+            // producing an empty tile range (tilesDone == 0).
+            return lastGoodRegion ?? OverlayRasterizer.Region(
+                latSouth: MapStyle.shared.DEFAULT_LAT - 0.15,
+                latNorth: MapStyle.shared.DEFAULT_LAT + 0.15,
+                lonWest: MapStyle.shared.DEFAULT_LNG - 0.25,
+                lonEast: MapStyle.shared.DEFAULT_LNG + 0.25)
         }
 
         // MARK: Layers
@@ -509,13 +530,16 @@ struct MapView: UIViewRepresentable {
             let fail = styleErrorText.isEmpty ? "-" : styleErrorText
             let layersState = layersReady ? "YES" : "NO"
             let tiles = catalog?.writtenTiles ?? 0
+            let done = catalog?.tilesDone ?? 0
             let zMin = catalog?.zMin ?? 0
             let zMax = catalog?.zMax ?? 0
             // Localized "overlay" so QA can tell whether the raster pipeline ran.
-            // The "pending" tail exposes the exact gate that is stuck: file
+            // `done` = tiles attempted, `tiles` = those actually written.
+            // done==0 -> build had an empty/degenerate region; done>0==tiles ->
+            // render failed. The "pending" tail exposes the stuck gate: file
             // presence, queued zoom, busy task, and budget-skip counter.
             let overlayText = layersReady
-                ? "tiles=\(tiles) z=\(zMin)-\(zMax)"
+                ? "tiles=\(tiles)/\(done) z=\(zMin)-\(zMax) skip=\(skippedBuildCount)"
                 : "pending files=\(dataFiles != nil) q=\(pendingBuild?.zoom ?? -1) busy=\(rasterTask != nil) skip=\(skippedBuildCount)"
             let text = """
             style=\(styleState) fail=\(fail) layers=\(layersState)

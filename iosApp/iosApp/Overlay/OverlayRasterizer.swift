@@ -154,6 +154,14 @@ enum OverlayRasterizer {
         let latNorth: Double
         let lonWest: Double
         let lonEast: Double
+
+        /// A region is usable for tile-range math only when the coordinates are
+        /// finite and the rectangle is not inverted/zero-sized (occurs when the
+        /// camera reads bounds before the map has got its frame).
+        var isValid: Bool {
+            latSouth.isFinite && latNorth.isFinite && lonWest.isFinite && lonEast.isFinite
+                && latSouth < latNorth && lonWest < lonEast
+        }
     }
 
     static func worldX(lon: Double) -> Double { (lon + 180.0) / 360.0 }
