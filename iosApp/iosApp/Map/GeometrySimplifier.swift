@@ -18,7 +18,9 @@ enum GeometrySimplifier {
     /// with the same closed invariant.
     static func simplifyRing(_ ring: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
         guard ring.count > 4 else { return ring }
-        let isClosed = ring.first == ring.last
+        let isClosed = ring.count >= 2
+            && ring[0].latitude == ring[ring.count - 1].latitude
+            && ring[0].longitude == ring[ring.count - 1].longitude
         let interior = isClosed ? Array(ring.dropLast()) : ring
         guard interior.count >= 3 else { return ring }
         let simplified = douglasPeucker(interior, tolerance: tolerance)
