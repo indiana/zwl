@@ -251,7 +251,7 @@ struct MapView: UIViewRepresentable {
             zoneFill.fillOutlineColor = NSExpression(forConstantValue: UIColor(red: 0.0, green: 0.4, blue: 0.1, alpha: 1.0))
             // Antialiased fills are a big fragment cost for many-polygon
             // sources on older devices; the overlay look barely notices it off.
-            zoneFill.fillAntialias = NSExpression(forConstantValue: false)
+            zoneFill.fillAntialiased = NSExpression(forConstantValue: false)
             style.addLayer(zoneFill)
 
             let zoneLine = MLNLineStyleLayer(identifier: zoneLineId, source: zoneSource)
@@ -266,7 +266,7 @@ struct MapView: UIViewRepresentable {
             let banFill = MLNFillStyleLayer(identifier: banFillId, source: banSource)
             banFill.fillColor = NSExpression(forConstantValue: UIColor(red: 0.8, green: 0.1, blue: 0.1, alpha: 0.3))
             banFill.fillOutlineColor = NSExpression(forConstantValue: UIColor(red: 0.6, green: 0.0, blue: 0.0, alpha: 1.0))
-            banFill.fillAntialias = NSExpression(forConstantValue: false)
+            banFill.fillAntialiased = NSExpression(forConstantValue: false)
             style.addLayer(banFill)
 
             let banLine = MLNLineStyleLayer(identifier: banLineId, source: banSource)
