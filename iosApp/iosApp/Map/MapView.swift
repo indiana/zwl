@@ -120,12 +120,15 @@ struct MapView: UIViewRepresentable {
         private var lastJsonSignature = ""
         private var lastToggleSignature = ""
         private var lastDiagnosticsText = ""
+        private var parseTask: Task<Void, Never>?
 
         private let zoneFillId = "zone-fill-layer"
         private let zoneLineId = "zone-line-layer"
         private let banFillId = "ban-fill-layer"
         private let banLineId = "ban-line-layer"
-        private let poiCircleId = "poi-circle-layer"
+        private let poiShelterId = "poi-shelter-layer"
+        private let poiFireplaceId = "poi-fireplace-layer"
+        private let poiOtherId = "poi-other-layer"
 
         private var parent: MapView
 
@@ -236,7 +239,9 @@ struct MapView: UIViewRepresentable {
             removeLayerIfPresent(zoneLineId, style: style)
             removeLayerIfPresent(banFillId, style: style)
             removeLayerIfPresent(banLineId, style: style)
-            removeLayerIfPresent(poiCircleId, style: style)
+            removeLayerIfPresent(poiShelterId, style: style)
+            removeLayerIfPresent(poiFireplaceId, style: style)
+            removeLayerIfPresent(poiOtherId, style: style)
             removeSourceIfPresent("zone-source", style: style)
             removeSourceIfPresent("ban-source", style: style)
             removeSourceIfPresent("poi-source", style: style)
@@ -269,18 +274,49 @@ struct MapView: UIViewRepresentable {
             banLine.lineWidth = NSExpression(forConstantValue: 2.0)
             style.addLayer(banLine)
 
+            // One POI source, three circle layers filtered by `categoryKey` so
+            // toggling visibility never rebuilds/refilters the data.
             let poiSource = MLNShapeSource(identifier: "poi-source", features: [], options: nil)
             style.addSource(poiSource)
             self.poiSource = poiSource
 
-            let poiCircle = MLNCircleStyleLayer(identifier: poiCircleId, source: poiSource)
-            poiCircle.circleRadius = NSExpression(forConstantValue: 6.0)
-            poiCircle.circleColor = colorExpression()
-            poiCircle.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
-            poiCircle.circleStrokeWidth = NSExpression(forConstantValue: 1.5)
-            style.addLayer(poiCircle)
+            let shelter = poiCircleLayer(identifier: poiShelterId,
+                                         source: poiSource,
+                                         color: UIColor(red: 0.10, green: 0.65, blue: 0.25, alpha: 1.0))
+            shelter.predicate = NSPredicate(format: "categoryKey == %@", "shelter")
+            shelter.isVisible = showShelters
+            style.addLayer(shelter)
+
+            let fireplace = poiCircleLayer(identifier: poiFireplaceId,
+                                           source: poiSource,
+                                           color: UIColor.systemOrange)
+            fireplace.predicate = NSPredicate(format: "categoryKey == %@", "fireplace")
+            fireplace.isVisible = showFireplaces
+            style.addLayer(fireplace)
+
+            let other = poiCircleLayer(identifier: poiOtherId,
+                                       source: poiSource,
+                                       color: UIColor.systemBlue)
+            other.predicate = NSPredicate(format: "categoryKey != %@ AND categoryKey != %@",
+                                          "shelter", "fireplace")
+            other.isVisible = showOthers
+            style.addLayer(other)
+
+            style.layer(withIdentifier: banFillId)?.isVisible = showBans
+            style.layer(withIdentifier: banLineId)?.isVisible = showBans
 
             layersReady = true
+        }
+
+        private func poiCircleLayer(identifier: String,
+                                    source: MLNShapeSource,
+                                    color: UIColor) -> MLNCircleStyleLayer {
+            let layer = MLNCircleStyleLayer(identifier: identifier, source: source)
+            layer.circleRadius = NSExpression(forConstantValue: 6.0)
+            layer.circleColor = NSExpression(forConstantValue: color)
+            layer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+            layer.circleStrokeWidth = NSExpression(forConstantValue: 1.5)
+            return layer
         }
 
         private func removeLayerIfPresent(_ id: String, style: MLNStyle) {
@@ -295,76 +331,86 @@ struct MapView: UIViewRepresentable {
             }
         }
 
-        private func colorExpression() -> NSExpression {
-            let shelterColor = NSExpression(forConstantValue: UIColor(red: 0.10, green: 0.65, blue: 0.25, alpha: 1.0))
-            let fireplaceColor = NSExpression(forConstantValue: UIColor.systemOrange)
-            let fallbackColor = NSExpression(forConstantValue: UIColor.systemBlue)
-            let matched = [
-                NSExpression(forConstantValue: "shelter"): shelterColor,
-                NSExpression(forConstantValue: "fireplace"): fireplaceColor
-            ]
-            return NSExpression(forMLNMatchingKey: NSExpression(forKeyPath: "categoryKey"),
-                                in: matched,
-                                default: fallbackColor)
-        }
-
         // MARK: Data application
 
         func applySourcesIfReady() {
             guard styleLoaded, mapView != nil else { return }
-
-            let jsonSignature = "\(zonesJson.count)|\(bansJson.count)|\(poisJson.count)"
-            if jsonSignature != lastJsonSignature {
-                lastJsonSignature = jsonSignature
-                jsonByteCount = (zones: zonesJson.count,
-                                 bans: bansJson.count,
-                                 pois: poisJson.count)
-
-                parsedZoneFeatures = GeoJsonToFeatures.features(from: zonesJson)
-                zoneFeatureCount = parsedZoneFeatures.count
-                zoneSource?.shape = MLNShapeCollectionFeature(shapes: parsedZoneFeatures)
-
-                parsedBanFeatures = GeoJsonToFeatures.features(from: bansJson)
-                banFeatureCount = parsedBanFeatures.count
-                banSource?.shape = MLNShapeCollectionFeature(shapes: parsedBanFeatures)
-
-                parsedPoiFeatures = GeoJsonToFeatures.features(from: poisJson)
-                poiFeatureCount = parsedPoiFeatures.count
-                poiShelterCount = parsedPoiFeatures.filter { poiCategoryKey($0) == "shelter" }.count
-                poiFireplaceCount = parsedPoiFeatures.filter { poiCategoryKey($0) == "fireplace" }.count
-                poiOtherCount = poiFeatureCount - poiShelterCount - poiFireplaceCount
-
-                // Fresh data: force the toggle-filters below to run once.
-                lastToggleSignature = ""
-            }
-
-            // Cheap per-update work only when a toggle actually changed:
-            // re-filter the POIs for the current toggles and sync ban layer
-            // visibility. Rebuilding the shape collection (which makes MapLibre
-            // re-ingest the data) on every updateUIView is what made scrolling
-            // stutter.
-            let toggleSignature = "\(showBans)|\(showShelters)|\(showFireplaces)|\(showOthers)"
-            if toggleSignature != lastToggleSignature {
-                lastToggleSignature = toggleSignature
-                let filteredPois = parsedPoiFeatures.filter { feature in
-                    switch poiCategoryKey(feature) {
-                    case "shelter": return showShelters
-                    case "fireplace": return showFireplaces
-                    default: return showOthers
-                    }
-                }
-                poiSource?.shape = MLNShapeCollectionFeature(shapes: filteredPois)
-
-                if let style = mapView?.style {
-                    style.layer(withIdentifier: banFillId)?.isVisible = showBans
-                    style.layer(withIdentifier: banLineId)?.isVisible = showBans
-                }
-            }
+            scheduleParseIfNeeded()
+            refreshLayerVisibility()
             publishDiagnostics()
         }
 
-        private func poiCategoryKey(_ feature: MLNShape) -> String {
-            (feature as? MLNFeature)?.attributes["categoryKey"] as? String ?? "other"
+        /// Kicks off parsing on a background QoS, once per data change. The
+        /// heavy GeoJSON decode + simplification must never run on the main
+        /// thread (it previously froze the app for seconds at first open).
+        private func scheduleParseIfNeeded() {
+            let jsonSignature = "\(zonesJson.count)|\(bansJson.count)|\(poisJson.count)"
+            guard jsonSignature != lastJsonSignature else { return }
+            lastJsonSignature = jsonSignature
+            jsonByteCount = (zones: zonesJson.count,
+                             bans: bansJson.count,
+                             pois: poisJson.count)
+
+            let zones = zonesJson
+            let bans = bansJson
+            let pois = poisJson
+            parseTask?.cancel()
+            parseTask = Task.detached(priority: .utility) { [weak self] in
+                let zoneFeatures = GeoJsonToFeatures.features(from: zones)
+                let banFeatures = GeoJsonToFeatures.features(from: bans)
+                let poiFeatures = GeoJsonToFeatures.features(from: pois)
+                let shel = poiFeatures.filter { GeoJsonToFeatures.categoryKey(of: $0) == "shelter" }.count
+                let fire = poiFeatures.filter { GeoJsonToFeatures.categoryKey(of: $0) == "fireplace" }.count
+                let other = poiFeatures.count - shel - fire
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self?.applyParsed(zones: zoneFeatures,
+                                      bans: banFeatures,
+                                      pois: poiFeatures,
+                                      shelter: shel,
+                                      fireplace: fire,
+                                      other: other)
+                }
+            }
+        }
+
+        private func applyParsed(zones: [MLNShape],
+                                 bans: [MLNShape],
+                                 pois: [MLNShape],
+                                 shelter: Int,
+                                 fireplace: Int,
+                                 other: Int) {
+            parsedZoneFeatures = zones
+            zoneFeatureCount = zones.count
+            zoneSource?.shape = MLNShapeCollectionFeature(shapes: zones)
+
+            parsedBanFeatures = bans
+            banFeatureCount = bans.count
+            banSource?.shape = MLNShapeCollectionFeature(shapes: bans)
+
+            parsedPoiFeatures = pois
+            poiFeatureCount = pois.count
+            poiShelterCount = shelter
+            poiFireplaceCount = fireplace
+            poiOtherCount = other
+
+            refreshLayerVisibility()
+            publishDiagnostics()
+        }
+
+        /// Toggles only touch layer visibility; the shape data is never rebuilt
+        /// here (that used to make MapLibre re-ingest the whole collection on
+        /// every updateUIView and stutter the scroll).
+        private func refreshLayerVisibility() {
+            guard let style = mapView?.style else { return }
+            let signature = "\(showBans)|\(showShelters)|\(showFireplaces)|\(showOthers)"
+            guard signature != lastToggleSignature else { return }
+            lastToggleSignature = signature
+            style.layer(withIdentifier: banFillId)?.isVisible = showBans
+            style.layer(withIdentifier: banLineId)?.isVisible = showBans
+            style.layer(withIdentifier: poiShelterId)?.isVisible = showShelters
+            style.layer(withIdentifier: poiFireplaceId)?.isVisible = showFireplaces
+            style.layer(withIdentifier: poiOtherId)?.isVisible = showOthers
         }
 
         // MARK: Diagnostics
@@ -430,7 +476,10 @@ struct MapView: UIViewRepresentable {
             let point = gesture.location(in: mapView)
             let tapRect = CGRect(x: point.x - 30, y: point.y - 30, width: 60, height: 60)
 
-            let pois = mapView.visibleFeatures(in: tapRect, styleLayerIdentifiers: [poiCircleId])
+            let pois = mapView.visibleFeatures(
+                in: tapRect,
+                styleLayerIdentifiers: [poiShelterId, poiFireplaceId, poiOtherId]
+            )
             if let poiFeature = pois.first {
                 if let name = poiFeature.attribute(forKey: "name") as? String {
                     onTapPoi(name)

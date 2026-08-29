@@ -49,9 +49,18 @@ enum GeoJsonToFeatures {
         return result
     }
 
+    static func categoryKey(of feature: MLNShape) -> String {
+        (feature as? MLNFeature)?.attributes["categoryKey"] as? String ?? "other"
+    }
+
     private static func polygonFeatures(rings: [[[Any]]], properties: [String: Any]) -> [MLNShape] {
         guard let shellNumbered = rings.first else { return [] }
-        let shellPoints = shellNumbered.compactMap { coordinate2D($0) }
+        let denseShell = shellNumbered.compactMap { coordinate2D($0) }
+        guard denseShell.count >= 3 else { return [] }
+
+        // Decimate for the renderer (display-only; zone membership uses the
+        // unmodified shared data).
+        let shellPoints = GeometrySimplifier.simplifyRing(denseShell)
         guard shellPoints.count >= 3 else { return [] }
 
         let polygon = shellPoints.withUnsafeBufferPointer { buffer -> MLNPolygonFeature in
