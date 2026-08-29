@@ -112,6 +112,14 @@ struct MapView: UIViewRepresentable {
         private var hasCenteredOnStartup = false
         private var lastRecenterSignal = 0
 
+        // Cached parsed features so `updateUIView` (fired on every observable
+        // change) never re-parses the whole GeoJSON on the main thread.
+        private var parsedZoneFeatures: [MLNShape] = []
+        private var parsedBanFeatures: [MLNShape] = []
+        private var parsedPoiFeatures: [MLNShape] = []
+        private var lastJsonSignature = ""
+        private var lastDiagnosticsText = ""
+
         private let zoneFillId = "zone-fill-layer"
         private let zoneLineId = "zone-line-layer"
         private let banFillId = "ban-fill-layer"
@@ -302,46 +310,50 @@ struct MapView: UIViewRepresentable {
         // MARK: Data application
 
         func applySourcesIfReady() {
-            guard styleLoaded, let mapView = mapView else { return }
+            guard styleLoaded, mapView != nil else { return }
 
-            jsonByteCount = (zones: zonesJson.count,
-                             bans: bansJson.count,
-                             pois: poisJson.count)
+            let jsonSignature = "\(zonesJson.count)|\(bansJson.count)|\(poisJson.count)"
+            if jsonSignature != lastJsonSignature {
+                lastJsonSignature = jsonSignature
+                jsonByteCount = (zones: zonesJson.count,
+                                 bans: bansJson.count,
+                                 pois: poisJson.count)
 
-            let zoneFeatures = GeoJsonToFeatures.features(from: zonesJson)
-            zoneFeatureCount = zoneFeatures.count
-            zoneSource?.shape = MLNShapeCollectionFeature(shapes: zoneFeatures)
+                parsedZoneFeatures = GeoJsonToFeatures.features(from: zonesJson)
+                zoneFeatureCount = parsedZoneFeatures.count
+                zoneSource?.shape = MLNShapeCollectionFeature(shapes: parsedZoneFeatures)
 
-            let banFeatures = GeoJsonToFeatures.features(from: bansJson)
-            banFeatureCount = banFeatures.count
-            banSource?.shape = MLNShapeCollectionFeature(shapes: banFeatures)
+                parsedBanFeatures = GeoJsonToFeatures.features(from: bansJson)
+                banFeatureCount = parsedBanFeatures.count
+                banSource?.shape = MLNShapeCollectionFeature(shapes: parsedBanFeatures)
 
-            let pois = GeoJsonToFeatures.features(from: poisJson)
-            poiFeatureCount = pois.count
-            poiShelterCount = 0
-            poiFireplaceCount = 0
-            poiOtherCount = 0
-            let filteredPois = pois.filter { feature in
-                let key = (feature as? MLNFeature)?.attributes["categoryKey"] as? String ?? "other"
-                switch key {
-                case "shelter":
-                    poiShelterCount += 1
-                    return showShelters
-                case "fireplace":
-                    poiFireplaceCount += 1
-                    return showFireplaces
-                default:
-                    poiOtherCount += 1
-                    return showOthers
+                parsedPoiFeatures = GeoJsonToFeatures.features(from: poisJson)
+                poiFeatureCount = parsedPoiFeatures.count
+                poiShelterCount = parsedPoiFeatures.filter { poiCategoryKey($0) == "shelter" }.count
+                poiFireplaceCount = parsedPoiFeatures.filter { poiCategoryKey($0) == "fireplace" }.count
+                poiOtherCount = poiFeatureCount - poiShelterCount - poiFireplaceCount
+            }
+
+            // Cheap per-update work: re-filter POIs for the current toggles and
+            // sync ban layer visibility.
+            let filteredPois = parsedPoiFeatures.filter { feature in
+                switch poiCategoryKey(feature) {
+                case "shelter": return showShelters
+                case "fireplace": return showFireplaces
+                default: return showOthers
                 }
             }
             poiSource?.shape = MLNShapeCollectionFeature(shapes: filteredPois)
 
-            if let style = mapView.style {
+            if let style = mapView?.style {
                 style.layer(withIdentifier: banFillId)?.isVisible = showBans
                 style.layer(withIdentifier: banLineId)?.isVisible = showBans
             }
             publishDiagnostics()
+        }
+
+        private func poiCategoryKey(_ feature: MLNShape) -> String {
+            (feature as? MLNFeature)?.attributes["categoryKey"] as? String ?? "other"
         }
 
         // MARK: Diagnostics
@@ -356,7 +368,13 @@ struct MapView: UIViewRepresentable {
             bans:  json \(jsonByteCount.bans) feat \(banFeatureCount)
             pois:  json \(jsonByteCount.pois) feat \(poiFeatureCount) (sh \(poiShelterCount) fp \(poiFireplaceCount) ot \(poiOtherCount))
             """
-            onDiagnostics(text)
+            // `@Published` always emits on assignment, so writing back an unchanged
+            // string here would trigger a SwiftUI re-render loop that freezes the
+            // app. Only push new text through.
+            if text != lastDiagnosticsText {
+                lastDiagnosticsText = text
+                onDiagnostics(text)
+            }
         }
 
         // MARK: Camera centering
