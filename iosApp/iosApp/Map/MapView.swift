@@ -13,6 +13,7 @@ struct MapView: UIViewRepresentable {
     let showFireplaces: Bool
     let showOthers: Bool
     let overlayEnabled: Bool
+    let baseEnabled: Bool
     let followsUser: Bool
     let showHeading: Bool
     let userLatitude: Double?
@@ -58,7 +59,10 @@ struct MapView: UIViewRepresentable {
         map.setCenter(
             CLLocationCoordinate2D(latitude: MapStyle.shared.DEFAULT_LAT,
                                    longitude: MapStyle.shared.DEFAULT_LNG),
-            zoomLevel: MapStyle.shared.DEFAULT_ZOOM,
+            // Start lighter than DEFAULT_ZOOM: the initial tile burst is the
+            // biggest single startup block on this iPad class. The first GPS
+            // fix later re-centers to DEFAULT_ZOOM (see handleCentering).
+            zoomLevel: 12,
             animated: false
         )
 
@@ -79,6 +83,7 @@ struct MapView: UIViewRepresentable {
         coordinator.showFireplaces = showFireplaces
         coordinator.showOthers = showOthers
         coordinator.overlayEnabled = overlayEnabled
+        coordinator.baseEnabled = baseEnabled
         coordinator.followsUser = followsUser
         coordinator.showHeading = showHeading
         coordinator.onTapZone = onTapZone
@@ -109,6 +114,16 @@ struct MapView: UIViewRepresentable {
                 guard oldValue != overlayEnabled else { return }
                 resetStallMeter()
                 applyOverlayEnabled()
+            }
+        }
+        /// Diagnostics: fades the OSM base raster to 0/1 to measure what the
+        /// base layer alone costs on the main thread (and to give a usable
+        /// "fast map" while isolating it).
+        var baseEnabled = true {
+            didSet {
+                guard oldValue != baseEnabled else { return }
+                resetStallMeter()
+                applyBaseEnabled()
             }
         }
         var followsUser = true {
@@ -483,7 +498,9 @@ struct MapView: UIViewRepresentable {
                 layersApplied = true
                 layersReady = true
                 lastInstalledZoom = catalog.zMin
-                tOverlay = Date().timeIntervalSince(startTimestamp)
+                if tOverlay == nil {
+                    tOverlay = Date().timeIntervalSince(startTimestamp)
+                }
             }
             refreshLayerVisibility()
         }
@@ -531,6 +548,15 @@ struct MapView: UIViewRepresentable {
             }
         }
 
+        /// Sets the OSM base raster opacity (diagnostics A/B). Idempotent —
+        /// called from the toggle and re-applied whenever the style reloads.
+        private func applyBaseEnabled() {
+            guard let style = mapView?.style else { return }
+            if let layer = style.layer(withIdentifier: "osm") as? MLNRasterStyleLayer {
+                layer.rasterOpacity = NSExpression(forConstantValue: baseEnabled ? 1.0 : 0.0)
+            }
+        }
+
         // MARK: Data application
 
         func applySourcesIfReady() {
@@ -538,6 +564,7 @@ struct MapView: UIViewRepresentable {
             scheduleWriteIfNeeded()
             installRasterIfCatalogReady()
             refreshLayerVisibility()
+            applyBaseEnabled()
             publishDiagnostics()
         }
 

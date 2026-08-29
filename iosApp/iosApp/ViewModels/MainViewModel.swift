@@ -85,6 +85,12 @@ final class MainViewModel: NSObject, ObservableObject {
     let app: ForestApp
     private let locationManager = CLLocationManager()
     private var lastInZoneDistrict: String?
+    // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
+    // re-renders the map on the main thread (the iPad-class bottleneck), so
+    // only meaningful movement/timing changes are published.
+    private var lastPublishedLocation: CLLocation?
+    private var lastHeadingAt = Date.distantPast
+    private var lastAzimuthValue: Float?
 
     init(app: ForestApp) {
         self.app = app
@@ -388,6 +394,15 @@ extension MainViewModel: CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
+        if let prev = lastPublishedLocation {
+            let distance = loc.distance(from: prev)
+            let elapsed = loc.timestamp.timeIntervalSince(prev.timestamp)
+            // Skip sub-5m jitter arriving within 2s of the last published fix —
+            // a stationary device is the exact case where 1Hz re-renders stall
+            // the map for no reason.
+            if distance < 5, elapsed < 2 { return }
+        }
+        lastPublishedLocation = loc
         userLatitude = loc.coordinate.latitude
         userLongitude = loc.coordinate.longitude
         computeLocationStatus()
@@ -398,7 +413,15 @@ extension MainViewModel: CLLocationManagerDelegate {
         guard newHeading.headingAccuracy >= 0 else { return }
         let trueHeading = newHeading.trueHeading
         let magneticHeading = newHeading.magneticHeading
-        azimuth = Float(trueHeading >= 0 ? trueHeading : magneticHeading)
+        let value = Float(trueHeading >= 0 ? trueHeading : magneticHeading)
+        let now = Date()
+        // Sensor events can stream many times a second; publish at most 1Hz and
+        // only when the heading actually moved by at least a degree.
+        guard now.timeIntervalSince(lastHeadingAt) >= 1.0 else { return }
+        if let last = lastAzimuthValue, abs(value - last) < 1 { return }
+        lastHeadingAt = now
+        lastAzimuthValue = value
+        azimuth = value
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

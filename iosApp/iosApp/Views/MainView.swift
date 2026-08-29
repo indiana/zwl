@@ -5,6 +5,7 @@ struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
     @State private var overlayEnabled = true
+    @State private var baseEnabled = true
     @State private var followsUser = true
     @State private var showHeading = true
 
@@ -162,6 +163,7 @@ struct MainView: View {
             showFireplaces: viewModel.showFireplaces,
             showOthers: viewModel.showOthers,
             overlayEnabled: overlayEnabled,
+            baseEnabled: baseEnabled,
             followsUser: followsUser,
             showHeading: showHeading,
             userLatitude: viewModel.userLatitude,
@@ -210,6 +212,10 @@ struct MainView: View {
             Toggle("Inne", isOn: $viewModel.showOthers)
 
             Divider()
+
+            // Diagnostics: fades the OSM base raster off to measure how much the
+            // base layer alone costs on the main thread.
+            Toggle("Baza OSM (diagnoza)", isOn: $baseEnabled)
 
             // Diagnostics-only switch: removes the five raster overlay layers in
             // place so we can A/B whether the overlay (or the base map) is what
