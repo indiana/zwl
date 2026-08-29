@@ -39,7 +39,7 @@ struct MapView: UIViewRepresentable {
         // unachievable so the renderer alternates smooth bursts with long frame
         // stalls. Cap at 30 for a uniform rhythm, and stop background tile
         // prefetch from competing with the visible raster.
-        map.preferredFramesPerSecond = 30
+        map.preferredFramesPerSecond = .lowPower
         map.prefetchesTiles = false
         map.showsUserLocation = true
         map.allowsRotating = false
@@ -137,6 +137,7 @@ struct MapView: UIViewRepresentable {
         private var skippedBuildCount = 0
         private var lastSourceBounceAt = Date.distantPast
         private var lastInstalledZoom = -1
+        private var isCameraMoving = false
         private static let sourceBounceMinInterval: TimeInterval = 2.0
 
         private let zoneRasterId = "zone-raster-layer"
@@ -171,6 +172,8 @@ struct MapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) {
+            // A gesture (or programmatic camera move) has settled.
+            isCameraMoving = false
             let bounds = mapView.visibleCoordinateBounds
             onVisibleRegionChange(
                 MapRegion(latSouth: bounds.sw.latitude,
@@ -180,6 +183,10 @@ struct MapView: UIViewRepresentable {
             )
             // Bake (or top up) the overlay tiles the current viewport needs.
             scheduleRasterBuildFromCamera()
+        }
+
+        func mapViewRegionIsChanging(_ mapView: MLNMapView) {
+            isCameraMoving = true
         }
 
         // MARK: Style readiness
@@ -328,8 +335,7 @@ struct MapView: UIViewRepresentable {
         }
 
         private func cameraGestureActive() -> Bool {
-            guard let map = mapView, map.isUserInteractionEnabled else { return true }
-            return map.isScrolling || map.isZooming || map.isDecelerating
+            isCameraMoving
         }
 
         private func currentBuildRegion() -> OverlayRasterizer.Region {
