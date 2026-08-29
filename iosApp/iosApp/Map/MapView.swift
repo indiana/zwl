@@ -112,6 +112,7 @@ struct MapView: UIViewRepresentable {
         private var jsonByteCount = (zones: 0, bans: 0, pois: 0)
         private var hasCenteredOnStartup = false
         private var lastRecenterSignal = 0
+        private var lastDiagnosticsText = ""
 
         // On-disk GeoJSON files feeding the rasterizer. Written once per data
         // change on a background QoS; `updateUIView` re-runs are free.
@@ -523,13 +524,13 @@ struct MapView: UIViewRepresentable {
             }
 
             for zone in catalog.zones
-            where OverlayRasterizer.polygon(zone, contains: coord.longitude, latitude: coord.latitude) {
+            where OverlayRasterizer.polygon(zone, contains: coord.longitude, lat: coord.latitude) {
                 onTapZone(zone.properties["name"] as? String)
                 return
             }
 
             for ban in catalog.bans
-            where OverlayRasterizer.polygon(ban, contains: coord.longitude, latitude: coord.latitude) {
+            where OverlayRasterizer.polygon(ban, contains: coord.longitude, lat: coord.latitude) {
                 if let id = (ban.properties["remoteId"] as? NSNumber)?.int64Value {
                     onTapBan(id)
                 }
