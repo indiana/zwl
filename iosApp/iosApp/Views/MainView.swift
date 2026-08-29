@@ -3,6 +3,7 @@ import shared
 
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
+    @State private var isSettingsOpen = false
 
     var body: some View {
         ZStack {
@@ -92,6 +93,16 @@ struct MainView: View {
         ZStack {
             map
 
+            if isSettingsOpen {
+                // Tap-outside-to-close layer. It sits under the panel so the
+                // panel's own controls keep working; toggling a switch no
+                // longer dismisses the whole menu (SwiftUI Menu did).
+                Color.black.opacity(0.04)
+                    .contentShape(Rectangle())
+                    .onTapGesture { isSettingsOpen = false }
+                    .ignoresSafeArea()
+            }
+
             VStack {
                 if viewModel.isDownloading || !viewModel.downloadStatusText.isEmpty {
                     MapDownloadCard(text: viewModel.downloadStatusText,
@@ -107,10 +118,17 @@ struct MainView: View {
                 HStack(spacing: 8) {
                     Spacer()
                     myLocationButton
-                    settingsMenuButton
+                    settingsButton
                 }
                 .padding(.trailing, 16)
                 .padding(.top, 8)
+
+                if isSettingsOpen {
+                    settingsPanel
+                        .padding(.trailing, 16)
+                        .padding(.top, 12)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
                 Spacer()
             }
 
@@ -153,32 +171,45 @@ struct MainView: View {
         .ignoresSafeArea(edges: .top)
     }
 
-    /// Dropdown with layer toggles + offline download (Android settings dropdown parity).
-    private var settingsMenuButton: some View {
-        Menu {
+    /// Toggles the always-open settings panel (Android settings dropdown
+    /// parity). The panel stays open while toggling layers; closing is done by
+    /// tapping outside of it.
+    private var settingsButton: some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isSettingsOpen.toggle()
+            }
+        }) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 17, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .foregroundColor(isSettingsOpen ? .white : .primary)
+                .background(
+                    isSettingsOpen ? Color.blue : Color(.systemBackground),
+                    in: RoundedRectangle(cornerRadius: 14)
+                )
+                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+        }
+    }
+
+    private var settingsPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Wyświetlaj na mapie")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            Button { viewModel.showBans.toggle() } label: {
-                menuCheckLabel("Zakazy wstępu do lasu", checked: viewModel.showBans)
-            }
-            Button { viewModel.showShelters.toggle() } label: {
-                menuCheckLabel("Wiaty", checked: viewModel.showShelters)
-            }
-            Button { viewModel.showFireplaces.toggle() } label: {
-                menuCheckLabel("Ogniska", checked: viewModel.showFireplaces)
-            }
-            Button { viewModel.showOthers.toggle() } label: {
-                menuCheckLabel("Inne", checked: viewModel.showOthers)
-            }
+            Toggle("Zakazy wstępu do lasu", isOn: $viewModel.showBans)
+            Toggle("Wiaty", isOn: $viewModel.showShelters)
+            Toggle("Ogniska", isOn: $viewModel.showFireplaces)
+            Toggle("Inne", isOn: $viewModel.showOthers)
 
             Divider()
 
-            Button { viewModel.downloadVisibleArea() } label: {
+            Button(action: { viewModel.downloadVisibleArea() }) {
                 Label("Pobierz obszar offline", systemImage: "arrow.down.circle")
             }
             .disabled(viewModel.isDownloading)
+            .font(.system(size: 15))
 
             if viewModel.debugUiEnabled {
                 Divider()
@@ -187,24 +218,23 @@ struct MainView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                Button { viewModel.toggleDebugInvertZone() } label: {
+                Button(action: { viewModel.toggleDebugInvertZone() }) {
                     Label("Odwróć status: strefa / poza strefą",
                           systemImage: viewModel.debugInvertZone
                             ? "arrow.left.arrow.right.circle.fill"
                             : "arrow.left.arrow.right.circle")
                 }
+                .font(.system(size: 15))
             }
-        } label: {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: 44, height: 44)
-                .foregroundColor(.primary)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
         }
-    }
-
-    private func menuCheckLabel(_ title: String, checked: Bool) -> some View {
-        Label(title, systemImage: checked ? "checkmark.circle.fill" : "circle")
+        .padding(14)
+        .frame(width: 280, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(Color.black.opacity(0.08))
+        )
+        .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
     }
 
     private var myLocationButton: some View {

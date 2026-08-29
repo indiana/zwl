@@ -38,6 +38,9 @@ struct MapView: UIViewRepresentable {
         map.showsUserLocation = true
         map.allowsRotating = false
         map.userTrackingMode = .follow
+        // Android parity: the user position is a direction arrow that rotates
+        // with the device heading, not a plain dot.
+        map.showsUserHeadingIndicator = true
         context.coordinator.mapView = map
         map.setCenter(
             CLLocationCoordinate2D(latitude: MapStyle.shared.DEFAULT_LAT,
@@ -281,7 +284,23 @@ struct MapView: UIViewRepresentable {
             self.poiSource = poiSource
 
             let poiCircle = MLNCircleStyleLayer(identifier: poiCircleId, source: poiSource)
-            poiCircle.circleRadius = NSExpression(forConstantValue: 6.0)
+            // Zoom-scaled radius, mirroring Android: dots shrink when zoomed out
+            // so a whole-country view does not collapse into a blob.
+            poiCircle.circleRadius = NSExpression(
+                forFunction: "mgl_step",
+                arguments: [
+                    NSExpression(forKeyPath: "zoom"),
+                    NSExpression(forConstantValue: 2.0),
+                    NSExpression(forConstantValue: 11.0),
+                    NSExpression(forConstantValue: 3.0),
+                    NSExpression(forConstantValue: 12.5),
+                    NSExpression(forConstantValue: 5.0),
+                    NSExpression(forConstantValue: 14.0),
+                    NSExpression(forConstantValue: 8.0),
+                    NSExpression(forConstantValue: 16.0),
+                    NSExpression(forConstantValue: 12.0)
+                ]
+            )
             poiCircle.circleColor = colorExpression()
             poiCircle.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
             poiCircle.circleStrokeWidth = NSExpression(forConstantValue: 1.5)
