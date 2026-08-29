@@ -126,11 +126,7 @@ struct MapView: UIViewRepresentable {
 
         // MARK: MLNMapViewDelegate
 
-        func mapViewDidFinishLoadingStyle(_ mapView: MLNMapView) {
-            handleStyleLoaded(mapView)
-        }
-
-        func mapView(_ mapView: MLNMapView, didFinishLoadingStyle style: MLNStyle) {
+        func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             handleStyleLoaded(mapView)
         }
 
@@ -160,8 +156,9 @@ struct MapView: UIViewRepresentable {
         // MARK: Style readiness
 
         /// Called from the delegate hooks AND from the probe timer, so the
-        /// overlay layers never depend on a single delegate callback (some
-        /// MapLibre iOS versions skip `mapViewDidFinishLoadingStyle`).
+        /// overlay layers never depend on a single delegate callback. Both
+        /// `mapView(_:didFinishLoading:)` and the poller (map.style != nil)
+        /// converge here.
         private func handleStyleLoaded(_ mapView: MLNMapView) {
             guard !styleLoaded else { return }
             styleLoaded = true
