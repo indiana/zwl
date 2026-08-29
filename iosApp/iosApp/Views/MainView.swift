@@ -4,6 +4,7 @@ import shared
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
+    @State private var overlayEnabled = true
 
     var body: some View {
         ZStack {
@@ -158,6 +159,7 @@ struct MainView: View {
             showShelters: viewModel.showShelters,
             showFireplaces: viewModel.showFireplaces,
             showOthers: viewModel.showOthers,
+            overlayEnabled: overlayEnabled,
             userLatitude: viewModel.userLatitude,
             userLongitude: viewModel.userLongitude,
             recenterSignal: viewModel.recenterSignal,
@@ -202,6 +204,13 @@ struct MainView: View {
             Toggle("Wiaty", isOn: $viewModel.showShelters)
             Toggle("Ogniska", isOn: $viewModel.showFireplaces)
             Toggle("Inne", isOn: $viewModel.showOthers)
+
+            Divider()
+
+            // Diagnostics-only switch: removes the five raster overlay layers in
+            // place so we can A/B whether the overlay (or the base map) is what
+            // lags on device.
+            Toggle("Overlay (diagnoza)", isOn: $overlayEnabled)
 
             Divider()
 

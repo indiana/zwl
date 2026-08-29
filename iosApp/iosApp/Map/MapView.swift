@@ -12,6 +12,7 @@ struct MapView: UIViewRepresentable {
     let showShelters: Bool
     let showFireplaces: Bool
     let showOthers: Bool
+    let overlayEnabled: Bool
     let userLatitude: Double?
     let userLongitude: Double?
     let recenterSignal: Int
@@ -71,6 +72,7 @@ struct MapView: UIViewRepresentable {
         coordinator.showShelters = showShelters
         coordinator.showFireplaces = showFireplaces
         coordinator.showOthers = showOthers
+        coordinator.overlayEnabled = overlayEnabled
         coordinator.onTapZone = onTapZone
         coordinator.onTapBan = onTapBan
         coordinator.onTapPoi = onTapPoi
@@ -94,6 +96,12 @@ struct MapView: UIViewRepresentable {
         var showShelters = true
         var showFireplaces = true
         var showOthers = true
+        var overlayEnabled = true {
+            didSet {
+                guard oldValue != overlayEnabled else { return }
+                applyOverlayEnabled()
+            }
+        }
         var onTapZone: ((String?) -> Void) = { _ in }
         var onTapBan: (Int64) -> Void = { _ in }
         var onTapPoi: (String) -> Void = { _ in }
@@ -264,7 +272,7 @@ struct MapView: UIViewRepresentable {
         /// rasters.
         private func startRasterLoop() {
             guard rasterTask == nil else { return }
-            guard let files = dataFiles else { return }
+            guard overlayEnabled, let files = dataFiles else { return }
             guard let pending = pendingBuild else {
                 installRasterIfCatalogReady()
                 return
@@ -319,7 +327,7 @@ struct MapView: UIViewRepresentable {
         /// fires on every settle): the rasterizer skips tiles already on disk
         /// and force-rebuilds only when the camera crossed an integer zoom.
         private func scheduleRasterBuildFromCamera() {
-            guard let map = mapView, dataFiles != nil else { return }
+            guard overlayEnabled, let map = mapView, dataFiles != nil else { return }
             // MapLibre requests tiles at floor(zoomLevel): bake that zoom plus
             // one extra level so the first zoom-in is already crisp (no low-res
             // upscales while the bake catches up). Four levels up from the
@@ -384,6 +392,7 @@ struct MapView: UIViewRepresentable {
         /// Only runs when the style AND a catalog exist and nothing is applied
         /// yet; bounces (`layersApplied = false`) force a re-install.
         private func installRasterIfCatalogReady() {
+            guard overlayEnabled else { return }
             guard let catalog = catalog, styleLoaded, mapView != nil else { return }
             guard let style = mapView?.style else { return }
             if !layersApplied {
@@ -435,6 +444,37 @@ struct MapView: UIViewRepresentable {
         private func removeSourceIfPresent(_ id: String, style: MLNStyle) {
             if let source = style.source(withIdentifier: id) {
                 style.removeSource(source)
+            }
+        }
+
+        /// Diagnostics A/B: fully detaches (or re-attaches) the raster overlay
+        /// while the app keeps running. The catalog and baked tiles survive on
+        /// disk, so re-enabling re-installs the sources immediately.
+        private func applyOverlayEnabled() {
+            guard let style = mapView?.style else { return }
+            if overlayEnabled {
+                installRasterIfCatalogReady()
+                scheduleRasterBuildFromCamera()
+            } else {
+                rasterTask?.cancel()
+                rasterTask = nil
+                writeTask?.cancel()
+                writeTask = nil
+                pendingBuild = nil
+                layersApplied = false
+                layersReady = false
+                for id in [zoneRasterId, banRasterId,
+                           shelterRasterId, fireplaceRasterId, otherRasterId] {
+                    removeLayerIfPresent(id, style: style)
+                }
+                for id in [OverlayRasterizer.zoneSourceId,
+                           OverlayRasterizer.banSourceId,
+                           OverlayRasterizer.shelterSourceId,
+                           OverlayRasterizer.fireplaceSourceId,
+                           OverlayRasterizer.otherSourceId] {
+                    removeSourceIfPresent(id, style: style)
+                }
+                publishDiagnostics()
             }
         }
 
@@ -538,9 +578,14 @@ struct MapView: UIViewRepresentable {
             // done==0 -> build had an empty/degenerate region; done>0==tiles ->
             // render failed. The "pending" tail exposes the stuck gate: file
             // presence, queued zoom, busy task, and budget-skip counter.
-            let overlayText = layersReady
-                ? "tiles=\(tiles)/\(done) z=\(zMin)-\(zMax) skip=\(skippedBuildCount)"
-                : "pending files=\(dataFiles != nil) q=\(pendingBuild?.zoom ?? -1) busy=\(rasterTask != nil) skip=\(skippedBuildCount)"
+            let overlayText: String
+            if !overlayEnabled {
+                overlayText = "off"
+            } else if layersReady {
+                overlayText = "tiles=\(tiles)/\(done) z=\(zMin)-\(zMax) skip=\(skippedBuildCount)"
+            } else {
+                overlayText = "pending files=\(dataFiles != nil) q=\(pendingBuild?.zoom ?? -1) busy=\(rasterTask != nil) skip=\(skippedBuildCount)"
+            }
             let text = """
             style=\(styleState) fail=\(fail) layers=\(layersState)
             overlay: \(overlayText)
