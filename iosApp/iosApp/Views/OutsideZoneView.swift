@@ -10,6 +10,7 @@ struct OutsideZoneView: View {
     let ban: ForestBan?
     let onBanTap: () -> Void
     let onDistrictTap: () -> Void
+    var onDebugToggle: (() -> Void)?
 
     private let compassSize: CGFloat = 220
 
@@ -30,6 +31,9 @@ struct OutsideZoneView: View {
                         Text("!")
                             .font(.system(size: 48, weight: .black))
                             .foregroundColor(ZWL.yellowPrimary)
+                    }
+                    .onTapGesture {
+                        onDebugToggle?()
                     }
 
                     Text("Jesteś poza strefą\nprogramu \"Zanocuj w Lesie\"")

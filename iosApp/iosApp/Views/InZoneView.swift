@@ -8,6 +8,7 @@ struct InZoneView: View {
     let ban: ForestBan?
     let onBanTap: () -> Void
     let onDistrictTap: () -> Void
+    var onDebugToggle: (() -> Void)?
 
     var body: some View {
         ScrollView {
@@ -26,6 +27,9 @@ struct InZoneView: View {
                         Image(systemName: "checkmark")
                             .font(.system(size: 48, weight: .bold))
                             .foregroundColor(ZWL.forestGreenAccent)
+                    }
+                    .onTapGesture {
+                        onDebugToggle?()
                     }
 
                     Text("Jesteś w strefie\nprogramu \"Zanocuj w Lesie\"")

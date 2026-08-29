@@ -20,6 +20,7 @@ struct MapView: UIViewRepresentable {
     let onTapPoi: (String) -> Void
     let onTapBackground: () -> Void
     let onVisibleRegionChange: (MapRegion) -> Void
+    let onDiagnostics: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -47,6 +48,8 @@ struct MapView: UIViewRepresentable {
 
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         map.addGestureRecognizer(tap)
+
+        context.coordinator.scheduleStyleProbe()
         return map
     }
 
@@ -64,6 +67,7 @@ struct MapView: UIViewRepresentable {
         coordinator.onTapPoi = onTapPoi
         coordinator.onTapBackground = onTapBackground
         coordinator.onVisibleRegionChange = onVisibleRegionChange
+        coordinator.onDiagnostics = onDiagnostics
         coordinator.applySourcesIfReady()
         coordinator.handleCentering(userLatitude: userLatitude,
                                     userLongitude: userLongitude,
@@ -86,8 +90,22 @@ struct MapView: UIViewRepresentable {
         var onTapPoi: (String) -> Void = { _ in }
         var onTapBackground: () -> Void = {}
         var onVisibleRegionChange: (MapRegion) -> Void = { _ in }
+        var onDiagnostics: (String) -> Void = { _ in }
 
         private var styleLoaded = false
+        private var styleFinishCount = 0
+        private var styleErrorText = ""
+        private var styleFallbackTried = false
+        private var styleProbeTicks = 0
+        private var styleProbeTimer: Timer?
+        private var layersReady = false
+        private var zoneFeatureCount = 0
+        private var banFeatureCount = 0
+        private var poiFeatureCount = 0
+        private var poiShelterCount = 0
+        private var poiFireplaceCount = 0
+        private var poiOtherCount = 0
+        private var jsonByteCount = (zones: 0, bans: 0, pois: 0)
         private var zoneSource: MLNShapeSource?
         private var banSource: MLNShapeSource?
         private var poiSource: MLNShapeSource?
@@ -109,9 +127,19 @@ struct MapView: UIViewRepresentable {
         // MARK: MLNMapViewDelegate
 
         func mapViewDidFinishLoadingStyle(_ mapView: MLNMapView) {
-            setupLayers(on: mapView)
-            styleLoaded = true
-            applySourcesIfReady()
+            handleStyleLoaded(mapView)
+        }
+
+        func mapView(_ mapView: MLNMapView, didFinishLoadingStyle style: MLNStyle) {
+            handleStyleLoaded(mapView)
+        }
+
+        func mapView(_ mapView: MLNMapView, didFailLoadingStyle styleIdentifier: String?, withError error: Error) {
+            recordStyleFailure(error)
+        }
+
+        func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: Error) {
+            recordStyleFailure(error)
         }
 
         func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {
@@ -129,6 +157,71 @@ struct MapView: UIViewRepresentable {
             )
         }
 
+        // MARK: Style readiness
+
+        /// Called from the delegate hooks AND from the probe timer, so the
+        /// overlay layers never depend on a single delegate callback (some
+        /// MapLibre iOS versions skip `mapViewDidFinishLoadingStyle`).
+        private func handleStyleLoaded(_ mapView: MLNMapView) {
+            guard !styleLoaded else { return }
+            styleLoaded = true
+            styleFinishCount += 1
+            setupLayers(on: mapView)
+            applySourcesIfReady()
+            stopStyleProbe()
+            publishDiagnostics()
+        }
+
+        private func recordStyleFailure(_ error: Error) {
+            styleErrorText = error.localizedDescription
+            publishDiagnostics()
+            if !styleFallbackTried {
+                attemptStyleReloadFromFile()
+            }
+        }
+
+        /// MapLibre iOS can leave the in-memory style in a broken state after a
+        /// bad `styleJSON` parse; retry by loading the same JSON from a local
+        /// file (the `styleURL` path is far more battle-tested).
+        private func attemptStyleReloadFromFile() {
+            guard !styleFallbackTried, let mapView = mapView else { return }
+            styleFallbackTried = true
+            let json = MapStyle.shared.OSM_STYLE_JSON
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("osm-style.json")
+            try? json.write(to: url, atomically: true, encoding: .utf8)
+            mapView.styleURL = url
+        }
+
+        /// Polls for the style loading. Fragile parts of this map code path only
+        /// run after the style exists; never fail silently again.
+        private func scheduleStyleProbe() {
+            styleProbeTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
+                guard let self = self else { return }
+                if self.styleLoaded {
+                    self.stopStyleProbe()
+                    return
+                }
+                self.styleProbeTicks += 1
+                if let map = self.mapView, map.style != nil {
+                    self.handleStyleLoaded(map)
+                    return
+                }
+                // ~12s with no style at all: try the file-URL retry once.
+                if self.styleProbeTicks >= 30, !self.styleFallbackTried {
+                    self.attemptStyleReloadFromFile()
+                }
+                if self.styleProbeTicks >= 60 {
+                    self.stopStyleProbe()
+                }
+            }
+        }
+
+        private func stopStyleProbe() {
+            styleProbeTimer?.invalidate()
+            styleProbeTimer = nil
+        }
+
         // MARK: Layers
 
         private func setupLayers(on mapView: MLNMapView) {
@@ -138,6 +231,9 @@ struct MapView: UIViewRepresentable {
             removeLayerIfPresent(banFillId, style: style)
             removeLayerIfPresent(banLineId, style: style)
             removeLayerIfPresent(poiCircleId, style: style)
+            removeSourceIfPresent("zone-source", style: style)
+            removeSourceIfPresent("ban-source", style: style)
+            removeSourceIfPresent("poi-source", style: style)
 
             let zoneSource = MLNShapeSource(identifier: "zone-source", features: [], options: nil)
             style.addSource(zoneSource)
@@ -177,11 +273,19 @@ struct MapView: UIViewRepresentable {
             poiCircle.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
             poiCircle.circleStrokeWidth = NSExpression(forConstantValue: 1.5)
             style.addLayer(poiCircle)
+
+            layersReady = true
         }
 
         private func removeLayerIfPresent(_ id: String, style: MLNStyle) {
             if let layer = style.layer(withIdentifier: id) {
                 style.removeLayer(layer)
+            }
+        }
+
+        private func removeSourceIfPresent(_ id: String, style: MLNStyle) {
+            if let source = style.source(withIdentifier: id) {
+                style.removeSource(source)
             }
         }
 
@@ -203,19 +307,35 @@ struct MapView: UIViewRepresentable {
         func applySourcesIfReady() {
             guard styleLoaded, let mapView = mapView else { return }
 
+            jsonByteCount = (zones: zonesJson.count,
+                             bans: bansJson.count,
+                             pois: poisJson.count)
+
             let zoneFeatures = GeoJsonToFeatures.features(from: zonesJson)
+            zoneFeatureCount = zoneFeatures.count
             zoneSource?.shape = MLNShapeCollectionFeature(shapes: zoneFeatures)
 
             let banFeatures = GeoJsonToFeatures.features(from: bansJson)
+            banFeatureCount = banFeatures.count
             banSource?.shape = MLNShapeCollectionFeature(shapes: banFeatures)
 
             let pois = GeoJsonToFeatures.features(from: poisJson)
+            poiFeatureCount = pois.count
+            poiShelterCount = 0
+            poiFireplaceCount = 0
+            poiOtherCount = 0
             let filteredPois = pois.filter { feature in
                 let key = (feature as? MLNFeature)?.attributes["categoryKey"] as? String ?? "other"
                 switch key {
-                case "shelter": return showShelters
-                case "fireplace": return showFireplaces
-                default: return showOthers
+                case "shelter":
+                    poiShelterCount += 1
+                    return showShelters
+                case "fireplace":
+                    poiFireplaceCount += 1
+                    return showFireplaces
+                default:
+                    poiOtherCount += 1
+                    return showOthers
                 }
             }
             poiSource?.shape = MLNShapeCollectionFeature(shapes: filteredPois)
@@ -224,6 +344,22 @@ struct MapView: UIViewRepresentable {
                 style.layer(withIdentifier: banFillId)?.isVisible = showBans
                 style.layer(withIdentifier: banLineId)?.isVisible = showBans
             }
+            publishDiagnostics()
+        }
+
+        // MARK: Diagnostics
+
+        private func publishDiagnostics() {
+            let styleState = styleLoaded ? "YES(\(styleFinishCount))" : "NO"
+            let fail = styleErrorText.isEmpty ? "-" : styleErrorText
+            let layersState = layersReady ? "YES" : "NO"
+            let text = """
+            style=\(styleState) fail=\(fail) layers=\(layersState)
+            zones: json \(jsonByteCount.zones) feat \(zoneFeatureCount)
+            bans:  json \(jsonByteCount.bans) feat \(banFeatureCount)
+            pois:  json \(jsonByteCount.pois) feat \(poiFeatureCount) (sh \(poiShelterCount) fp \(poiFireplaceCount) ot \(poiOtherCount))
+            """
+            onDiagnostics(text)
         }
 
         // MARK: Camera centering

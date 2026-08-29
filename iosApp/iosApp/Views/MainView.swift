@@ -35,10 +35,13 @@ struct MainView: View {
             mapTab
                 .tabItem { Label("Mapa", systemImage: "map") }
         }
-        .tint(viewModel.currentInZone != nil ? ZWL.forestGreenAccent : ZWL.yellowPrimary)
+        .tint(viewModel.displayInZone != nil ? ZWL.forestGreenAccent : ZWL.yellowPrimary)
         .sheet(isPresented: isZoneSheetPresented) {
             if let zone = viewModel.selectedZone {
-                ZoneDetailView(zone: zone)
+                ZoneDetailView(zone: zone,
+                               distanceMeters: viewModel.selectedZoneDistanceMeters,
+                               fireRiskLevel: viewModel.selectedZoneFireRiskLevel,
+                               isLoadingFireRisk: viewModel.isLoadingZoneFireRisk)
                     .presentationDetents([.medium, .large])
             }
         }
@@ -58,15 +61,16 @@ struct MainView: View {
 
     @ViewBuilder
     private var statusTab: some View {
-        if let inZone = viewModel.currentInZone {
+        if let inZone = viewModel.displayInZone {
             InZoneView(
                 district: inZone.forestDistrict,
                 fireRisk: viewModel.fireRiskLevel,
                 ban: viewModel.activeForestBan,
                 onBanTap: { viewModel.openActiveBan() },
-                onDistrictTap: { viewModel.selectZone(named: inZone.forestDistrict) }
+                onDistrictTap: { viewModel.selectZone(named: inZone.forestDistrict) },
+                onDebugToggle: viewModel.debugUiEnabled ? { viewModel.toggleDebugInvertZone() } : nil
             )
-        } else if let outside = viewModel.currentOutsideZone {
+        } else if let outside = viewModel.displayOutsideZone {
             OutsideZoneView(
                 nearestDistrict: outside.nearestDistrict,
                 distanceMeters: outside.distanceMeters,
@@ -74,7 +78,8 @@ struct MainView: View {
                 azimuth: viewModel.azimuth,
                 ban: viewModel.activeForestBan,
                 onBanTap: { viewModel.openActiveBan() },
-                onDistrictTap: { viewModel.selectZone(named: outside.nearestDistrict) }
+                onDistrictTap: { viewModel.selectZone(named: outside.nearestDistrict) },
+                onDebugToggle: viewModel.debugUiEnabled ? { viewModel.toggleDebugInvertZone() } : nil
             )
         } else {
             GpsLocatingView()
@@ -88,42 +93,39 @@ struct MainView: View {
             map
 
             VStack {
-                topBar
-                    .padding([.horizontal, .top])
-                Spacer()
-            }
-
-            VStack {
-                Spacer().frame(height: 56)
-                HStack {
-                    if viewModel.isDownloading || !viewModel.downloadStatusText.isEmpty {
-                        MapDownloadCard(text: viewModel.downloadStatusText,
-                                        progress: viewModel.downloadProgress,
-                                        isDownloading: viewModel.isDownloading)
-                            .padding(.leading, 16)
-                    }
-                    Spacer()
+                if viewModel.isDownloading || !viewModel.downloadStatusText.isEmpty {
+                    MapDownloadCard(text: viewModel.downloadStatusText,
+                                    progress: viewModel.downloadProgress,
+                                    isDownloading: viewModel.isDownloading)
+                        .padding([.leading, .top], 16)
                 }
                 Spacer()
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack {
-                Spacer().frame(height: 56)
-                HStack {
-                    Spacer()
-                    settingsMenuButton
-                        .padding(.trailing, 16)
-                }
-                Spacer()
-            }
-
-            VStack {
-                Spacer()
-                HStack {
+                HStack(spacing: 8) {
                     Spacer()
                     myLocationButton
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 24)
+                    settingsMenuButton
+                }
+                .padding(.trailing, 16)
+                .padding(.top, 8)
+                Spacer()
+            }
+
+            if DebugMapOverlay.isEnabled && !viewModel.mapDiagnostics.isEmpty {
+                VStack {
+                    Spacer()
+                    Text(viewModel.mapDiagnostics)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.white)
+                        .lineSpacing(2)
+                        .padding(6)
+                        .background(.black.opacity(0.6))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .padding([.leading, .bottom], 16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -145,26 +147,10 @@ struct MainView: View {
             onTapBan: { viewModel.selectBan(byRemoteId: $0) },
             onTapPoi: { viewModel.selectPoi(named: $0) },
             onTapBackground: { viewModel.clearSelection() },
-            onVisibleRegionChange: { viewModel.visibleRegion = $0 }
+            onVisibleRegionChange: { viewModel.visibleRegion = $0 },
+            onDiagnostics: { viewModel.mapDiagnostics = $0 }
         )
         .ignoresSafeArea(edges: .top)
-    }
-
-    private var topBar: some View {
-        HStack(spacing: 8) {
-            Text("Zanocuj w Lesie")
-                .font(.headline)
-                .padding(.horizontal, 4)
-            Spacer()
-            Button(action: { viewModel.refreshAllData() }) {
-                Image(systemName: "arrow.clockwise")
-            }
-            .buttonStyle(.bordered)
-            .disabled(viewModel.isDownloading)
-        }
-        .padding(8)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     /// Dropdown with layer toggles + offline download (Android settings dropdown parity).
@@ -193,6 +179,21 @@ struct MainView: View {
                 Label("Pobierz obszar offline", systemImage: "arrow.down.circle")
             }
             .disabled(viewModel.isDownloading)
+
+            if viewModel.debugUiEnabled {
+                Divider()
+
+                Text("Tryb testowy")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Button { viewModel.toggleDebugInvertZone() } label: {
+                    Label("Odwróć status: strefa / poza strefą",
+                          systemImage: viewModel.debugInvertZone
+                            ? "arrow.left.arrow.right.circle.fill"
+                            : "arrow.left.arrow.right.circle")
+                }
+            }
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 17, weight: .semibold))
@@ -233,6 +234,15 @@ struct MainView: View {
         Binding(get: { viewModel.selectedPoi != nil },
                 set: { if !$0 { viewModel.clearSelection() } })
     }
+}
+
+// MARK: - Debug overlay (QA builds only)
+
+enum DebugMapOverlay {
+    /// Kept `true` while iterating on the iOS map via TestFlight. Flip to
+    /// `false` before shipping to the App Store (TestFlight builds are Release,
+    /// so `#if DEBUG` cannot gate this).
+    static let isEnabled = true
 }
 
 // MARK: - Loading / Error states (Android parity)

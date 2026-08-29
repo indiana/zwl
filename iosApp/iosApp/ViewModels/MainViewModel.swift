@@ -57,6 +57,22 @@ final class MainViewModel: NSObject, ObservableObject {
     // Fire risk
     @Published var fireRiskLevel: Int = -1
 
+    // Debug / QA overrides. `debugUiEnabled` must be flipped to false before
+    // the App Store release; test-flight QA keeps it on so the tappable status
+    // icon can flip between "w strefie" / "poza strefą" (Android parity).
+    var debugUiEnabled: Bool { true }
+    @Published var debugInvertZone = false
+
+    // Zone detail sheet state (cycle-1 parity: distance + fire risk + stove rule;
+    // BDL forest stand comes in a later cycle).
+    @Published var selectedZoneDistanceMeters: Double?
+    @Published var selectedZoneFireRiskLevel: Int?
+    @Published var isLoadingZoneFireRisk = false
+
+    // Live map diagnostics (overlay shown while the map overlays are being
+    // debugged on device; remove once rendering is confirmed).
+    @Published var mapDiagnostics: String = ""
+
     // Offline download
     @Published var isDownloading = false
     @Published var downloadProgress: Float = 0
@@ -172,10 +188,79 @@ final class MainViewModel: NSObject, ObservableObject {
     // MARK: - Selection
 
     func selectZone(named name: String?) {
-        guard let name = name else { return }
-        selectedZone = app.cachedZones().first { $0.forestDistrict == name }
+        guard let name = name, let zone = app.cachedZones().first(where: { $0.forestDistrict == name }) else { return }
+        selectedZone = zone
         selectedBan = nil
         selectedPoi = nil
+        selectedZoneDistanceMeters = nil
+        selectedZoneFireRiskLevel = nil
+        isLoadingZoneFireRisk = false
+        computeZoneDetail(for: zone)
+    }
+
+    /// Fills the zone detail sheet: distance from the user and fire risk read at
+    /// the zone's first boundary coordinate (Android parity for cycle 1).
+    private func computeZoneDetail(for zone: Zone) {
+        if let userLat = userLatitude, let userLng = userLongitude {
+            if currentInZone?.forestDistrict == zone.forestDistrict {
+                selectedZoneDistanceMeters = 0
+            } else if let first = firstShellCoordinate(of: zone.forestDistrict) {
+                selectedZoneDistanceMeters = Self.equirectDistance(
+                    lat1: userLat, lon1: userLng,
+                    lat2: first.0, lon2: first.1
+                )
+            }
+        }
+
+        guard let first = firstShellCoordinate(of: zone.forestDistrict) else { return }
+        isLoadingZoneFireRisk = true
+        Task { [weak self] in
+            guard let self = self else { return }
+            let level = (try? await self.app.getFireRisk(latitude: first.0, longitude: first.1).intValue) ?? -1
+            self.selectedZoneFireRiskLevel = level
+            self.isLoadingZoneFireRisk = false
+        }
+    }
+
+    /// Extracts the first [lng, lat] coordinate of the zone's shell from the
+    /// GeoJSON the map uses (avoids pulling WKT parsing into Swift).
+    private func firstShellCoordinate(of district: String) -> (Double, Double)? {
+        guard let data = zonesGeoJson.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let features = root["features"] as? [[String: Any]] else { return nil }
+        for feature in features {
+            guard let props = feature["properties"] as? [String: Any],
+                  props["name"] as? String == district,
+                  let geometry = feature["geometry"] as? [String: Any],
+                  let raw = geometry["coordinates"] as? [Any] else { continue }
+            // Polygon -> [ [lng,lat], ... ] (ring); MultiPolygon -> [ [ring], ... ].
+            let firstRing: [Any]
+            if let polygons = raw.first as? [[[Any]]],
+               let ring = polygons.first as? [[Any]] {
+                firstRing = ring
+            } else if let ring = raw.first as? [[Any]] {
+                firstRing = ring
+            } else {
+                continue
+            }
+            guard let firstPair = firstRing.first as? [Any],
+                  let lon = (firstPair.first as? NSNumber)?.doubleValue,
+                  firstPair.count >= 2,
+                  let lat = (firstPair[1] as? NSNumber)?.doubleValue else { continue }
+            return (lat, lon)
+        }
+        return nil
+    }
+
+    /// Great-circle-ish distance using the equirectangular approximation
+    /// (fine at walkable distances; used for the zone detail sheet only).
+    private static func equirectDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
+        let meanLat = (lat1 + lat2) / 2.0 * .pi / 180.0
+        let dLat = (lat2 - lat1) * .pi / 180.0
+        let dLon = (lon2 - lon1) * .pi / 180.0
+        let x = dLon * 111320.0 * cos(meanLat)
+        let y = dLat * 111320.0
+        return sqrt(x * x + y * y)
     }
 
     func selectBan(byRemoteId remoteId: Int64) {
@@ -252,6 +337,32 @@ final class MainViewModel: NSObject, ObservableObject {
     }
 
     // MARK: - Helpers
+
+    /// Debug/QA flipping of the zone classification shown in the Status tab
+    /// (real GPS data is untouched; fire risk / bans are kept as-is).
+    func toggleDebugInvertZone() {
+        debugInvertZone.toggle()
+    }
+
+    var displayStatus: LocationStatus? {
+        guard debugInvertZone else { return locationStatus }
+        switch locationStatus {
+        case let inZone as LocationStatusInZone:
+            return LocationStatusOutsideZone(
+                nearestDistrict: inZone.forestDistrict,
+                distanceMeters: 8500.0,
+                bearingDegrees: 0.0
+            )
+        case let outside as LocationStatusOutsideZone:
+            return LocationStatusInZone(forestDistrict: outside.nearestDistrict)
+        default:
+            return locationStatus
+        }
+    }
+
+    /// Status as shown to the user (respects the debug invert toggle).
+    var displayInZone: LocationStatusInZone? { displayStatus as? LocationStatusInZone }
+    var displayOutsideZone: LocationStatusOutsideZone? { displayStatus as? LocationStatusOutsideZone }
 
     var currentInZone: LocationStatusInZone? { locationStatus as? LocationStatusInZone }
     var currentOutsideZone: LocationStatusOutsideZone? { locationStatus as? LocationStatusOutsideZone }
