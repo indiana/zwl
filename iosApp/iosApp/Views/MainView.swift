@@ -5,6 +5,8 @@ struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
     @State private var overlayEnabled = true
+    @State private var followsUser = true
+    @State private var showHeading = true
 
     var body: some View {
         ZStack {
@@ -160,6 +162,8 @@ struct MainView: View {
             showFireplaces: viewModel.showFireplaces,
             showOthers: viewModel.showOthers,
             overlayEnabled: overlayEnabled,
+            followsUser: followsUser,
+            showHeading: showHeading,
             userLatitude: viewModel.userLatitude,
             userLongitude: viewModel.userLongitude,
             recenterSignal: viewModel.recenterSignal,
@@ -211,6 +215,13 @@ struct MainView: View {
             // place so we can A/B whether the overlay (or the base map) is what
             // lags on device.
             Toggle("Overlay (diagnoza)", isOn: $overlayEnabled)
+
+            // Diagnostics-only: userTrackingMode .follow re-centers the camera
+            // on every GPS tick, and the heading arrow rotates on every
+            // magnetometer event — both force main-thread re-renders and are
+            // prime suspects for the UI freezes.
+            Toggle("Podążaj za lokalizacją (diagnoza)", isOn: $followsUser)
+            Toggle("Strzałka kierunku (diagnoza)", isOn: $showHeading)
 
             Divider()
 

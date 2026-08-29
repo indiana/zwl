@@ -13,6 +13,8 @@ struct MapView: UIViewRepresentable {
     let showFireplaces: Bool
     let showOthers: Bool
     let overlayEnabled: Bool
+    let followsUser: Bool
+    let showHeading: Bool
     let userLatitude: Double?
     let userLongitude: Double?
     let recenterSignal: Int
@@ -60,6 +62,7 @@ struct MapView: UIViewRepresentable {
         map.addGestureRecognizer(tap)
 
         context.coordinator.scheduleStyleProbe()
+        context.coordinator.startStallProbe()
         return map
     }
 
@@ -73,6 +76,8 @@ struct MapView: UIViewRepresentable {
         coordinator.showFireplaces = showFireplaces
         coordinator.showOthers = showOthers
         coordinator.overlayEnabled = overlayEnabled
+        coordinator.followsUser = followsUser
+        coordinator.showHeading = showHeading
         coordinator.onTapZone = onTapZone
         coordinator.onTapBan = onTapBan
         coordinator.onTapPoi = onTapPoi
@@ -102,6 +107,18 @@ struct MapView: UIViewRepresentable {
                 applyOverlayEnabled()
             }
         }
+        var followsUser = true {
+            didSet {
+                guard oldValue != followsUser else { return }
+                mapView?.userTrackingMode = followsUser ? .follow : .none
+            }
+        }
+        var showHeading = true {
+            didSet {
+                guard oldValue != showHeading else { return }
+                mapView?.showsUserHeadingIndicator = showHeading
+            }
+        }
         var onTapZone: ((String?) -> Void) = { _ in }
         var onTapBan: (Int64) -> Void = { _ in }
         var onTapPoi: (String) -> Void = { _ in }
@@ -115,6 +132,9 @@ struct MapView: UIViewRepresentable {
         private var styleFallbackTried = false
         private var styleProbeTicks = 0
         private var styleProbeTimer: Timer?
+        private var stallProbeTimer: Timer?
+        private var lastStallProbe = Date()
+        private var maxStall: TimeInterval = 0
         private var layersReady = false
         private var layersApplied = false
         private var zoneFeatureCount = 0
@@ -262,6 +282,24 @@ struct MapView: UIViewRepresentable {
         private func stopStyleProbe() {
             styleProbeTimer?.invalidate()
             styleProbeTimer = nil
+        }
+
+        /// Freeze meter for QA: ticks every 0.5s on the main runloop and reports
+        /// the longest gap (max main-thread stall since launch) in diagnostics.
+        /// A button press that takes 2s shows up here exactly when the renderer
+        /// hogged the main thread.
+        fileprivate func startStallProbe() {
+            lastStallProbe = Date()
+            stallProbeTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                guard let self = self else { return }
+                let now = Date()
+                let gap = now.timeIntervalSince(self.lastStallProbe)
+                self.lastStallProbe = now
+                if gap > 0.75 {
+                    self.maxStall = max(self.maxStall, gap)
+                }
+                self.publishDiagnostics()
+            }
         }
 
         // MARK: Raster overlay lifecycle
@@ -587,7 +625,7 @@ struct MapView: UIViewRepresentable {
                 overlayText = "pending files=\(dataFiles != nil) q=\(pendingBuild?.zoom ?? -1) busy=\(rasterTask != nil) skip=\(skippedBuildCount)"
             }
             let text = """
-            style=\(styleState) fail=\(fail) layers=\(layersState)
+            style=\(styleState) fail=\(fail) layers=\(layersState) stall=\(String(format: "%.1f", maxStall))s
             overlay: \(overlayText)
             zones: json \(jsonByteCount.zones) feat \(zoneFeatureCount)
             bans:  json \(jsonByteCount.bans) feat \(banFeatureCount)
@@ -627,7 +665,7 @@ struct MapView: UIViewRepresentable {
                 zoomLevel: MapStyle.shared.DEFAULT_ZOOM,
                 animated: animated
             )
-            mapView.userTrackingMode = .follow
+            mapView.userTrackingMode = followsUser ? .follow : .none
             let bounds = mapView.visibleCoordinateBounds
             onVisibleRegionChange(
                 MapRegion(latSouth: bounds.sw.latitude,
