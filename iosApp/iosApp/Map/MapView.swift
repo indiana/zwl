@@ -102,6 +102,7 @@ struct MapView: UIViewRepresentable {
         private var styleProbeTicks = 0
         private var styleProbeTimer: Timer?
         private var layersReady = false
+        private var layersApplied = false
         private var zoneFeatureCount = 0
         private var banFeatureCount = 0
         private var poiFeatureCount = 0
@@ -112,23 +113,23 @@ struct MapView: UIViewRepresentable {
         private var hasCenteredOnStartup = false
         private var lastRecenterSignal = 0
 
-        // On-disk GeoJSON files backing the URL sources (tile pipeline). The
-        // whole feature set is only ever written once per data change, on a
-        // background QoS; `updateUIView` re-runs are essentially free.
+        // On-disk GeoJSON files feeding the rasterizer. Written once per data
+        // change on a background QoS; `updateUIView` re-runs are free.
         private var dataFiles: GeoJsonFileWriter.Files?
-        private var dataApplied = false
         private var lastJsonSignature = ""
         private var lastToggleSignature = ""
-        private var lastDiagnosticsText = ""
-        private var parseTask: Task<Void, Never>?
 
-        private let zoneFillId = "zone-fill-layer"
-        private let zoneLineId = "zone-line-layer"
-        private let banFillId = "ban-fill-layer"
-        private let banLineId = "ban-line-layer"
-        private let poiShelterId = "poi-shelter-layer"
-        private let poiFireplaceId = "poi-fireplace-layer"
-        private let poiOtherId = "poi-other-layer"
+        // Raster overlay state. The rasterizer renders viewport tiles off-main;
+        // the returned catalog is kept for tap hit-testing and diagnostics.
+        private var catalog: OverlayRasterizer.Catalog?
+        private var rasterTask: Task<Void, Never>?
+        private var pendingRasterRegion: OverlayRasterizer.Region?
+
+        private let zoneRasterId = "zone-raster-layer"
+        private let banRasterId = "ban-raster-layer"
+        private let shelterRasterId = "poi-shelter-raster-layer"
+        private let fireplaceRasterId = "poi-fireplace-raster-layer"
+        private let otherRasterId = "poi-other-raster-layer"
 
         private var parent: MapView
 
@@ -163,6 +164,8 @@ struct MapView: UIViewRepresentable {
                           lonWest: bounds.sw.longitude,
                           lonEast: bounds.ne.longitude)
             )
+            // Backfill any raster overlay tiles the new viewport needs.
+            scheduleRasterBuild(force: false)
         }
 
         // MARK: Style readiness
@@ -175,7 +178,7 @@ struct MapView: UIViewRepresentable {
             guard !styleLoaded else { return }
             styleLoaded = true
             styleFinishCount += 1
-            ensureSourcesAndLayers()
+            installRasterIfCatalogReady()
             applySourcesIfReady()
             stopStyleProbe()
             publishDiagnostics()
@@ -231,130 +234,117 @@ struct MapView: UIViewRepresentable {
             styleProbeTimer = nil
         }
 
+        // MARK: Raster overlay lifecycle
+
+        /// Single-producer background loop: one raster build at a time, newest
+        /// pending region wins. Never touches the main thread while rendering;
+        /// tiles are file-backed PNGs, so the renderer only decodes rasters.
+        private func startRasterLoop() {
+            guard rasterTask == nil else { return }
+            guard let files = dataFiles else { return }
+            guard let region = pendingRasterRegion else {
+                installRasterIfCatalogReady()
+                return
+            }
+            pendingRasterRegion = nil
+            let zMin = max(2, Int(MapStyle.shared.MIN_ZOOM.rounded()))
+            let zMax = min(20, Int(MapStyle.shared.MAX_ZOOM.rounded()))
+            rasterTask = Task.detached(priority: .utility) {
+                let result = OverlayRasterizer.build(files: files,
+                                                     region: region,
+                                                     zMin: zMin,
+                                                     zMax: zMax)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.rasterTask = nil
+                    self.catalog = result.catalog
+                    if result.deltaWritten > 0, self.layersApplied {
+                        // New files on disk — bounce the sources so MapLibre
+                        // picks up the freshly baked tiles.
+                        self.layersApplied = false
+                    }
+                    self.installRasterIfCatalogReady()
+                    self.publishDiagnostics()
+                    self.startRasterLoop()
+                }
+            }
+        }
+
+        /// Marks the current viewport as needing tiles. Cheap to call often: the
+        /// rasterizer skips every tile already on disk.
+        private func scheduleRasterBuild(force: Bool) {
+            guard dataFiles != nil else { return }
+            let region = currentBuildRegion()
+            if force || pendingRasterRegion == nil {
+                pendingRasterRegion = region
+            }
+            startRasterLoop()
+        }
+
+        private func currentBuildRegion() -> OverlayRasterizer.Region {
+            if let map = mapView {
+                let b = map.visibleCoordinateBounds
+                let s = b.sw
+                let n = b.ne
+                let latSpan = max(n.latitude - s.latitude, 0.1)
+                let lonSpan = max(n.longitude - s.longitude, 0.1)
+                return .init(latSouth: s.latitude - latSpan * 0.3,
+                             latNorth: n.latitude + latSpan * 0.3,
+                             lonWest: s.longitude - lonSpan * 0.3,
+                             lonEast: n.longitude + lonSpan * 0.3)
+            }
+            let lat = MapStyle.shared.DEFAULT_LAT
+            return .init(latSouth: lat - 0.25,
+                         latNorth: lat + 0.25,
+                         lonWest: MapStyle.shared.DEFAULT_LNG - 0.4,
+                         lonEast: MapStyle.shared.DEFAULT_LNG + 0.4)
+        }
+
         // MARK: Layers
 
-        /// Recreates the overlay sources + layers from the on-disk GeoJSON
-        /// files. Sources are URL-backed `MLNShapeSource`s, so MapLibre cuts
-        /// them into tiles on its worker threads (Android `GeoJsonSource`
-        /// parity) instead of tessellating on the main thread. Only runs once
-        /// per data change and once after the style loads.
-        private func ensureSourcesAndLayers() {
-            guard styleLoaded, let mapView = mapView, let style = mapView.style else { return }
-            guard let files = dataFiles, !dataApplied else { return }
-            dataApplied = true
+        /// Installs the five raster sources + layers once, from the catalog.
+        /// Only runs when the style AND a catalog exist and nothing is applied
+        /// yet; bounces (`layersApplied = false`) force a re-install.
+        private func installRasterIfCatalogReady() {
+            guard let catalog = catalog, styleLoaded, mapView != nil else { return }
+            guard let style = mapView?.style else { return }
+            if !layersApplied {
+                removeLayerIfPresent(zoneRasterId, style: style)
+                removeLayerIfPresent(banRasterId, style: style)
+                removeLayerIfPresent(shelterRasterId, style: style)
+                removeLayerIfPresent(fireplaceRasterId, style: style)
+                removeLayerIfPresent(otherRasterId, style: style)
+                removeSourceIfPresent(OverlayRasterizer.zoneSourceId, style: style)
+                removeSourceIfPresent(OverlayRasterizer.banSourceId, style: style)
+                removeSourceIfPresent(OverlayRasterizer.shelterSourceId, style: style)
+                removeSourceIfPresent(OverlayRasterizer.fireplaceSourceId, style: style)
+                removeSourceIfPresent(OverlayRasterizer.otherSourceId, style: style)
 
-            removeLayerIfPresent(zoneFillId, style: style)
-            removeLayerIfPresent(zoneLineId, style: style)
-            removeLayerIfPresent(banFillId, style: style)
-            removeLayerIfPresent(banLineId, style: style)
-            removeLayerIfPresent(poiShelterId, style: style)
-            removeLayerIfPresent(poiFireplaceId, style: style)
-            removeLayerIfPresent(poiOtherId, style: style)
-            removeSourceIfPresent("zone-source", style: style)
-            removeSourceIfPresent("ban-source", style: style)
-            removeSourceIfPresent("poi-shelter-source", style: style)
-            removeSourceIfPresent("poi-fireplace-source", style: style)
-            removeSourceIfPresent("poi-other-source", style: style)
-
-            let zoneSource = MLNShapeSource(identifier: "zone-source", url: files.zonesURL, options: shapeSourceOptions)
-            style.addSource(zoneSource)
-
-            let zoneFill = MLNFillStyleLayer(identifier: zoneFillId, source: zoneSource)
-            zoneFill.fillColor = NSExpression(forConstantValue: UIColor(red: 0.10, green: 0.65, blue: 0.25, alpha: 0.35))
-            zoneFill.fillOutlineColor = NSExpression(forConstantValue: UIColor(red: 0.0, green: 0.4, blue: 0.1, alpha: 1.0))
-            zoneFill.fillAntialiased = NSExpression(forConstantValue: false)
-            style.addLayer(zoneFill)
-
-            let zoneLine = MLNLineStyleLayer(identifier: zoneLineId, source: zoneSource)
-            zoneLine.lineColor = NSExpression(forConstantValue: UIColor(red: 0.0, green: 0.45, blue: 0.1, alpha: 0.9))
-            zoneLine.lineWidth = NSExpression(forConstantValue: 2.0)
-            style.addLayer(zoneLine)
-
-            let banSource = MLNShapeSource(identifier: "ban-source", url: files.bansURL, options: shapeSourceOptions)
-            style.addSource(banSource)
-
-            let banFill = MLNFillStyleLayer(identifier: banFillId, source: banSource)
-            banFill.fillColor = NSExpression(forConstantValue: banFillColor(visible: showBans))
-            banFill.fillOutlineColor = NSExpression(forConstantValue: banOutlineColor(visible: showBans))
-            banFill.fillAntialiased = NSExpression(forConstantValue: false)
-            style.addLayer(banFill)
-
-            let banLine = MLNLineStyleLayer(identifier: banLineId, source: banSource)
-            banLine.lineColor = NSExpression(forConstantValue: UIColor(red: 0.7, green: 0.05, blue: 0.05, alpha: 0.9))
-            banLine.lineWidth = NSExpression(forConstantValue: 2.0)
-            banLine.lineOpacity = NSExpression(forConstantValue: showBans ? 0.9 : 0.0)
-            style.addLayer(banLine)
-
-            // One URL source per POI category. Layers stay layout-visible
-            // (tiles stay hot) — toggling switches paint opacity only.
-            let shelterSource = MLNShapeSource(identifier: "poi-shelter-source",
-                                               url: files.shelterURL, options: nil)
-            style.addSource(shelterSource)
-
-            let shelterLayer = poiCircleLayer(identifier: poiShelterId,
-                                              source: shelterSource,
-                                              color: UIColor(red: 0.10, green: 0.65, blue: 0.25, alpha: 1.0),
-                                              isOpaque: showShelters)
-            style.addLayer(shelterLayer)
-
-            let fireplaceSource = MLNShapeSource(identifier: "poi-fireplace-source",
-                                                 url: files.fireplaceURL, options: nil)
-            style.addSource(fireplaceSource)
-
-            let fireplaceLayer = poiCircleLayer(identifier: poiFireplaceId,
-                                                source: fireplaceSource,
-                                                color: UIColor.systemOrange,
-                                                isOpaque: showFireplaces)
-            style.addLayer(fireplaceLayer)
-
-            let otherSource = MLNShapeSource(identifier: "poi-other-source",
-                                             url: files.otherURL, options: nil)
-            style.addSource(otherSource)
-
-            let otherLayer = poiCircleLayer(identifier: poiOtherId,
-                                            source: otherSource,
-                                            color: UIColor.systemBlue,
-                                            isOpaque: showOthers)
-            style.addLayer(otherLayer)
-
-            layersReady = true
-        }
-
-        /// Aggressive-enough tile simplification for the polygon sources. The
-        /// engine's default (0.375 px) keeps too many vertices country-wide,
-        /// which is what made tile-building lag burst on main.
-        private var shapeSourceOptions: [MLNShapeSourceOption: Any]? {
-            [.simplificationTolerance: 1.0]
-        }
-
-        private func banFillColor(visible: Bool) -> UIColor {
-            visible ? UIColor(red: 0.8, green: 0.1, blue: 0.1, alpha: 0.3) : UIColor.clear
-        }
-
-        private func banOutlineColor(visible: Bool) -> UIColor {
-            visible ? UIColor(red: 0.6, green: 0.0, blue: 0.0, alpha: 1.0) : UIColor.clear
-        }
-
-        private func poiCircleLayer(identifier: String,
-                                    source: MLNShapeSource,
-                                    color: UIColor,
-                                    isOpaque: Bool) -> MLNCircleStyleLayer {
-            let layer = MLNCircleStyleLayer(identifier: identifier, source: source)
-            // Zoom-scaled radius, mirroring Android: dots shrink when zoomed
-            // out so a whole-country view does not collapse into a blob.
-            layer.circleRadius = NSExpression(mglJSONObject: [
-                "step", ["zoom"], 2,
-                11, 3,
-                12.5, 5,
-                14, 8,
-                16, 12
-            ] as [Any])
-            layer.circleColor = NSExpression(forConstantValue: color)
-            layer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
-            layer.circleStrokeWidth = NSExpression(forConstantValue: 1.5)
-            layer.circleOpacity = NSExpression(forConstantValue: isOpaque ? 1.0 : 0.0)
-            layer.circleStrokeOpacity = NSExpression(forConstantValue: isOpaque ? 1.0 : 0.0)
-            return layer
+                let specs: [(sourceId: String, template: String, layerId: String, visible: Bool)] = [
+                    (OverlayRasterizer.zoneSourceId, OverlayRasterizer.tileTemplate(layer: .zones), zoneRasterId, true),
+                    (OverlayRasterizer.banSourceId, OverlayRasterizer.tileTemplate(layer: .bans), banRasterId, showBans),
+                    (OverlayRasterizer.shelterSourceId, OverlayRasterizer.tileTemplate(layer: .shelters), shelterRasterId, showShelters),
+                    (OverlayRasterizer.fireplaceSourceId, OverlayRasterizer.tileTemplate(layer: .fireplaces), fireplaceRasterId, showFireplaces),
+                    (OverlayRasterizer.otherSourceId, OverlayRasterizer.tileTemplate(layer: .others), otherRasterId, showOthers)
+                ]
+                for spec in specs {
+                    let options: [MLNTileSourceOption: Any] = [
+                        .tileSize: 256,
+                        .minimumZoomLevel: catalog.zMin,
+                        .maximumZoomLevel: catalog.zMax
+                    ]
+                    let source = MLNRasterTileSource(identifier: spec.sourceId,
+                                                     tileURLTemplates: [spec.template],
+                                                     options: options)
+                    style.addSource(source)
+                    let layer = MLNRasterStyleLayer(identifier: spec.layerId, source: source)
+                    layer.rasterOpacity = NSExpression(forConstantValue: spec.visible ? 1.0 : 0.0)
+                    style.addLayer(layer)
+                }
+                layersApplied = true
+                layersReady = true
+            }
+            refreshLayerVisibility()
         }
 
         private func removeLayerIfPresent(_ id: String, style: MLNStyle) {
@@ -374,14 +364,13 @@ struct MapView: UIViewRepresentable {
         func applySourcesIfReady() {
             guard styleLoaded, mapView != nil else { return }
             scheduleWriteIfNeeded()
-            ensureSourcesAndLayers()
+            installRasterIfCatalogReady()
             refreshLayerVisibility()
             publishDiagnostics()
         }
 
-        /// Writes the GeoJSON to temp files on a background QoS once per data
-        /// change. Note and symmetry between this and the old parse path: the
-        /// heavy JSON work must never run on the main thread.
+        /// Writes the GeoJSON to temp files (the rasterizer's input) on a
+        /// background QoS once per data change.
         private func scheduleWriteIfNeeded() {
             let jsonSignature = "\(zonesJson.count)|\(bansJson.count)|\(poisJson.count)"
             guard jsonSignature != lastJsonSignature else { return }
@@ -393,15 +382,15 @@ struct MapView: UIViewRepresentable {
             let zones = zonesJson
             let bans = bansJson
             let pois = poisJson
-            parseTask?.cancel()
-            parseTask = Task.detached(priority: .utility) { [weak self] in
+            rasterTask?.cancel()
+            rasterTask = Task.detached(priority: .utility) {
                 let files = GeoJsonFileWriter.makeFiles(zones: zones, bans: bans, pois: pois)
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     if let files = files {
-                        self?.applyFiles(files)
+                        self.applyFiles(files)
                     } else {
-                        self?.publishDiagnostics()
+                        self.publishDiagnostics()
                     }
                 }
             }
@@ -409,7 +398,6 @@ struct MapView: UIViewRepresentable {
 
         private func applyFiles(_ files: GeoJsonFileWriter.Files) {
             dataFiles = files
-            dataApplied = false
             zoneFeatureCount = files.zoneCount
             banFeatureCount = files.banCount
             poiFeatureCount = files.shelterCount + files.fireplaceCount + files.otherCount
@@ -417,35 +405,34 @@ struct MapView: UIViewRepresentable {
             poiFireplaceCount = files.fireplaceCount
             poiOtherCount = files.otherCount
 
-            ensureSourcesAndLayers()
-            refreshLayerVisibility()
+            // New dataset: drop every baked tile so nothing stale can remain,
+            // then rebuild for the current viewport in the background.
+            rasterTask?.cancel()
+            catalog = nil
+            layersApplied = false
+            layersReady = false
+            OverlayRasterizer.reset()
+            scheduleRasterBuild(force: true)
             publishDiagnostics()
         }
 
-        /// Toggles switch paint properties only (layers stay layout-visible, so
-        /// tweets baked by the tile pipeline stay hot and the switch is
-        /// instantaneous — no brick rebuild on reveal).
+        /// Toggles switch raster opacity only — the cheapest style mutation
+        /// there is. No geometry, no data rebuild, no filter pass.
         private func refreshLayerVisibility() {
-            guard let style = mapView?.style, layersReady else { return }
+            guard layersReady, let style = mapView?.style else { return }
             let signature = "\(showBans)|\(showShelters)|\(showFireplaces)|\(showOthers)"
             guard signature != lastToggleSignature else { return }
             lastToggleSignature = signature
 
-            if let banFill = style.layer(withIdentifier: banFillId) as? MLNFillStyleLayer {
-                banFill.fillColor = NSExpression(forConstantValue: banFillColor(visible: showBans))
-                banFill.fillOutlineColor = NSExpression(forConstantValue: banOutlineColor(visible: showBans))
-            }
-            if let banLine = style.layer(withIdentifier: banLineId) as? MLNLineStyleLayer {
-                banLine.lineOpacity = NSExpression(forConstantValue: showBans ? 0.9 : 0.0)
-            }
-            for entry in [(poiShelterId, showShelters),
-                          (poiFireplaceId, showFireplaces),
-                          (poiOtherId, showOthers)] {
-                if let layer = style.layer(withIdentifier: entry.0) as? MLNCircleStyleLayer {
-                    let opacity: Double = entry.1 ? 1.0 : 0.0
-                    layer.circleOpacity = NSExpression(forConstantValue: opacity)
-                    layer.circleStrokeOpacity = NSExpression(forConstantValue: opacity)
-                }
+            setRasterOpacity(banRasterId, visible: showBans, style: style)
+            setRasterOpacity(shelterRasterId, visible: showShelters, style: style)
+            setRasterOpacity(fireplaceRasterId, visible: showFireplaces, style: style)
+            setRasterOpacity(otherRasterId, visible: showOthers, style: style)
+        }
+
+        private func setRasterOpacity(_ id: String, visible: Bool, style: MLNStyle) {
+            if let layer = style.layer(withIdentifier: id) as? MLNRasterStyleLayer {
+                layer.rasterOpacity = NSExpression(forConstantValue: visible ? 1.0 : 0.0)
             }
         }
 
@@ -455,8 +442,14 @@ struct MapView: UIViewRepresentable {
             let styleState = styleLoaded ? "YES(\(styleFinishCount))" : "NO"
             let fail = styleErrorText.isEmpty ? "-" : styleErrorText
             let layersState = layersReady ? "YES" : "NO"
+            let tiles = catalog?.writtenTiles ?? 0
+            let zMin = catalog?.zMin ?? 0
+            let zMax = catalog?.zMax ?? 0
+            // Localized "overlay" so QA can tell whether the raster pipeline ran.
+            let overlayText = layersReady ? "tiles=\(tiles) z=\(zMin)-\(zMax)" : "pending"
             let text = """
             style=\(styleState) fail=\(fail) layers=\(layersState)
+            overlay: \(overlayText)
             zones: json \(jsonByteCount.zones) feat \(zoneFeatureCount)
             bans:  json \(jsonByteCount.bans) feat \(banFeatureCount)
             pois:  json \(jsonByteCount.pois) feat \(poiFeatureCount) (sh \(poiShelterCount) fp \(poiFireplaceCount) ot \(poiOtherCount))
@@ -507,33 +500,38 @@ struct MapView: UIViewRepresentable {
 
         // MARK: Tap handling
 
+        /// Overlays are rasters now, so `visibleFeatures` has nothing to offer.
+        /// Hit-testing runs against the retained catalog: nearest POI first,
+        /// then point-in-polygon over zones and bans (Android parity order).
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            guard let mapView = mapView else { return }
-            let point = gesture.location(in: mapView)
-            let tapRect = CGRect(x: point.x - 30, y: point.y - 30, width: 60, height: 60)
-
-            let pois = mapView.visibleFeatures(
-                in: tapRect,
-                styleLayerIdentifiers: [poiShelterId, poiFireplaceId, poiOtherId]
-            )
-            if let poiFeature = pois.first {
-                if let name = poiFeature.attribute(forKey: "name") as? String {
-                    onTapPoi(name)
-                    return
-                }
+            guard let mapView = mapView, let catalog = catalog else {
+                onTapBackground()
+                return
             }
+            let point = gesture.location(in: mapView)
+            let coord = mapView.convert(point, toCoordinateFrom: mapView)
+            let zoom = mapView.zoomLevel
+            let degPerPixel = (360.0 / pow(2.0, zoom)) / 256.0
+            let maxDeg = 30.0 * degPerPixel
 
-            let zones = mapView.visibleFeatures(in: tapRect, styleLayerIdentifiers: [zoneFillId])
-            if let zoneFeature = zones.first {
-                let name = zoneFeature.attribute(forKey: "name") as? String
-                onTapZone(name)
+            if let poi = OverlayRasterizer.nearestPoi(in: catalog,
+                                                      lon: coord.longitude,
+                                                      lat: coord.latitude,
+                                                      maxDeg: maxDeg) {
+                onTapPoi(poi.name)
                 return
             }
 
-            let bans = mapView.visibleFeatures(in: tapRect, styleLayerIdentifiers: [banFillId])
-            if let banFeature = bans.first {
-                if let remoteIdNumber = banFeature.attribute(forKey: "remoteId") as? NSNumber {
-                    onTapBan(remoteIdNumber.int64Value)
+            for zone in catalog.zones
+            where OverlayRasterizer.polygon(zone, contains: coord.longitude, latitude: coord.latitude) {
+                onTapZone(zone.properties["name"] as? String)
+                return
+            }
+
+            for ban in catalog.bans
+            where OverlayRasterizer.polygon(ban, contains: coord.longitude, latitude: coord.latitude) {
+                if let id = (ban.properties["remoteId"] as? NSNumber)?.int64Value {
+                    onTapBan(id)
                 }
                 return
             }
