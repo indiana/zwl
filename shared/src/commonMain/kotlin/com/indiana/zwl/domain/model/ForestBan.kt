@@ -16,4 +16,11 @@ data class ForestBan(
     val compartmentCode: String?,
     val areaSqMeters: Double?,
     val geometryWkt: String
-)
+) {
+    /**
+     * iOS/SKIE accessor for [description], which collides with
+     * `NSObject.description` after ObjC export (the same reason as
+     * `Poi.categoryDescription`).
+     */
+    val banDescription: String? get() = description
+}

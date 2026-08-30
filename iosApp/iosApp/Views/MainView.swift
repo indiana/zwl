@@ -119,7 +119,8 @@ struct MainView: View {
                 if viewModel.isDownloading || !viewModel.downloadStatusText.isEmpty {
                     MapDownloadCard(text: viewModel.downloadStatusText,
                                     progress: viewModel.downloadProgress,
-                                    isDownloading: viewModel.isDownloading)
+                                    isDownloading: viewModel.isDownloading,
+                                    errorMessage: viewModel.downloadErrorText)
                         .padding([.leading, .top], 16)
                 }
                 Spacer()

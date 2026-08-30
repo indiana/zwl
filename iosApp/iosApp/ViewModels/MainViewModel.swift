@@ -90,6 +90,7 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var downloadProgress: Float = 0
     @Published var downloadStatusText = ""
     @Published var downloadFinished = false
+    @Published var downloadErrorText: String? = nil
 
     let app: ForestApp
     private let locationManager = CLLocationManager()
@@ -379,6 +380,7 @@ final class MainViewModel: NSObject, ObservableObject {
         downloadProgress = 0
         downloadStatusText = "Rozpoczynanie..."
         downloadFinished = false
+        downloadErrorText = nil
 
         Task { [weak self] in
             guard let self = self else { return }
@@ -401,11 +403,13 @@ final class MainViewModel: NSObject, ObservableObject {
                     },
                     onError: { [weak self] message in
                         self?.downloadStatusText = message
+                        self?.downloadErrorText = message
                         self?.downloadFinished = true
                     }
                 )
             } catch {
                 self.downloadStatusText = "Błąd pobierania: \(error.localizedDescription)"
+                self.downloadErrorText = "Błąd pobierania: \(error.localizedDescription)"
                 self.downloadFinished = true
             }
             self.isDownloading = false

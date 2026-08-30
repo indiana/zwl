@@ -59,7 +59,7 @@ struct PoiDetailView: View {
     }
 
     private var showDescription: Bool {
-        !poi.description.isEmpty && poi.description != poi.name
+        !poi.categoryDescription.isEmpty && poi.categoryDescription != poi.name
     }
 
     private var descriptionSubcard: some View {
@@ -67,7 +67,7 @@ struct PoiDetailView: View {
             Text("OPIS KATEGORII BDL")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundColor(.secondary)
-            Text(poi.description)
+            Text(poi.categoryDescription)
                 .font(.system(size: 13))
                 .padding(.top, 4)
         }

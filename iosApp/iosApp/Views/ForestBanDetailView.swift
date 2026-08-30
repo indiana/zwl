@@ -66,12 +66,12 @@ struct ForestBanDetailView: View {
                 .multilineTextAlignment(.center)
                 .padding(.top, 6)
 
-            if !ban.description.isEmpty {
+            if let desc = ban.banDescription, !desc.isEmpty {
                 Divider()
                     .overlay(ZWL.errorRedAccent.opacity(0.3))
                     .padding(.vertical, 10)
 
-                Text(ban.description)
+                Text(desc)
                     .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.9))
                     .multilineTextAlignment(.center)
