@@ -8,23 +8,31 @@ import com.indiana.zwl.domain.util.RdlpMapper
 import com.indiana.zwl.shared.data.remote.BdlOgcApi
 import kotlinx.coroutines.CancellationException
 import org.locationtech.jts.geom.Envelope
+import org.locationtech.jts.geom.Geometry
 import org.locationtech.jts.io.WKTReader
-import javax.inject.Inject
+import kotlin.math.round
 
-class GetForestStandUseCase @Inject constructor(
+/**
+ * Fetches and aggregates the BDL forest-stand (drzewostan) summary for a zone.
+ *
+ * Lives in shared (KMP) so Android and iOS run the same logic for the
+ * forest-stand card in zone details. JTS types come from the multiplatform
+ * kts-core port and compile on every target.
+ */
+class GetForestStandUseCase(
     private val ogcApi: BdlOgcApi
 ) {
     suspend operator fun invoke(zone: Zone): Result<ForestStandSummary> {
         return try {
-            val reader = WKTReader()
-            val geometry = reader.read(zone.geometryWkt)!!
+            val geometry: Geometry = WKTReader().read(zone.geometryWkt)
             val envelope: Envelope = geometry.getEnvelopeInternal()
 
             val bbox = "${envelope.getMinX()},${envelope.getMinY()},${envelope.getMaxX()},${envelope.getMaxY()}"
-            val centroid = geometry.getCentroid()
+            val centre = envelope.centre()
+                ?: return Result.failure(Exception("Nie udało się ustalić położenia strefy."))
 
             val regionResult = ogcApi.findNadlesnictwo(
-                bbox = "${centroid.getX() - 0.01},${centroid.getY() - 0.01},${centroid.getX() + 0.01},${centroid.getY() + 0.01}"
+                bbox = "${centre.x - 0.01},${centre.y - 0.01},${centre.x + 0.01},${centre.y + 0.01}"
             )
             val regionCd = regionResult.features.firstOrNull()?.properties?.get("region_cd")?.toString()?.trim('"')
 
@@ -103,7 +111,7 @@ class GetForestStandUseCase @Inject constructor(
                     SpeciesEntry(
                         speciesCode = code,
                         speciesName = RdlpMapper.speciesCodeToName(code),
-                        percentage = Math.round(percentage * 10.0) / 10.0,
+                        percentage = round(percentage * 10.0) / 10.0,
                         ageLabel = ageLabel
                     )
                 }
@@ -115,13 +123,13 @@ class GetForestStandUseCase @Inject constructor(
                     standStructure = standStructure,
                     siteType = siteType,
                     protectionCategory = protectionCategory,
-                    totalAreaHa = Math.round(totalArea * 100.0) / 100.0,
+                    totalAreaHa = round(totalArea * 100.0) / 100.0,
                     rotationAge = rotationAge
                 )
             )
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            e.printStackTrace()
+            println(e.stackTraceToString())
             Result.failure(e)
         }
     }

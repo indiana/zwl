@@ -66,11 +66,13 @@ final class MainViewModel: NSObject, ObservableObject {
     var debugUiEnabled: Bool { true }
     @Published var debugInvertZone = false
 
-    // Zone detail sheet state (cycle-1 parity: distance + fire risk + stove rule;
-    // BDL forest stand comes in a later cycle).
+    // Zone detail sheet state (distance + fire risk + stove rule + BDL forest
+    // stand card — Android parity).
     @Published var selectedZoneDistanceMeters: Double?
     @Published var selectedZoneFireRiskLevel: Int?
     @Published var isLoadingZoneFireRisk = false
+    @Published var selectedZoneForestStand: ForestStandSummary?
+    @Published var isLoadingZoneForestStand = false
 
     // Live map diagnostics (overlay shown while the map overlays are being
     // debugged on device; remove once rendering is confirmed).
@@ -204,11 +206,14 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedZoneDistanceMeters = nil
         selectedZoneFireRiskLevel = nil
         isLoadingZoneFireRisk = false
+        selectedZoneForestStand = nil
+        isLoadingZoneForestStand = false
         computeZoneDetail(for: zone)
     }
 
-    /// Fills the zone detail sheet: distance from the user and fire risk read at
-    /// the zone's first boundary coordinate (Android parity for cycle 1).
+    /// Fills the zone detail sheet: distance from the user, fire risk read at
+    /// the zone's first boundary coordinate, and the BDL forest-stand card
+    /// (Android parity).
     private func computeZoneDetail(for zone: Zone) {
         if let userLat = userLatitude, let userLng = userLongitude {
             if currentInZone?.forestDistrict == zone.forestDistrict {
@@ -221,6 +226,8 @@ final class MainViewModel: NSObject, ObservableObject {
             }
         }
 
+        selectForestStand(for: zone)
+
         guard let first = firstShellCoordinate(of: zone.forestDistrict) else { return }
         isLoadingZoneFireRisk = true
         Task { [weak self] in
@@ -229,6 +236,45 @@ final class MainViewModel: NSObject, ObservableObject {
             self.selectedZoneFireRiskLevel = level
             self.isLoadingZoneFireRisk = false
         }
+    }
+
+    /// BDL forest-stand card (Android "STRUKTURA I CHARAKTERYSTYKA DRZEWOSTANU"
+    /// parity): show the cached summary immediately, refresh from the network
+    /// when the cache is missing or older than the 24h TTL, then persist the
+    /// fresh copy via the same ZoneRepository cache Android uses.
+    private func selectForestStand(for zone: Zone) {
+        let cached = app.cachedForestStand(zone: zone)
+        selectedZoneForestStand = cached
+
+        let timestamp = zone.forestStandTimestamp
+        let stale: Bool
+        if let ts = timestamp {
+            stale = Self.currentTimeMillis() - ts.int64Value > Self.forestStandCacheTtlMillis
+        } else {
+            stale = true
+        }
+        let needRefresh = cached == nil || stale
+        guard needRefresh else { return }
+
+        isLoadingZoneForestStand = true
+        Task { [weak self] in
+            guard let self = self else { return }
+            if let fresh = try? await self.app.getForestStand(zone: zone) {
+                self.selectedZoneForestStand = fresh
+                try? await self.app.cacheForestStand(
+                    zone: zone,
+                    summary: fresh,
+                    timestamp: Self.currentTimeMillis()
+                )
+            }
+            self.isLoadingZoneForestStand = false
+        }
+    }
+
+    private static let forestStandCacheTtlMillis: Int64 = 24 * 60 * 60 * 1000
+
+    private static func currentTimeMillis() -> Int64 {
+        Int64(Date().timeIntervalSince1970 * 1000)
     }
 
     /// Extracts the first [lng, lat] coordinate of the zone's shell from the

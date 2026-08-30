@@ -4,12 +4,15 @@ import shared
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
-    @State private var overlayEnabled = true
-    @State private var vectorOverlay = true
-    @State private var baseEnabled = true
-    @State private var showUserDot = true
-    @State private var followsUser = true
-    @State private var showHeading = true
+    // Persisted so A/B configs survive a cold restart (i.e. Baza OFF measured
+    // at true startup, not after a mid-session style reload). Follow/heading
+    // are user preferences, the rest are diagnostics toggles.
+    @AppStorage("settings.overlayEnabled") private var overlayEnabled = true
+    @AppStorage("settings.vectorOverlay") private var vectorOverlay = true
+    @AppStorage("settings.baseEnabled") private var baseEnabled = true
+    @AppStorage("settings.showUserDot") private var showUserDot = true
+    @AppStorage("settings.followsUser") private var followsUser = true
+    @AppStorage("settings.showHeading") private var showHeading = true
 
     var body: some View {
         ZStack {
@@ -46,9 +49,12 @@ struct MainView: View {
         .sheet(isPresented: isZoneSheetPresented) {
             if let zone = viewModel.selectedZone {
                 ZoneDetailView(zone: zone,
+                               app: viewModel.app,
                                distanceMeters: viewModel.selectedZoneDistanceMeters,
                                fireRiskLevel: viewModel.selectedZoneFireRiskLevel,
-                               isLoadingFireRisk: viewModel.isLoadingZoneFireRisk)
+                               isLoadingFireRisk: viewModel.isLoadingZoneFireRisk,
+                               forestStand: viewModel.selectedZoneForestStand,
+                               isLoadingForestStand: viewModel.isLoadingZoneForestStand)
                     .presentationDetents([.medium, .large])
             }
         }
