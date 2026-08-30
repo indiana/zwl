@@ -149,7 +149,7 @@ struct ForestBanDetailView: View {
 
             if let area = ban.areaSqMeters {
                 localisationRow(label: "Powierzchnia:",
-                                value: "\(formatAreaHa(area)) ha (\(formatAreaSqM(area)) m²)")
+                                value: "\(formatAreaHa(area.doubleValue)) ha (\(formatAreaSqM(area.doubleValue)) m²)")
             }
         }
     }
