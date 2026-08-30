@@ -416,17 +416,28 @@ final class MainViewModel: NSObject, ObservableObject {
                     maxZoom: 16,
                     maxTiles: 500,
                     onProgress: { [weak self] progress, text in
-                        self?.downloadProgress = progress.floatValue
-                        self?.downloadStatusText = text
+                        // Kotlin invokes these from Dispatchers.Default; hop to
+                        // the main actor before touching @Published state.
+                        Task { @MainActor [weak self] in
+                            guard let self = self else { return }
+                            self.downloadProgress = progress.floatValue
+                            self.downloadStatusText = text
+                        }
                     },
                     onSuccess: { [weak self] count in
-                        self?.downloadStatusText = "Pobrano kafelków: \(count)"
-                        self?.downloadFinished = true
+                        Task { @MainActor [weak self] in
+                            guard let self = self else { return }
+                            self.downloadStatusText = "Pobrano kafelków: \(count)"
+                            self.downloadFinished = true
+                        }
                     },
                     onError: { [weak self] message in
-                        self?.downloadStatusText = message
-                        self?.downloadErrorText = message
-                        self?.downloadFinished = true
+                        Task { @MainActor [weak self] in
+                            guard let self = self else { return }
+                            self.downloadStatusText = message
+                            self.downloadErrorText = message
+                            self.downloadFinished = true
+                        }
                     }
                 )
             } catch {
