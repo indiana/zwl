@@ -35,11 +35,21 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var bansGeoJson: String = ""
     @Published var poisGeoJson: String = ""
 
-    // Layer toggles
-    @Published var showBans: Bool = true
-    @Published var showShelters: Bool = true
-    @Published var showFireplaces: Bool = true
-    @Published var showOthers: Bool = true
+    // Layer toggles (persisted across launches like Android's
+    // SharedPreferences `zwl_map_settings`; they reset to defaults only on
+    // first launch).
+    @Published var showBans: Bool = true {
+        didSet { UserDefaults.standard.set(showBans, forKey: Self.keyShowBans) }
+    }
+    @Published var showShelters: Bool = true {
+        didSet { UserDefaults.standard.set(showShelters, forKey: Self.keyShowShelters) }
+    }
+    @Published var showFireplaces: Bool = true {
+        didSet { UserDefaults.standard.set(showFireplaces, forKey: Self.keyShowFireplaces) }
+    }
+    @Published var showOthers: Bool = true {
+        didSet { UserDefaults.standard.set(showOthers, forKey: Self.keyShowOthers) }
+    }
 
     // Selections
     @Published var selectedZone: Zone?
@@ -57,6 +67,10 @@ final class MainViewModel: NSObject, ObservableObject {
 
     // Increment to ask the map to re-center on the user position
     @Published var recenterSignal: Int = 0
+
+    // Transient "Oczekiwanie na sygnał GPS..." pill (Android toast parity)
+    // shown when the re-center button is tapped before the first GPS fix.
+    @Published var gpsWaitingMessageVisible = false
 
     // Compass heading (degrees, 0 = north)
     @Published var azimuth: Float = 0
@@ -99,6 +113,10 @@ final class MainViewModel: NSObject, ObservableObject {
     let app: ForestApp
     private let locationManager = CLLocationManager()
     private let pathMonitor = NWPathMonitor()
+    private static let keyShowBans = "mapSettings.showBans"
+    private static let keyShowShelters = "mapSettings.showShelters"
+    private static let keyShowFireplaces = "mapSettings.showFireplaces"
+    private static let keyShowOthers = "mapSettings.showOthers"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
     // re-renders the map on the main thread (the iPad-class bottleneck), so
@@ -110,6 +128,11 @@ final class MainViewModel: NSObject, ObservableObject {
     init(app: ForestApp) {
         self.app = app
         super.init()
+        let defaults = UserDefaults.standard
+        showBans = defaults.object(forKey: Self.keyShowBans) as? Bool ?? true
+        showShelters = defaults.object(forKey: Self.keyShowShelters) as? Bool ?? true
+        showFireplaces = defaults.object(forKey: Self.keyShowFireplaces) as? Bool ?? true
+        showOthers = defaults.object(forKey: Self.keyShowOthers) as? Bool ?? true
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor [weak self] in
@@ -370,6 +393,18 @@ final class MainViewModel: NSObject, ObservableObject {
     // MARK: - Offline download
 
     func recenterMap() {
+        guard userLatitude != nil else {
+            // Android shows a toast here ("Oczekiwanie na sygnał GPS...");
+            // render a transient pill and hide it after ~2.5s.
+            if !gpsWaitingMessageVisible {
+                gpsWaitingMessageVisible = true
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    self?.gpsWaitingMessageVisible = false
+                }
+            }
+            return
+        }
         recenterSignal += 1
     }
 
