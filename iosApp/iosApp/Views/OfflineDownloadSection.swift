@@ -29,7 +29,7 @@ struct MapDownloadCard: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxHeight: errorMessage == nil ? .none : 76)
+            .frame(maxHeight: 76)
         }
         .padding(10)
         .frame(width: 200)
