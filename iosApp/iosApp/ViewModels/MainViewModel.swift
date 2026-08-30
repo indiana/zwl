@@ -91,6 +91,10 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var downloadStatusText = ""
     @Published var downloadFinished = false
     @Published var downloadErrorText: String? = nil
+    // Coalescing state for progress publishes (see applyDownloadProgress).
+    private var lastDownloadProgressShown: Float = -1
+    private var lastDownloadTextShown = ""
+    private var lastDownloadTextAt = Date.distantPast
 
     let app: ForestApp
     private let locationManager = CLLocationManager()
@@ -396,6 +400,30 @@ final class MainViewModel: NSObject, ObservableObject {
         downloadArea(region: region)
     }
 
+    /// Throttled progress callback for the offline download (Android only
+    /// drives its UI via a flow + throttling; Kotlin fires our callback per
+    /// tile, i.e. ~10-20 Hz on device). Publishing every tile forces a SwiftUI
+    /// update cycle per callback and pinned the main thread at ~80% CPU while
+    /// downloading (tripped the CPU watchdog, iOS 'cpu resource' termination).
+    /// Coalesce: progress on ~2% steps (forcing the final 1.0), text at most
+    /// every 0.35s unless the progress stepped.
+    private func applyDownloadProgress(_ progress: Float, text: String) {
+        let step = 0.02f
+        let steped = abs(progress - lastDownloadProgressShown) >= step || progress >= 0.999f
+        let now = Date()
+        let textDue = (text != lastDownloadTextShown)
+            && (now.timeIntervalSince(lastDownloadTextAt) >= 0.35 || steped)
+        if steped {
+            lastDownloadProgressShown = progress
+            downloadProgress = progress
+        }
+        if textDue {
+            lastDownloadTextShown = text
+            lastDownloadTextAt = now
+            downloadStatusText = text
+        }
+    }
+
     func downloadArea(region: MapRegion) {
         guard !isDownloading else { return }
         isDownloading = true
@@ -403,6 +431,9 @@ final class MainViewModel: NSObject, ObservableObject {
         downloadStatusText = "Rozpoczynanie..."
         downloadFinished = false
         downloadErrorText = nil
+        lastDownloadProgressShown = -1
+        lastDownloadTextShown = ""
+        lastDownloadTextAt = Date.distantPast
 
         Task { [weak self] in
             guard let self = self else { return }
@@ -420,8 +451,7 @@ final class MainViewModel: NSObject, ObservableObject {
                         // the main actor before touching @Published state.
                         Task { @MainActor [weak self] in
                             guard let self = self else { return }
-                            self.downloadProgress = progress.floatValue
-                            self.downloadStatusText = text
+                            self.applyDownloadProgress(progress.floatValue, text: text)
                         }
                     },
                     onSuccess: { [weak self] count in
