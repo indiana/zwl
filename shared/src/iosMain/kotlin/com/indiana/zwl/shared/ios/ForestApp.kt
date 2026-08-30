@@ -64,6 +64,11 @@ class ForestApp(
         try {
             if (zoneRepository.getZonesCount() == 0) {
                 ok = syncZones() && ok
+            } else {
+                val zones = zoneRepository.getAllZones()
+                if (zones.any { it.forestDistrict.contains("Nieznane", ignoreCase = true) }) {
+                    ok = syncZones() && ok
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -72,11 +77,12 @@ class ForestApp(
             ok = false
         }
 
+        // Android refreshes forest bans and POIs on every launch (they carry
+        // validity dates / can change); only zones are synced lazily above.
+        // Mirror that — keep the cached copy when the refresh fails.
         try {
             cachedBans = forestBanRepository.getAllBans()
-            if (cachedBans.isEmpty()) {
-                ok = syncBans() && ok
-            }
+            if (!syncBans()) ok = false
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -86,9 +92,7 @@ class ForestApp(
 
         try {
             cachedPois = poiRepository.getAllPois().first()
-            if (cachedPois.isEmpty()) {
-                ok = syncPois() && ok
-            }
+            if (!syncPois()) ok = false
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -96,9 +100,7 @@ class ForestApp(
             ok = false
         }
 
-        if (ok) {
-            refreshSpatialIndexes()
-        }
+        refreshSpatialIndexes()
         return ok
     }
 

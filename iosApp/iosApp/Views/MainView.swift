@@ -163,6 +163,10 @@ struct MainView: View {
                 Spacer()
             }
 
+            if viewModel.gpsWaitingMessageVisible {
+                gpsWaitingPill
+            }
+
             if viewModel.debugUiEnabled && DebugMapOverlay.isEnabled && !viewModel.mapDiagnostics.isEmpty {
                 VStack {
                     Spacer()
@@ -254,9 +258,9 @@ struct MainView: View {
                 .foregroundColor(.secondary)
 
             Toggle("Zakazy wstępu do lasu", isOn: $viewModel.showBans)
-            Toggle("Wiaty", isOn: $viewModel.showShelters)
-            Toggle("Ogniska", isOn: $viewModel.showFireplaces)
-            Toggle("Inne", isOn: $viewModel.showOthers)
+            Toggle("Wiaty i wiatopodobne", isOn: $viewModel.showShelters)
+            Toggle("Miejsca na ognisko", isOn: $viewModel.showFireplaces)
+            Toggle("Inne punkty", isOn: $viewModel.showOthers)
 
             Divider()
 
@@ -347,7 +351,22 @@ struct MainView: View {
                 .foregroundColor(.blue)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
         }
-        .disabled(viewModel.userLatitude == nil)
+    }
+
+    /// Transient pill at the bottom of the map (Android toast parity) shown
+    /// when "Moja lokalizacja" is tapped before the first GPS fix.
+    private var gpsWaitingPill: some View {
+        VStack {
+            Spacer()
+            Text("Oczekiwanie na sygnał GPS...")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(.black.opacity(0.75), in: Capsule())
+                .padding(.bottom, 24)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Sheet bindings
