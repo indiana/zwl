@@ -408,8 +408,8 @@ final class MainViewModel: NSObject, ObservableObject {
     /// Coalesce: progress on ~2% steps (forcing the final 1.0), text at most
     /// every 0.35s unless the progress stepped.
     private func applyDownloadProgress(_ progress: Float, text: String) {
-        let step = 0.02f
-        let steped = abs(progress - lastDownloadProgressShown) >= step || progress >= 0.999f
+        let step: Float = 0.02
+        let steped = abs(progress - lastDownloadProgressShown) >= step || progress >= 0.999
         let now = Date()
         let textDue = (text != lastDownloadTextShown)
             && (now.timeIntervalSince(lastDownloadTextAt) >= 0.35 || steped)
