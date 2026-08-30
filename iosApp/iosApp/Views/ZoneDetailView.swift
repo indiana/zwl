@@ -227,6 +227,27 @@ struct ZoneDetailView: View {
 
     @ViewBuilder
     private func metadataSection(_ summary: ForestStandSummary) -> some View {
+        let items = metadataItems(summary)
+        if !items.isEmpty {
+            Divider()
+                .padding(.vertical, 4)
+            Text("Parametry siedliska i gospodarki:")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.secondary)
+            ForEach(items.indices, id: \.self) { index in
+                HStack(alignment: .top) {
+                    Text(items[index].label)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    metadataValue(items[index])
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private func metadataItems(_ summary: ForestStandSummary) -> [(label: String, value: String, tooltip: String?)] {
         var items: [(label: String, value: String, tooltip: String?)] = []
         if let item = summary.forestFunction {
             items.append(("Funkcja lasu", item.name,
@@ -247,24 +268,7 @@ struct ZoneDetailView: View {
         if let rotationAge = app.forestStandRotationAgeText(summary: summary) {
             items.append(("Wiek rębności", rotationAge, app.rotationAgeTooltip()))
         }
-
-        if !items.isEmpty {
-            Divider()
-                .padding(.vertical, 4)
-            Text("Parametry siedliska i gospodarki:")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.secondary)
-            ForEach(items.indices, id: \.self) { index in
-                HStack(alignment: .top) {
-                    Text(items[index].label)
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    metadataValue(items[index])
-                }
-                .padding(.vertical, 2)
-            }
-        }
+        return items
     }
 
     @ViewBuilder
