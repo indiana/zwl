@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package com.indiana.zwl.shared.data.offline
 
 import app.cash.sqldelight.db.AfterVersion
