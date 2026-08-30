@@ -1,0 +1,53 @@
+name: Symbolicate iOS .ips
+
+# One-off helper: resolve ZWL (app binary) load addresses from a
+# `bug_type 202` microstackshots .ips against the exact dSYM of the
+# build that produced it (artifact "ZWL-release" from ios-release.yml).
+# Manual only, never on push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: 'GH run ID that produced the ZWL-release artifact'
+        required: false
+        default: '33332079078'
+      load_address:
+        description: 'App binary slide/base (from .ips "Path" + "Binary Images" first line)'
+        required: false
+        default: '0x100f7c000'
+      addresses:
+        description: 'Space-separated LOADED addresses from the .ips to symbolize'
+        required: false
+        default: '0x100fb0414 0x100fb047c 0x100fb04e0 0x100fb2e80 0x100fb3d48 0x100fb40fc 0x100fadde4 0x100fadd50 0x100fc3f00'
+
+jobs:
+  symbolicate:
+    runs-on: macos-latest
+    steps:
+      - name: Download ZWL-release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ZWL-release
+          run_id: ${{ github.event.inputs.artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Locate the app dSYM
+        id: dsym
+        run: |
+          DSYM_DWARF=$(find . -path '*App.app.dSYM/Contents/Resources/DWARF/*' -type f | head -n 1)
+          if [ -z "$DSYM_DWARF" ]; then
+            echo "No app dSYM found in the artifact"
+            exit 1
+          fi
+          echo "dwarf=$DSYM_DWARF"
+          echo "dwarf=$DSYM_DWARF" >> "$GITHUB_OUTPUT"
+
+      - name: atos symbolicate
+        env:
+          DSYM_DWARF: ${{ steps.dsym.outputs.dwarf }}
+          LOAD_ADDR: ${{ github.event.inputs.load_address }}
+          ADDRS: ${{ github.event.inputs.addresses }}
+        run: |
+          echo "ats: atos -o $(basename "$DSYM_DWARF") -l $LOAD_ADDR $ADDRS"
+          atos -o "$DSYM_DWARF" -l "$LOAD_ADDR" $ADDRS
