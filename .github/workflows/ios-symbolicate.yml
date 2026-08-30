@@ -29,7 +29,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ZWL-release
-          run_id: ${{ github.event.inputs.artifact_run_id }}
+          run-id: ${{ github.event.inputs.artifact_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Locate the app dSYM
