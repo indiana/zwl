@@ -59,7 +59,7 @@ class ForestApp(
         private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
     }
 
-    suspend fun initialize(): Boolean {
+    suspend fun initialize(): Boolean = withContext(Dispatchers.Default) {
         var ok = true
         try {
             if (zoneRepository.getZonesCount() == 0) {
@@ -101,7 +101,7 @@ class ForestApp(
         }
 
         refreshSpatialIndexes()
-        return ok
+        ok
     }
 
     suspend fun refreshSpatialIndexes() = withContext(Dispatchers.Default) {
@@ -194,16 +194,18 @@ class ForestApp(
         }
     }
 
-    fun checkLocation(latitude: Double, longitude: Double): LocationStatus {
-        return zoneEngine.checkLocation(latitude, longitude)
-    }
+    suspend fun checkLocation(latitude: Double, longitude: Double): LocationStatus =
+        withContext(Dispatchers.Default) {
+            zoneEngine.checkLocation(latitude, longitude)
+        }
 
-    fun checkForestBan(latitude: Double, longitude: Double): ForestBan? {
-        return banEngine.checkForestBan(latitude, longitude)
-    }
+    suspend fun checkForestBan(latitude: Double, longitude: Double): ForestBan? =
+        withContext(Dispatchers.Default) {
+            banEngine.checkForestBan(latitude, longitude)
+        }
 
-    suspend fun getFireRisk(latitude: Double, longitude: Double): Int {
-        return try {
+    suspend fun getFireRisk(latitude: Double, longitude: Double): Int = withContext(Dispatchers.Default) {
+        try {
             val response = fireApi.getFireHazard(geometry = "$longitude,$latitude")
             response.features?.firstOrNull()?.properties?.kodInt ?: -1
         } catch (e: CancellationException) {
@@ -213,11 +215,14 @@ class ForestApp(
         }
     }
 
-    fun zonesGeoJson(): String = MapGeoJson.zonesToGeoJson(cachedZones)
+    suspend fun zonesGeoJson(): String =
+        withContext(Dispatchers.Default) { MapGeoJson.zonesToGeoJson(cachedZones) }
 
-    fun bansGeoJson(): String = MapGeoJson.bansToGeoJson(cachedBans)
+    suspend fun bansGeoJson(): String =
+        withContext(Dispatchers.Default) { MapGeoJson.bansToGeoJson(cachedBans) }
 
-    fun poisGeoJson(): String = MapGeoJson.poisToGeoJson(cachedPois)
+    suspend fun poisGeoJson(): String =
+        withContext(Dispatchers.Default) { MapGeoJson.poisToGeoJson(cachedPois) }
 
     fun cachedZones(): List<Zone> = cachedZones
 
