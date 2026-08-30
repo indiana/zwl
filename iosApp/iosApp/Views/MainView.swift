@@ -15,6 +15,9 @@ struct MainView: View {
     @AppStorage("settings.showUserDot") private var showUserDot = true
     @AppStorage("settings.followsUser") private var followsUser = true
     @AppStorage("settings.showHeading") private var showHeading = true
+    // Dismisses the end-of-download card (bug: it used to stay on screen
+    // forever once the download finished/failed).
+    @State private var dismissDownloadCard = false
 
     var body: some View {
         ZStack {
@@ -123,12 +126,13 @@ struct MainView: View {
             }
 
             VStack {
-                if viewModel.isDownloading || !viewModel.downloadStatusText.isEmpty {
+                if (viewModel.isDownloading || !viewModel.downloadStatusText.isEmpty) && !dismissDownloadCard {
                     MapDownloadCard(text: viewModel.downloadStatusText,
                                     progress: viewModel.downloadProgress,
                                     isDownloading: viewModel.isDownloading,
                                     errorMessage: viewModel.downloadErrorText)
                         .padding([.leading, .top], 16)
+                        .onTapGesture { dismissDownloadCard = true }
                 }
                 Spacer()
             }
