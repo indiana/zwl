@@ -13,6 +13,7 @@ struct MapView: UIViewRepresentable {
     let showFireplaces: Bool
     let showOthers: Bool
     let overlayEnabled: Bool
+    let vectorOverlay: Bool
     let baseEnabled: Bool
     let followsUser: Bool
     let showHeading: Bool
@@ -83,6 +84,7 @@ struct MapView: UIViewRepresentable {
         coordinator.showFireplaces = showFireplaces
         coordinator.showOthers = showOthers
         coordinator.overlayEnabled = overlayEnabled
+        coordinator.vectorOverlay = vectorOverlay
         coordinator.baseEnabled = baseEnabled
         coordinator.followsUser = followsUser
         coordinator.showHeading = showHeading
@@ -114,6 +116,16 @@ struct MapView: UIViewRepresentable {
                 guard oldValue != overlayEnabled else { return }
                 resetStallMeter()
                 applyOverlayEnabled()
+            }
+        }
+        /// A/B: switch the overlay between the current raster pipeline and the
+        /// pre-raster vector pipeline (URL-backed `MLNShapeSource`s) at runtime,
+        /// reusing the same on-disk GeoJSON files. Defaults to raster.
+        var vectorOverlay = false {
+            didSet {
+                guard oldValue != vectorOverlay else { return }
+                resetStallMeter()
+                applyOverlayMode()
             }
         }
         /// Diagnostics: fades the OSM base raster to 0/1 to measure what the
@@ -203,6 +215,22 @@ struct MapView: UIViewRepresentable {
         private let fireplaceRasterId = "poi-fireplace-raster-layer"
         private let otherRasterId = "poi-other-raster-layer"
 
+        // Vector overlay ids (pre-raster pipeline). Sources are URL-backed so
+        // MapLibre tiles them on its worker threads.
+        private var vectorInstalled = false
+        private let zoneFillId = "zone-fill-layer"
+        private let zoneLineId = "zone-line-layer"
+        private let banFillId = "ban-fill-layer"
+        private let banLineId = "ban-line-layer"
+        private let poiShelterId = "poi-shelter-layer"
+        private let poiFireplaceId = "poi-fireplace-layer"
+        private let poiOtherId = "poi-other-layer"
+        private let vectorZoneSourceId = "vec-zone-source"
+        private let vectorBanSourceId = "vec-ban-source"
+        private let vectorShelterSourceId = "vec-poi-shelter-source"
+        private let vectorFireplaceSourceId = "vec-poi-fireplace-source"
+        private let vectorOtherSourceId = "vec-poi-other-source"
+
         private var parent: MapView
 
         init(_ parent: MapView) {
@@ -239,7 +267,11 @@ struct MapView: UIViewRepresentable {
                           lonEast: bounds.ne.longitude)
             )
             // Bake (or top up) the overlay tiles the current viewport needs.
-            scheduleRasterBuildFromCamera()
+            // The vector pipeline has nothing to bake — MapLibre tiles the
+            // shape sources itself.
+            if !vectorOverlay {
+                scheduleRasterBuildFromCamera()
+            }
         }
 
         func mapViewRegionIsChanging(_ mapView: MLNMapView) {
@@ -339,6 +371,7 @@ struct MapView: UIViewRepresentable {
         /// rasters.
         private func startRasterLoop() {
             guard rasterTask == nil else { return }
+            guard !vectorOverlay else { return }
             guard overlayEnabled, let files = dataFiles else { return }
             guard let pending = pendingBuild else {
                 installRasterIfCatalogReady()
@@ -394,7 +427,7 @@ struct MapView: UIViewRepresentable {
         /// fires on every settle): the rasterizer skips tiles already on disk
         /// and force-rebuilds only when the camera crossed an integer zoom.
         private func scheduleRasterBuildFromCamera() {
-            guard overlayEnabled, let map = mapView, dataFiles != nil else { return }
+            guard overlayEnabled, !vectorOverlay, let map = mapView, dataFiles != nil else { return }
             // MapLibre requests tiles at floor(zoomLevel): bake that zoom plus
             // one extra level so the first zoom-in is already crisp (no low-res
             // upscales while the bake catches up). Four levels up from the
@@ -459,7 +492,7 @@ struct MapView: UIViewRepresentable {
         /// Only runs when the style AND a catalog exist and nothing is applied
         /// yet; bounces (`layersApplied = false`) force a re-install.
         private func installRasterIfCatalogReady() {
-            guard overlayEnabled else { return }
+            guard overlayEnabled, !vectorOverlay else { return }
             guard let catalog = catalog, styleLoaded, mapView != nil else { return }
             guard let style = mapView?.style else { return }
             if !layersApplied {
@@ -517,14 +550,183 @@ struct MapView: UIViewRepresentable {
             }
         }
 
-        /// Diagnostics A/B: fully detaches (or re-attaches) the raster overlay
-        /// while the app keeps running. The catalog and baked tiles survive on
-        /// disk, so re-enabling re-installs the sources immediately.
+        // MARK: Vector overlay (A/B via the "Wektor (diagnoza)" toggle)
+
+        /// Restores the pre-raster vector overlay: URL-backed `MLNShapeSource`s
+        /// so MapLibre cuts tiles on its worker threads (no main-thread
+        /// tessellation), zones/bans as fill+line, POIs as per-category circles.
+        /// Only runs once per data change / mode switch, after the style loads.
+        private func ensureVectorSourcesAndLayers() {
+            guard vectorOverlay, styleLoaded, mapView != nil else { return }
+            guard let style = mapView?.style, let files = dataFiles, !vectorInstalled else { return }
+
+            removeVectorOverlay(style)
+
+            let shapeOptions: [MLNShapeSourceOption: Any]? = [.simplificationTolerance: 1.0]
+            let zoneSource = MLNShapeSource(identifier: vectorZoneSourceId,
+                                            url: files.zonesURL,
+                                            options: shapeOptions)
+            style.addSource(zoneSource)
+            let zoneFill = MLNFillStyleLayer(identifier: zoneFillId, source: zoneSource)
+            zoneFill.fillColor = NSExpression(forConstantValue: UIColor(red: 0.10, green: 0.65, blue: 0.25, alpha: 0.35))
+            zoneFill.fillOutlineColor = NSExpression(forConstantValue: UIColor(red: 0.0, green: 0.4, blue: 0.1, alpha: 1.0))
+            zoneFill.fillAntialiased = NSExpression(forConstantValue: false)
+            style.addLayer(zoneFill)
+            let zoneLine = MLNLineStyleLayer(identifier: zoneLineId, source: zoneSource)
+            zoneLine.lineColor = NSExpression(forConstantValue: UIColor(red: 0.0, green: 0.45, blue: 0.1, alpha: 0.9))
+            zoneLine.lineWidth = NSExpression(forConstantValue: 2.0)
+            style.addLayer(zoneLine)
+
+            let banSource = MLNShapeSource(identifier: vectorBanSourceId,
+                                           url: files.bansURL,
+                                           options: shapeOptions)
+            style.addSource(banSource)
+            let banFill = MLNFillStyleLayer(identifier: banFillId, source: banSource)
+            banFill.fillColor = NSExpression(forConstantValue: banFillColor(showBans))
+            banFill.fillOutlineColor = NSExpression(forConstantValue: banOutlineColor(showBans))
+            banFill.fillAntialiased = NSExpression(forConstantValue: false)
+            style.addLayer(banFill)
+            let banLine = MLNLineStyleLayer(identifier: banLineId, source: banSource)
+            banLine.lineColor = NSExpression(forConstantValue: UIColor(red: 0.7, green: 0.05, blue: 0.05, alpha: 0.9))
+            banLine.lineWidth = NSExpression(forConstantValue: 2.0)
+            banLine.lineOpacity = NSExpression(forConstantValue: showBans ? 0.9 : 0.0)
+            style.addLayer(banLine)
+
+            // One URL source per POI category; toggling switches paint opacity
+            // only (layers stay layout-visible, so baked tiles stay hot).
+            let shelterSource = MLNShapeSource(identifier: vectorShelterSourceId,
+                                               url: files.shelterURL,
+                                               options: nil)
+            style.addSource(shelterSource)
+            style.addLayer(poiCircleLayer(identifier: poiShelterId,
+                                          source: shelterSource,
+                                          color: UIColor(red: 0.10, green: 0.65, blue: 0.25, alpha: 1.0),
+                                          isOpaque: showShelters))
+            let fireplaceSource = MLNShapeSource(identifier: vectorFireplaceSourceId,
+                                                 url: files.fireplaceURL,
+                                                 options: nil)
+            style.addSource(fireplaceSource)
+            style.addLayer(poiCircleLayer(identifier: poiFireplaceId,
+                                          source: fireplaceSource,
+                                          color: UIColor.systemOrange,
+                                          isOpaque: showFireplaces))
+            let otherSource = MLNShapeSource(identifier: vectorOtherSourceId,
+                                             url: files.otherURL,
+                                             options: nil)
+            style.addSource(otherSource)
+            style.addLayer(poiCircleLayer(identifier: poiOtherId,
+                                          source: otherSource,
+                                          color: UIColor.systemBlue,
+                                          isOpaque: showOthers))
+
+            vectorInstalled = true
+            layersReady = true
+            if tOverlay == nil {
+                tOverlay = Date().timeIntervalSince(startTimestamp)
+            }
+        }
+
+        private func banFillColor(_ visible: Bool) -> UIColor {
+            visible ? UIColor(red: 0.8, green: 0.1, blue: 0.1, alpha: 0.3) : UIColor.clear
+        }
+
+        private func banOutlineColor(_ visible: Bool) -> UIColor {
+            visible ? UIColor(red: 0.6, green: 0.0, blue: 0.0, alpha: 1.0) : UIColor.clear
+        }
+
+        private func poiCircleLayer(identifier: String,
+                                    source: MLNShapeSource,
+                                    color: UIColor,
+                                    isOpaque: Bool) -> MLNCircleStyleLayer {
+            let layer = MLNCircleStyleLayer(identifier: identifier, source: source)
+            // Zoom-scaled radius (Android parity): dots shrink when zoomed out.
+            layer.circleRadius = NSExpression(mglJSONObject: [
+                "step", ["zoom"], 2,
+                11, 3,
+                12.5, 5,
+                14, 8,
+                16, 12
+            ] as [Any])
+            layer.circleColor = NSExpression(forConstantValue: color)
+            layer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+            layer.circleStrokeWidth = NSExpression(forConstantValue: 1.5)
+            layer.circleOpacity = NSExpression(forConstantValue: isOpaque ? 1.0 : 0.0)
+            layer.circleStrokeOpacity = NSExpression(forConstantValue: isOpaque ? 1.0 : 0.0)
+            return layer
+        }
+
+        private func removeRasterOverlay(_ style: MLNStyle) {
+            for id in [zoneRasterId, banRasterId,
+                       shelterRasterId, fireplaceRasterId, otherRasterId] {
+                removeLayerIfPresent(id, style: style)
+            }
+            for id in [OverlayRasterizer.zoneSourceId,
+                       OverlayRasterizer.banSourceId,
+                       OverlayRasterizer.shelterSourceId,
+                       OverlayRasterizer.fireplaceSourceId,
+                       OverlayRasterizer.otherSourceId] {
+                removeSourceIfPresent(id, style: style)
+            }
+        }
+
+        private func removeVectorOverlay(_ style: MLNStyle) {
+            for id in [zoneFillId, zoneLineId, banFillId, banLineId,
+                       poiShelterId, poiFireplaceId, poiOtherId] {
+                removeLayerIfPresent(id, style: style)
+            }
+            for id in [vectorZoneSourceId, vectorBanSourceId,
+                       vectorShelterSourceId, vectorFireplaceSourceId, vectorOtherSourceId] {
+                removeSourceIfPresent(id, style: style)
+            }
+        }
+
+        /// A/B switcher between the raster and vector overlay pipelines.
+        private func applyOverlayMode() {
+            guard let style = mapView?.style else { return }
+            if vectorOverlay {
+                // Raster -> vector: stop baking and drop the raster layers.
+                rasterTask?.cancel()
+                rasterTask = nil
+                writeTask?.cancel()
+                writeTask = nil
+                pendingBuild = nil
+                removeRasterOverlay(style)
+                layersApplied = false
+                vectorInstalled = false
+                layersReady = false
+                if overlayEnabled {
+                    ensureVectorSourcesAndLayers()
+                    refreshLayerVisibility()
+                }
+            } else {
+                // Vector -> raster: drop the shape layers, rebuild the raster
+                // overlay for the current viewport.
+                removeVectorOverlay(style)
+                vectorInstalled = false
+                layersReady = false
+                if overlayEnabled {
+                    layersApplied = false
+                    installRasterIfCatalogReady()
+                    scheduleRasterBuildFromCamera()
+                }
+            }
+            publishDiagnostics()
+        }
+
+        /// Diagnostics A/B: fully detaches (or re-attaches) the overlay while the
+        /// app keeps running — whichever pipeline (raster/vector) is active.
         private func applyOverlayEnabled() {
             guard let style = mapView?.style else { return }
             if overlayEnabled {
-                installRasterIfCatalogReady()
-                scheduleRasterBuildFromCamera()
+                if vectorOverlay {
+                    vectorInstalled = false
+                    ensureVectorSourcesAndLayers()
+                    refreshLayerVisibility()
+                } else {
+                    installRasterIfCatalogReady()
+                    scheduleRasterBuildFromCamera()
+                }
+                publishDiagnostics()
             } else {
                 rasterTask?.cancel()
                 rasterTask = nil
@@ -532,18 +734,10 @@ struct MapView: UIViewRepresentable {
                 writeTask = nil
                 pendingBuild = nil
                 layersApplied = false
+                vectorInstalled = false
                 layersReady = false
-                for id in [zoneRasterId, banRasterId,
-                           shelterRasterId, fireplaceRasterId, otherRasterId] {
-                    removeLayerIfPresent(id, style: style)
-                }
-                for id in [OverlayRasterizer.zoneSourceId,
-                           OverlayRasterizer.banSourceId,
-                           OverlayRasterizer.shelterSourceId,
-                           OverlayRasterizer.fireplaceSourceId,
-                           OverlayRasterizer.otherSourceId] {
-                    removeSourceIfPresent(id, style: style)
-                }
+                removeRasterOverlay(style)
+                removeVectorOverlay(style)
                 publishDiagnostics()
             }
         }
@@ -562,8 +756,13 @@ struct MapView: UIViewRepresentable {
         func applySourcesIfReady() {
             guard styleLoaded, mapView != nil else { return }
             scheduleWriteIfNeeded()
-            installRasterIfCatalogReady()
-            refreshLayerVisibility()
+            if vectorOverlay {
+                ensureVectorSourcesAndLayers()
+                refreshLayerVisibility()
+            } else {
+                installRasterIfCatalogReady()
+                refreshLayerVisibility()
+            }
             applyBaseEnabled()
             publishDiagnostics()
         }
@@ -610,32 +809,67 @@ struct MapView: UIViewRepresentable {
             poiFireplaceCount = files.fireplaceCount
             poiOtherCount = files.otherCount
 
-            // New dataset: drop every baked tile so nothing stale can remain,
-            // then rebuild for the current viewport in the background.
-            rasterTask?.cancel()
-            writeTask?.cancel()
-            catalog = nil
-            layersApplied = false
-            layersReady = false
-            builtZoom = -1
-            pendingBuild = nil
-            OverlayRasterizer.reset()
-            scheduleRasterBuildFromCamera()
+            // New dataset: invalidate whichever overlay pipeline is active — the
+            // on-disk files changed underneath it.
+            if vectorOverlay {
+                vectorInstalled = false
+                layersReady = false
+                ensureVectorSourcesAndLayers()
+                refreshLayerVisibility()
+            } else {
+                rasterTask?.cancel()
+                writeTask?.cancel()
+                catalog = nil
+                layersApplied = false
+                layersReady = false
+                builtZoom = -1
+                pendingBuild = nil
+                OverlayRasterizer.reset()
+                scheduleRasterBuildFromCamera()
+            }
             publishDiagnostics()
         }
 
-        /// Toggles switch raster opacity only — the cheapest style mutation
-        /// there is. No geometry, no data rebuild, no filter pass.
+        /// Toggles switch paint properties only — the cheapest mutation for either
+        /// pipeline (raster opacity vs vector fill/line/circle opacity). No
+        /// geometry, no data rebuild, no filter pass.
         private func refreshLayerVisibility() {
             guard layersReady, let style = mapView?.style else { return }
             let signature = "\(showBans)|\(showShelters)|\(showFireplaces)|\(showOthers)"
             guard signature != lastToggleSignature else { return }
             lastToggleSignature = signature
 
+            if vectorOverlay {
+                refreshVectorVisibility(style)
+            } else {
+                refreshRasterVisibility(style)
+            }
+        }
+
+        private func refreshRasterVisibility(_ style: MLNStyle) {
             setRasterOpacity(banRasterId, visible: showBans, style: style)
             setRasterOpacity(shelterRasterId, visible: showShelters, style: style)
             setRasterOpacity(fireplaceRasterId, visible: showFireplaces, style: style)
             setRasterOpacity(otherRasterId, visible: showOthers, style: style)
+        }
+
+        private func refreshVectorVisibility(_ style: MLNStyle) {
+            if let banFill = style.layer(withIdentifier: banFillId) as? MLNFillStyleLayer {
+                banFill.fillColor = NSExpression(forConstantValue: banFillColor(showBans))
+                banFill.fillOutlineColor = NSExpression(forConstantValue: banOutlineColor(showBans))
+            }
+            if let banLine = style.layer(withIdentifier: banLineId) as? MLNLineStyleLayer {
+                banLine.lineOpacity = NSExpression(forConstantValue: showBans ? 0.9 : 0.0)
+            }
+            for entry in [(poiShelterId, showShelters),
+                          (poiFireplaceId, showFireplaces),
+                          (poiOtherId, showOthers)] {
+                if let layer = style.layer(withIdentifier: entry.0) as? MLNCircleStyleLayer {
+                    let opacity: Double = entry.1 ? 1.0 : 0.0
+                    layer.circleOpacity = NSExpression(forConstantValue: opacity)
+                    layer.circleStrokeOpacity = NSExpression(forConstantValue: opacity)
+                }
+            }
         }
 
         private func setRasterOpacity(_ id: String, visible: Bool, style: MLNStyle) {
@@ -662,6 +896,8 @@ struct MapView: UIViewRepresentable {
             let overlayText: String
             if !overlayEnabled {
                 overlayText = "off"
+            } else if vectorOverlay {
+                overlayText = "vector layers=\(layersReady ? "YES" : "NO")"
             } else if layersReady {
                 overlayText = "tiles=\(tiles)/\(done) z=\(zMin)-\(zMax) skip=\(skippedBuildCount)"
             } else {
@@ -734,15 +970,24 @@ struct MapView: UIViewRepresentable {
 
         // MARK: Tap handling
 
-        /// Overlays are rasters now, so `visibleFeatures` has nothing to offer.
-        /// Hit-testing runs against the retained catalog: nearest POI first,
-        /// then point-in-polygon over zones and bans (Android parity order).
+        /// Vector overlays hit-test natively through `visibleFeatures`; the raster
+        /// overlay hits against the retained catalog (nearest POI first, then
+        /// point-in-polygon over zones and bans — Android parity order).
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            guard let mapView = mapView, let catalog = catalog else {
+            guard let mapView = mapView else {
                 onTapBackground()
                 return
             }
             let point = gesture.location(in: mapView)
+            let tapRect = CGRect(x: point.x - 30, y: point.y - 30, width: 60, height: 60)
+            if vectorOverlay {
+                handleVectorTap(mapView, tapRect)
+                return
+            }
+            guard let catalog = catalog else {
+                onTapBackground()
+                return
+            }
             let coord = mapView.convert(point, toCoordinateFrom: mapView)
             let zoom = mapView.zoomLevel
             let degPerPixel = (360.0 / pow(2.0, zoom)) / 256.0
@@ -766,6 +1011,36 @@ struct MapView: UIViewRepresentable {
             where OverlayRasterizer.polygon(ban, contains: coord.longitude, lat: coord.latitude) {
                 if let id = (ban.properties["remoteId"] as? NSNumber)?.int64Value {
                     onTapBan(id)
+                }
+                return
+            }
+
+            onTapBackground()
+        }
+
+        private func handleVectorTap(_ mapView: MLNMapView, _ tapRect: CGRect) {
+            let pois = mapView.visibleFeatures(
+                in: tapRect,
+                styleLayerIdentifiers: [poiShelterId, poiFireplaceId, poiOtherId]
+            )
+            if let poiFeature = pois.first {
+                if let name = poiFeature.attribute(forKey: "name") as? String {
+                    onTapPoi(name)
+                    return
+                }
+            }
+
+            let zones = mapView.visibleFeatures(in: tapRect, styleLayerIdentifiers: [zoneFillId])
+            if let zoneFeature = zones.first {
+                let name = zoneFeature.attribute(forKey: "name") as? String
+                onTapZone(name)
+                return
+            }
+
+            let bans = mapView.visibleFeatures(in: tapRect, styleLayerIdentifiers: [banFillId])
+            if let banFeature = bans.first {
+                if let remoteIdNumber = banFeature.attribute(forKey: "remoteId") as? NSNumber {
+                    onTapBan(remoteIdNumber.int64Value)
                 }
                 return
             }

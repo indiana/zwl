@@ -5,6 +5,7 @@ struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
     @State private var overlayEnabled = true
+    @State private var vectorOverlay = false
     @State private var baseEnabled = true
     @State private var followsUser = true
     @State private var showHeading = true
@@ -163,6 +164,7 @@ struct MainView: View {
             showFireplaces: viewModel.showFireplaces,
             showOthers: viewModel.showOthers,
             overlayEnabled: overlayEnabled,
+            vectorOverlay: vectorOverlay,
             baseEnabled: baseEnabled,
             followsUser: followsUser,
             showHeading: showHeading,
@@ -221,6 +223,11 @@ struct MainView: View {
             // place so we can A/B whether the overlay (or the base map) is what
             // lags on device.
             Toggle("Overlay (diagnoza)", isOn: $overlayEnabled)
+
+            // Diagnostics A/B: swap the overlay between the baked raster tiles
+            // (default) and the pre-raster vector pipeline (crisp at every
+            // zoom) so we can compare appearance and stall in one session.
+            Toggle("Wektor (diagnoza)", isOn: $vectorOverlay)
 
             // Diagnostics-only: userTrackingMode .follow re-centers the camera
             // on every GPS tick, and the heading arrow rotates on every
