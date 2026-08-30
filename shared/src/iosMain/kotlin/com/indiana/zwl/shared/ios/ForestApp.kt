@@ -11,6 +11,7 @@ import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.util.BdlInfo
+import com.indiana.zwl.domain.util.NadlesnictwoUrls
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
 import com.indiana.zwl.shared.data.remote.ForestBanSyncParser
@@ -279,6 +280,11 @@ class ForestApp(
     }
 
     fun rotationAgeTooltip(): String = BdlInfo.rotationAgeTooltip
+
+    fun nadlesnictwoWebsiteUrl(districtName: String?, rdlpName: String?): String? =
+        NadlesnictwoUrls.websiteUrl(districtName, rdlpName)
+
+    fun nadlesnictwoWebsiteHost(url: String?): String? = NadlesnictwoUrls.displayHost(url)
 
     suspend fun downloadArea(
         latSouth: Double,

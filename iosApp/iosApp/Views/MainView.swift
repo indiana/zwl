@@ -60,13 +60,13 @@ struct MainView: View {
         }
         .sheet(isPresented: isBanSheetPresented) {
             if let ban = viewModel.selectedBan {
-                ForestBanDetailView(ban: ban)
+                ForestBanDetailView(ban: ban, app: viewModel.app)
                     .presentationDetents([.large])
             }
         }
         .sheet(isPresented: isPoiSheetPresented) {
             if let poi = viewModel.selectedPoi {
-                PoiDetailView(poi: poi)
+                PoiDetailView(poi: poi, distanceMeters: viewModel.selectedPoiDistanceMeters)
                     .presentationDetents([.medium])
             }
         }
@@ -125,6 +125,17 @@ struct MainView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            if viewModel.isOffline {
+                VStack {
+                    HStack {
+                        offlineBanner
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding([.leading, .top], 16)
+            }
 
             VStack {
                 HStack(spacing: 8) {
@@ -187,6 +198,24 @@ struct MainView: View {
             onDiagnostics: { viewModel.mapDiagnostics = $0 }
         )
         .ignoresSafeArea(edges: .top)
+    }
+
+    /// Red "Tryb offline" pill (Android `MapViewContainer` parity — error-red
+    /// rounded surface with an offline icon and bold label).
+    private var offlineBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 16, weight: .semibold))
+            Text("Tryb offline")
+                .font(.system(size: 13, weight: .bold))
+                .kerning(0.5)
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(ZWL.errorRedButton.opacity(0.9), in: RoundedRectangle(cornerRadius: 12))
+        .compositingGroup()
+        .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
     }
 
     /// Toggles the always-open settings panel (Android settings dropdown
