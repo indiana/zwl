@@ -64,7 +64,8 @@ struct MapView: UIViewRepresentable {
             // Start lighter than DEFAULT_ZOOM: the initial tile burst is the
             // biggest single startup block on this iPad class. The first GPS
             // fix later re-centers to DEFAULT_ZOOM (see handleCentering).
-            zoomLevel: 12,
+            // z10 vs z12: ~16x fewer base tiles at the first fill.
+            zoomLevel: 10,
             animated: false
         )
 
