@@ -4,6 +4,8 @@ import shared
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
+    @State private var cacheAlertPresented = false
+    @State private var cacheAlertMessage = ""
     // Persisted so A/B configs survive a cold restart (i.e. Baza OFF measured
     // at true startup, not after a mid-session style reload). Follow/heading
     // are user preferences, the rest are diagnostics toggles.
@@ -69,6 +71,11 @@ struct MainView: View {
                 PoiDetailView(poi: poi, distanceMeters: viewModel.selectedPoiDistanceMeters)
                     .presentationDetents([.medium])
             }
+        }
+        .alert("Pamięć podręczna", isPresented: $cacheAlertPresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(cacheAlertMessage)
         }
     }
 
@@ -156,7 +163,7 @@ struct MainView: View {
                 Spacer()
             }
 
-            if DebugMapOverlay.isEnabled && !viewModel.mapDiagnostics.isEmpty {
+            if viewModel.debugUiEnabled && DebugMapOverlay.isEnabled && !viewModel.mapDiagnostics.isEmpty {
                 VStack {
                     Spacer()
                     Text(viewModel.mapDiagnostics)
@@ -253,41 +260,50 @@ struct MainView: View {
 
             Divider()
 
-            // Diagnostics: fades the OSM base raster off to measure how much the
-            // base layer alone costs on the main thread.
-            Toggle("Baza OSM (diagnoza)", isOn: $baseEnabled)
-
-            // Diagnostics-only switch: removes the five raster overlay layers in
-            // place so we can A/B whether the overlay (or the base map) is what
-            // lags on device.
-            Toggle("Overlay (diagnoza)", isOn: $overlayEnabled)
-
-            // Diagnostics A/B: swap the overlay between the baked raster tiles
-            // (default) and the pre-raster vector pipeline (crisp at every
-            // zoom) so we can compare appearance and stall in one session.
-            Toggle("Wektor (diagnoza)", isOn: $vectorOverlay)
-
-            // Diagnostics-only: userTrackingMode .follow re-centers the camera
-            // on every GPS tick, and the heading arrow rotates on every
-            // magnetometer event — both force main-thread re-renders and are
-            // prime suspects for the UI freezes.
-            Toggle("Podążaj za lokalizacją (diagnoza)", isOn: $followsUser)
-            Toggle("Strzałka kierunku (diagnoza)", isOn: $showHeading)
-
-            // Diagnostics: the native MapLibre location dot re-renders the map
-            // on every GPS tick (~1Hz) — the one continuous driver we never
-            // tested except by leaving it on.
-            Toggle("Kropka GPS (diagnoza)", isOn: $showUserDot)
-
-            Divider()
-
             Button(action: { viewModel.downloadVisibleArea() }) {
                 Label("Pobierz obszar offline", systemImage: "arrow.down.circle")
             }
             .disabled(viewModel.isDownloading)
             .font(.system(size: 15))
 
+            Button(action: { clearCache() }) {
+                Label("Wyczyść cache", systemImage: "trash")
+            }
+            .font(.system(size: 15))
+
             if viewModel.debugUiEnabled {
+                Divider()
+
+                Text("Diagnostyka (debug)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                // Diagnostics: fades the OSM base raster off to measure how much the
+                // base layer alone costs on the main thread.
+                Toggle("Baza OSM (diagnoza)", isOn: $baseEnabled)
+
+                // Diagnostics-only switch: removes the five raster overlay layers in
+                // place so we can A/B whether the overlay (or the base map) is what
+                // lags on device.
+                Toggle("Overlay (diagnoza)", isOn: $overlayEnabled)
+
+                // Diagnostics A/B: swap the overlay between the baked raster tiles
+                // (default) and the pre-raster vector pipeline (crisp at every
+                // zoom) so we can compare appearance and stall in one session.
+                Toggle("Wektor (diagnoza)", isOn: $vectorOverlay)
+
+                // Diagnostics-only: userTrackingMode .follow re-centers the camera
+                // on every GPS tick, and the heading arrow rotates on every
+                // magnetometer event — both force main-thread re-renders and are
+                // prime suspects for the UI freezes.
+                Toggle("Podążaj za lokalizacją (diagnoza)", isOn: $followsUser)
+                Toggle("Strzałka kierunku (diagnoza)", isOn: $showHeading)
+
+                // Diagnostics: the native MapLibre location dot re-renders the map
+                // on every GPS tick (~1Hz) — the one continuous driver we never
+                // tested except by leaving it on.
+                Toggle("Kropka GPS (diagnoza)", isOn: $showUserDot)
+
                 Divider()
 
                 Text("Tryb testowy")
@@ -311,6 +327,16 @@ struct MainView: View {
                 .strokeBorder(Color.black.opacity(0.08))
         )
         .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+    }
+
+    /// "Wyczyść cache" (Android parity): closes the settings panel and reports
+    /// the outcome with the same wording Android uses in its toast.
+    private func clearCache() {
+        isSettingsOpen = false
+        cacheAlertMessage = viewModel.clearOfflineCache()
+            ? "Pamięć podręczna została wyczyszczona"
+            : "Brak pamięci podręcznej do wyczyszczenia"
+        cacheAlertPresented = true
     }
 
     private var myLocationButton: some View {
@@ -345,10 +371,10 @@ struct MainView: View {
 // MARK: - Debug overlay (QA builds only)
 
 enum DebugMapOverlay {
-    /// Kept `true` while iterating on the iOS map via TestFlight. Flip to
-    /// `false` before shipping to the App Store (TestFlight builds are Release,
-    /// so `#if DEBUG` cannot gate this).
-    static let isEnabled = true
+    /// Kept `true` while iterating on the iOS map via TestFlight. Now `false`
+    /// for the release candidate (the overlay also requires
+    /// `MainViewModel.debugUiEnabled`, so both must be fliped to restore it).
+    static let isEnabled = false
 }
 
 // MARK: - Loading / Error states (Android parity)
