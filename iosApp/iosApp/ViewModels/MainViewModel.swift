@@ -249,7 +249,7 @@ final class MainViewModel: NSObject, ObservableObject {
         let timestamp = zone.forestStandTimestamp
         let stale: Bool
         if let ts = timestamp {
-            stale = Self.currentTimeMillis() - ts > Self.forestStandCacheTtlMillis
+            stale = Self.currentTimeMillis() - ts.int64Value > Self.forestStandCacheTtlMillis
         } else {
             stale = true
         }
