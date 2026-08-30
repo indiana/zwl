@@ -77,13 +77,13 @@ class MbtilesTilePackager(
             return@withContext
         }
 
-        store.open(
-            bounds = "${region.lonWest},${region.latSouth},${region.lonEast},${region.latNorth}",
-            minZoom = minZoom,
-            maxZoom = maxZoom
-        )
-
         try {
+            store.open(
+                bounds = "${region.lonWest},${region.latSouth},${region.lonEast},${region.latNorth}",
+                minZoom = minZoom,
+                maxZoom = maxZoom
+            )
+
             val existingTiles = store.existingTiles()
             onProgress(0f, "Rozpoczynanie pobierania...")
 
@@ -125,8 +125,21 @@ class MbtilesTilePackager(
             }
 
             onSuccess(successCount)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Never let an unexpected storage/open failure escape raw into the
+            // caller's coroutine — on iOS an unhandled exception in this
+            // standalone coroutine aborts the whole app (SIGABRT). Report it
+            // through onError like any other download failure.
+            println("MbtilesTilePackager: download failed: ${e.message}")
+            onError("Błąd podczas pobierania: ${e.message}")
         } finally {
-            store.close()
+            try {
+                store.close()
+            } catch (e: Exception) {
+                println("MbtilesTilePackager: store.close failed: ${e.message}")
+            }
         }
     }
 
