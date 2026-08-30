@@ -49,9 +49,12 @@ struct MainView: View {
         .sheet(isPresented: isZoneSheetPresented) {
             if let zone = viewModel.selectedZone {
                 ZoneDetailView(zone: zone,
+                               app: viewModel.app,
                                distanceMeters: viewModel.selectedZoneDistanceMeters,
                                fireRiskLevel: viewModel.selectedZoneFireRiskLevel,
-                               isLoadingFireRisk: viewModel.isLoadingZoneFireRisk)
+                               isLoadingFireRisk: viewModel.isLoadingZoneFireRisk,
+                               forestStand: viewModel.selectedZoneForestStand,
+                               isLoadingForestStand: viewModel.isLoadingZoneForestStand)
                     .presentationDetents([.medium, .large])
             }
         }

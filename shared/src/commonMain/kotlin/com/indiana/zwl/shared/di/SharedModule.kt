@@ -3,6 +3,7 @@ package com.indiana.zwl.shared.di
 import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
+import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.shared.data.local.DatabaseDriverFactory
 import com.indiana.zwl.shared.data.local.SharedDatabase
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
@@ -19,6 +20,7 @@ val sharedModule = module {
     single { BdlArcgisApi(get()) }
     single { BdlFireApi(get()) }
     single { BdlOgcApi(get()) }
+    single { GetForestStandUseCase(get()) }
 }
 
 val databaseModule = module {

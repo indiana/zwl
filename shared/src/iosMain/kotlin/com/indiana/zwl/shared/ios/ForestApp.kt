@@ -2,12 +2,15 @@ package com.indiana.zwl.shared.ios
 
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.ForestBan
+import com.indiana.zwl.domain.model.ForestStandSummary
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
+import com.indiana.zwl.domain.usecase.GetForestStandUseCase
+import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
 import com.indiana.zwl.shared.data.remote.ForestBanSyncParser
@@ -24,6 +27,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
@@ -37,7 +41,8 @@ class ForestApp(
     private val arcgisApi: BdlArcgisApi,
     private val fireApi: BdlFireApi,
     private val offlineStore: MbtilesStore,
-    private val httpClient: HttpClient
+    private val httpClient: HttpClient,
+    private val forestStandUseCase: GetForestStandUseCase
 ) {
 
     private val zoneEngine = SpatialEngine()
@@ -48,6 +53,10 @@ class ForestApp(
     private var cachedPois: List<Poi> = emptyList()
 
     private var cachedBans: List<ForestBan> = emptyList()
+
+    companion object {
+        private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
+    }
 
     suspend fun initialize(): Boolean {
         var ok = true
@@ -212,6 +221,64 @@ class ForestApp(
     fun cachedPois(): List<Poi> = cachedPois
 
     fun cachedBans(): List<ForestBan> = cachedBans
+
+    suspend fun getForestStand(zone: Zone): ForestStandSummary? = withContext(Dispatchers.Default) {
+        try {
+            forestStandUseCase(zone).getOrNull()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            println("ForestApp.getForestStand failed: ${e.message}")
+            null
+        }
+    }
+
+    fun cachedForestStand(zone: Zone): ForestStandSummary? {
+        val json = zone.forestStandJson ?: return null
+        return try {
+            Json.decodeFromString<ForestStandSummary>(json)
+        } catch (e: Exception) {
+            println("ForestApp.cachedForestStand decode failed: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun cacheForestStand(zone: Zone, summary: ForestStandSummary, timestamp: Long) {
+        try {
+            val json = Json.encodeToString(summary)
+            zoneRepository.updateForestStand(zone.forestDistrict, json, timestamp)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            println("ForestApp.cacheForestStand failed: ${e.message}")
+        }
+    }
+
+    fun isForestStandCacheStale(zone: Zone, now: Long): Boolean {
+        val timestamp = zone.forestStandTimestamp ?: return true
+        return now - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
+    }
+
+    fun forestStandCacheMaxAgeMs(): Long = FOREST_STAND_CACHE_MAX_AGE_MS
+
+    fun speciesWikipediaTitle(code: String): String? = BdlInfo.wikipediaTitleForSpecies(code)
+
+    fun wikipediaPageUrl(title: String): String = "${BdlInfo.WIKIPEDIA_BASE_URL}$title"
+
+    fun forestFunTooltip(code: String): String? = BdlInfo.tooltipForForestFun(code)
+
+    fun standStruTooltip(code: String): String? = BdlInfo.tooltipForStandStru(code)
+
+    fun siteTypeTooltip(code: String): String? = BdlInfo.tooltipForSiteType(code)
+
+    fun protCategTooltip(code: String): String? = BdlInfo.tooltipForProtCateg(code)
+
+    fun forestStandRotationAgeText(summary: ForestStandSummary): String? {
+        val age = summary.rotationAge ?: return null
+        return "$age lat"
+    }
+
+    fun rotationAgeTooltip(): String = BdlInfo.rotationAgeTooltip
 
     suspend fun downloadArea(
         latSouth: Double,
