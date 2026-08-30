@@ -67,10 +67,10 @@ final class MainViewModel: NSObject, ObservableObject {
     // Fire risk
     @Published var fireRiskLevel: Int = -1
 
-    // Debug / QA overrides. `debugUiEnabled` must be flipped to false before
-    // the App Store release; test-flight QA keeps it on so the tappable status
-    // icon can flip between "w strefie" / "poza strefą" (Android parity).
-    var debugUiEnabled: Bool { true }
+    // Debug / QA overrides. `debugUiEnabled` gates all diagnostics UI
+    // (status-tab flip, menu diagnostics toggles, map overlay). Kept `false`
+    // for the release candidate; flip back to `true` when QA needs them again.
+    var debugUiEnabled: Bool { false }
     @Published var debugInvertZone = false
 
     // Zone detail sheet state (distance + fire risk + stove rule + BDL forest
@@ -367,6 +367,28 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func recenterMap() {
         recenterSignal += 1
+    }
+
+    /// Deletes the packed offline tile database (SQLiter keeps it under
+    /// Application Support/databases/map.mbtiles on iOS). Returns whether a
+    /// cache file actually existed (Android "Wyczyść cache" parity).
+    func clearOfflineCache() -> Bool {
+        let fm = FileManager.default
+        guard let appSupport = fm.urls(for: .applicationSupportDirectory,
+                                       in: .userDomainMask).first else { return false }
+        let databaseURL = appSupport
+            .appendingPathComponent("databases", isDirectory: true)
+            .appendingPathComponent("map.mbtiles")
+
+        var existed = false
+        let candidates = [databaseURL,
+                          URL(fileURLWithPath: databaseURL.path + "-wal"),
+                          URL(fileURLWithPath: databaseURL.path + "-shm")]
+        for url in candidates where fm.fileExists(atPath: url.path) {
+            existed = true
+            try? fm.removeItem(at: url)
+        }
+        return existed
     }
 
     func downloadVisibleArea() {
