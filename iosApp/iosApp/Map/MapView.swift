@@ -17,6 +17,7 @@ struct MapView: UIViewRepresentable {
     let baseEnabled: Bool
     let followsUser: Bool
     let showHeading: Bool
+    let showUserDot: Bool
     let userLatitude: Double?
     let userLongitude: Double?
     let recenterSignal: Int
@@ -88,6 +89,7 @@ struct MapView: UIViewRepresentable {
         coordinator.baseEnabled = baseEnabled
         coordinator.followsUser = followsUser
         coordinator.showHeading = showHeading
+        coordinator.showUserDot = showUserDot
         coordinator.onTapZone = onTapZone
         coordinator.onTapBan = onTapBan
         coordinator.onTapPoi = onTapPoi
@@ -150,6 +152,16 @@ struct MapView: UIViewRepresentable {
                 guard oldValue != showHeading else { return }
                 resetStallMeter()
                 mapView?.showsUserHeadingIndicator = showHeading
+            }
+        }
+        /// Diagnostics: the native location dot re-renders the map on every GPS
+        /// tick (~1Hz) from the engine's own listener. Toggling it off tests
+        /// whether that alone drives the recurring stalls.
+        var showUserDot = true {
+            didSet {
+                guard oldValue != showUserDot else { return }
+                resetStallMeter()
+                mapView?.showsUserLocation = showUserDot
             }
         }
         var onTapZone: ((String?) -> Void) = { _ in }
@@ -904,7 +916,7 @@ struct MapView: UIViewRepresentable {
                 overlayText = "pending files=\(dataFiles != nil) q=\(pendingBuild?.zoom ?? -1) busy=\(rasterTask != nil) skip=\(skippedBuildCount)"
             }
             let text = """
-            style=\(styleState) fail=\(fail) layers=\(layersState) stall=\(String(format: "%.1f", maxStall))s
+            style=\(styleState) fail=\(fail) layers=\(layersState) dot=\(showUserDot ? "YES" : "NO") stall=\(String(format: "%.1f", maxStall))s
             phases s=\(fmt(tStyle)) d=\(fmt(tData)) o=\(fmt(tOverlay))
             overlay: \(overlayText)
             zones: json \(jsonByteCount.zones) feat \(zoneFeatureCount)

@@ -5,8 +5,9 @@ struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
     @State private var overlayEnabled = true
-    @State private var vectorOverlay = false
+    @State private var vectorOverlay = true
     @State private var baseEnabled = true
+    @State private var showUserDot = true
     @State private var followsUser = true
     @State private var showHeading = true
 
@@ -166,6 +167,7 @@ struct MainView: View {
             overlayEnabled: overlayEnabled,
             vectorOverlay: vectorOverlay,
             baseEnabled: baseEnabled,
+            showUserDot: showUserDot,
             followsUser: followsUser,
             showHeading: showHeading,
             userLatitude: viewModel.userLatitude,
@@ -235,6 +237,11 @@ struct MainView: View {
             // prime suspects for the UI freezes.
             Toggle("Podążaj za lokalizacją (diagnoza)", isOn: $followsUser)
             Toggle("Strzałka kierunku (diagnoza)", isOn: $showHeading)
+
+            // Diagnostics: the native MapLibre location dot re-renders the map
+            // on every GPS tick (~1Hz) — the one continuous driver we never
+            // tested except by leaving it on.
+            Toggle("Kropka GPS (diagnoza)", isOn: $showUserDot)
 
             Divider()
 
