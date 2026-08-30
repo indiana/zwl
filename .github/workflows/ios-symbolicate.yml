@@ -35,13 +35,25 @@ jobs:
       - name: Locate the app dSYM
         id: dsym
         run: |
-          DSYM_DWARF=$(find . -path '*App.app.dSYM/Contents/Resources/DWARF/*' -type f | head -n 1)
-          if [ -z "$DSYM_DWARF" ]; then
-            echo "No app dSYM found in the artifact"
-            exit 1
+          echo "=== archive contents (dSYMs / .app) ==="
+          find . -type d \( -name "*.dSYM" -o -name "*.app" \) | head -n 20
+          APP_DSYM=$(find . -path '*/dSYMs/ZWL.app.dSYM/Contents/Resources/DWARF/ZWL' -type f | head -n 1)
+          if [ -n "$APP_DSYM" ]; then
+            echo "dwarf=$APP_DSYM"
+            echo "dwarf=$APP_DSYM" >> "$GITHUB_OUTPUT"
+          else
+            # No dSYM (DEBUG_INFORMATION_FORMAT not dwarf-with-dsym): fall
+            # back to the app binary from the .ipa (global symbols may still
+            # resolve via its symbol table).
+            APP_BIN=$(find . -path '*Payload/ZWL.app/ZWL' -type f | head -n 1)
+            if [ -n "$APP_BIN" ]; then
+              echo "dwarf=$APP_BIN"
+              echo "dwarf=$APP_BIN" >> "$GITHUB_OUTPUT"
+            else
+              echo "Neither app dSYM nor app binary found"
+              exit 1
+            fi
           fi
-          echo "dwarf=$DSYM_DWARF"
-          echo "dwarf=$DSYM_DWARF" >> "$GITHUB_OUTPUT"
 
       - name: atos symbolicate
         env:
