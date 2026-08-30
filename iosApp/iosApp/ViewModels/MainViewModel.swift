@@ -155,7 +155,7 @@ final class MainViewModel: NSObject, ObservableObject {
                     self.phase = .error("Błąd synchronizacji danych. Sprawdź połączenie internetowe.")
                     return
                 }
-                self.computeLocationStatus()
+                await self.computeLocationStatus()
                 self.phase = .ready
                 self.requestLocationIfNeeded()
             } catch {
@@ -174,7 +174,7 @@ final class MainViewModel: NSObject, ObservableObject {
                 _ = try await self.app.syncPois()
                 try await self.app.refreshSpatialIndexes()
                 await self.refreshMapData()
-                self.computeLocationStatus()
+                await self.computeLocationStatus()
                 self.phase = .ready
             } catch {
                 self.phase = .error("Błąd odświeżania danych: \(error.localizedDescription)")
@@ -183,9 +183,12 @@ final class MainViewModel: NSObject, ObservableObject {
     }
 
     func refreshMapData() async {
-        zonesGeoJson = app.zonesGeoJson()
-        bansGeoJson = app.bansGeoJson()
-        poisGeoJson = app.poisGeoJson()
+        guard let zones = try? await app.zonesGeoJson(),
+              let bans = try? await app.bansGeoJson(),
+              let pois = try? await app.poisGeoJson() else { return }
+        zonesGeoJson = zones
+        bansGeoJson = bans
+        poisGeoJson = pois
     }
 
     // MARK: - Location
@@ -209,13 +212,13 @@ final class MainViewModel: NSObject, ObservableObject {
         locationManager.requestWhenInUseAuthorization()
     }
 
-    func computeLocationStatus() {
+    func computeLocationStatus() async {
         guard let lat = userLatitude, let lon = userLongitude else {
             activeForestBan = nil
             return
         }
-        let newStatus = app.checkLocation(latitude: lat, longitude: lon)
-        activeForestBan = app.checkForestBan(latitude: lat, longitude: lon)
+        guard let newStatus = try? await app.checkLocation(latitude: lat, longitude: lon) else { return }
+        activeForestBan = try? await app.checkForestBan(latitude: lat, longitude: lon)
         let district = (newStatus as? LocationStatusInZone)?.forestDistrict
         if district != lastInZoneDistrict {
             lastInZoneDistrict = district
@@ -257,23 +260,33 @@ final class MainViewModel: NSObject, ObservableObject {
     /// the zone's first boundary coordinate, and the BDL forest-stand card
     /// (Android parity).
     private func computeZoneDetail(for zone: Zone) {
+        let district = zone.forestDistrict
         if let userLat = userLatitude, let userLng = userLongitude {
-            if currentInZone?.forestDistrict == zone.forestDistrict {
+            if currentInZone?.forestDistrict == district {
                 selectedZoneDistanceMeters = 0
-            } else if let first = firstShellCoordinate(of: zone.forestDistrict) {
-                selectedZoneDistanceMeters = Self.equirectDistance(
-                    lat1: userLat, lon1: userLng,
-                    lat2: first.0, lon2: first.1
-                )
+            } else {
+                let geojson = zonesGeoJson
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    guard let first = await Self.firstShellCoordinateAsync(of: district, in: geojson) else { return }
+                    self.selectedZoneDistanceMeters = Self.equirectDistance(
+                        lat1: userLat, lon1: userLng,
+                        lat2: first.0, lon2: first.1
+                    )
+                }
             }
         }
 
         selectForestStand(for: zone)
 
-        guard let first = firstShellCoordinate(of: zone.forestDistrict) else { return }
+        let geojson = zonesGeoJson
         isLoadingZoneFireRisk = true
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self = self else { return }
+            guard let first = await Self.firstShellCoordinateAsync(of: district, in: geojson) else {
+                self.isLoadingZoneFireRisk = false
+                return
+            }
             let level = (try? await self.app.getFireRisk(latitude: first.0, longitude: first.1).intValue) ?? -1
             self.selectedZoneFireRiskLevel = level
             self.isLoadingZoneFireRisk = false
@@ -320,9 +333,10 @@ final class MainViewModel: NSObject, ObservableObject {
     }
 
     /// Extracts the first [lng, lat] coordinate of the zone's shell from the
-    /// GeoJSON the map uses (avoids pulling WKT parsing into Swift).
-    private func firstShellCoordinate(of district: String) -> (Double, Double)? {
-        guard let data = zonesGeoJson.data(using: .utf8),
+    /// GeoJSON the map uses (avoids pulling WKT parsing into Swift). Runs off
+    /// the main actor; see `firstShellCoordinateAsync`.
+    private nonisolated static func firstShellCoordinate(of district: String, in geojson: String) -> (Double, Double)? {
+        guard let data = geojson.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let features = root["features"] as? [[String: Any]] else { return nil }
         for feature in features {
@@ -347,6 +361,12 @@ final class MainViewModel: NSObject, ObservableObject {
             return (lat, lon)
         }
         return nil
+    }
+
+    private static func firstShellCoordinateAsync(of district: String, in geojson: String) async -> (Double, Double)? {
+        await Task.detached(priority: .userInitiated) {
+            Self.firstShellCoordinate(of: district, in: geojson)
+        }.value
     }
 
     /// Great-circle-ish distance using the equirectangular approximation
@@ -574,7 +594,7 @@ extension MainViewModel: CLLocationManagerDelegate {
         lastPublishedLocation = loc
         userLatitude = loc.coordinate.latitude
         userLongitude = loc.coordinate.longitude
-        computeLocationStatus()
+        Task { await self.computeLocationStatus() }
         Task { await self.refreshFireRiskIfNeeded() }
     }
 
