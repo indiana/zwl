@@ -206,6 +206,7 @@ struct MapView: UIViewRepresentable {
         private var dataFiles: GeoJsonFileWriter.Files?
         private var lastJsonSignature = ""
         private var lastToggleSignature = ""
+        private var lastAppliedSignature = ""
 
         // Raster overlay state. The rasterizer renders ONLY the current integer
         // zoom for the visible viewport (hundreds of tiles), off-main; neighbor
@@ -363,6 +364,13 @@ struct MapView: UIViewRepresentable {
         /// A button press that takes 2s shows up here exactly when the renderer
         /// hogged the main thread.
         fileprivate func startStallProbe() {
+            // Release builds never display the freeze meter, so don't even run
+            // the timer: per-tick publishDiagnostics used to build+emit the
+            // diagnostics string on the main thread and (while the stall counter
+            // kept growing) re-triggered SwiftUI update cycles -> CPU feedback
+            // loop that tripped the 202 CPU watchdog. Flips on automatically
+            // with DebugMapOverlay.isEnabled.
+            guard DebugMapOverlay.isEnabled else { return }
             lastStallProbe = Date()
             stallProbeTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
@@ -768,6 +776,15 @@ struct MapView: UIViewRepresentable {
 
         func applySourcesIfReady() {
             guard styleLoaded, mapView != nil else { return }
+            // Cheap gate. SwiftUI re-runs updateUIView (hence this) far more
+            // often than any input actually changes — fresh closures handed to
+            // the representable defeat its structural diff, so ANY @Published
+            // write on MainView (GPS 1Hz, status, diagnostics) re-invokes it.
+            // Never rebuild styles/strings unless the content signature moved;
+            // this was the main-thread CPU burn behind the 202 CPU watchdog.
+            let signature = contentSignature()
+            guard signature != lastAppliedSignature else { return }
+            lastAppliedSignature = signature
             scheduleWriteIfNeeded()
             if vectorOverlay {
                 ensureVectorSourcesAndLayers()
@@ -778,6 +795,17 @@ struct MapView: UIViewRepresentable {
             }
             applyBaseEnabled()
             publishDiagnostics()
+        }
+
+        /// Compact, deterministic key for the data + config that feeds the
+        /// overlay pipeline. Cheap to compute (a few .count + bools) so it can
+        /// gate a much more expensive style/string pipeline on the main thread.
+        private func contentSignature() -> String {
+            var sig = "v2|\(zonesJson.count)|\(bansJson.count)|\(poisJson.count)"
+            sig += "|\(showBans ? "1" : "0")\(showShelters ? "1" : "0")\(showFireplaces ? "1" : "0")\(showOthers ? "1" : "0")"
+            sig += "|\(overlayEnabled ? "1" : "0")\(vectorOverlay ? "1" : "0")\(baseEnabled ? "1" : "0")"
+            sig += "|\(followsUser ? "1" : "0")\(showHeading ? "1" : "0")\(showUserDot ? "1" : "0")"
+            return sig
         }
 
         /// Writes the GeoJSON to temp files (the rasterizer's input) on a
@@ -894,6 +922,10 @@ struct MapView: UIViewRepresentable {
         // MARK: Diagnostics
 
         private func publishDiagnostics() {
+            // Debug-only. When the overlay is disabled this return keeps the
+            // big interpolated string (and the @Published `mapDiagnostics`
+            // write it used to cause on every update) OFF the hot path.
+            guard DebugMapOverlay.isEnabled else { return }
             let styleState = styleLoaded ? "YES(\(styleFinishCount))" : "NO"
             let fail = styleErrorText.isEmpty ? "-" : styleErrorText
             let layersState = layersReady ? "YES" : "NO"
