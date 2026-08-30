@@ -42,9 +42,17 @@ struct ZoneDetailView: View {
                 }
                 .padding(16)
             }
-            .navigationTitle("Strefa")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 2) {
+                        Text(zone.forestDistrict)
+                            .font(.system(size: 17, weight: .bold))
+                        Text("Strefa programu \"Zanocuj w Lesie\"")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Zamknij") {
                         dismiss()

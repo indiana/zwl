@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import Combine
+import Network
 import shared
 import MapLibre
 
@@ -24,6 +25,11 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var phase: AppPhase = .loading
     @Published var locationStatus: LocationStatus?
 
+    /// True while the device has no satisfying network path (airplane mode
+    /// / no connectivity). Android shows a red "Tryb offline" pill on the map
+    /// then; we mirror that (NWPathMonitor, updates on any path change).
+    @Published var isOffline = false
+
     // Map data (GeoJSON strings produced by shared)
     @Published var zonesGeoJson: String = ""
     @Published var bansGeoJson: String = ""
@@ -39,6 +45,7 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var selectedZone: Zone?
     @Published var selectedBan: ForestBan?
     @Published var selectedPoi: Poi?
+    @Published var selectedPoiDistanceMeters: Double?
 
     // User location
     @Published var userLatitude: Double?
@@ -86,6 +93,7 @@ final class MainViewModel: NSObject, ObservableObject {
 
     let app: ForestApp
     private let locationManager = CLLocationManager()
+    private let pathMonitor = NWPathMonitor()
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
     // re-renders the map on the main thread (the iPad-class bottleneck), so
@@ -98,6 +106,12 @@ final class MainViewModel: NSObject, ObservableObject {
         self.app = app
         super.init()
         locationManager.delegate = self
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor [weak self] in
+                self?.isOffline = (path.status != .satisfied)
+            }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "zwl.network.monitor"))
     }
 
     // MARK: - Startup
@@ -328,6 +342,12 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedPoi = app.cachedPois().first { $0.name == name }
         selectedZone = nil
         selectedBan = nil
+        selectedPoiDistanceMeters = nil
+        if let poi = selectedPoi, let userLat = userLatitude, let userLon = userLongitude {
+            let userLoc = CLLocation(latitude: userLat, longitude: userLon)
+            let poiLoc = CLLocation(latitude: poi.latitude, longitude: poi.longitude)
+            selectedPoiDistanceMeters = userLoc.distance(from: poiLoc)
+        }
     }
 
     func openActiveBan() {
@@ -339,6 +359,7 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedZone = nil
         selectedBan = nil
         selectedPoi = nil
+        selectedPoiDistanceMeters = nil
     }
 
     // MARK: - Offline download
