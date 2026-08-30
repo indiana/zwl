@@ -29,10 +29,10 @@ struct MapDownloadCard: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxHeight: errorMessage == nil ? .none : 120)
+            .frame(maxHeight: errorMessage == nil ? .none : 76)
         }
-        .padding(12)
-        .frame(width: 240)
+        .padding(10)
+        .frame(width: 200)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
