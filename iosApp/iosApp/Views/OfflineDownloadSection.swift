@@ -6,13 +6,13 @@ struct MapDownloadCard: View {
     let text: String
     let progress: Float
     let isDownloading: Bool
+    let errorMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(isDownloading ? "Pobieranie mapy offline..." : "Pobieranie zakończone",
-                  systemImage: isDownloading ? "arrow.down.circle" : "checkmark.circle.fill")
+            Label(headerText, systemImage: headerIcon)
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(.primary)
+                .foregroundColor(headerColor)
 
             if isDownloading {
                 ProgressView(value: progress)
@@ -22,11 +22,30 @@ struct MapDownloadCard: View {
 
             Text(text)
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .fontWeight(errorMessage == nil ? .regular : .semibold)
+                .foregroundColor(errorMessage == nil ? .secondary : .red)
                 .lineLimit(2)
         }
         .padding(12)
         .frame(width: 220)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var headerText: String {
+        if isDownloading { return "Pobieranie mapy offline..." }
+        if errorMessage != nil { return "Pobieranie nieudane" }
+        return "Pobieranie zakończone"
+    }
+
+    private var headerIcon: String {
+        if isDownloading { return "arrow.down.circle" }
+        if errorMessage != nil { return "xmark.circle.fill" }
+        return "checkmark.circle.fill"
+    }
+
+    private var headerColor: Color {
+        if isDownloading { return .primary }
+        if errorMessage != nil { return Color.red }
+        return .primary
     }
 }
