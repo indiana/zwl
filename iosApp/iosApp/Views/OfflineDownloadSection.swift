@@ -20,14 +20,19 @@ struct MapDownloadCard: View {
                     .tint(ZWL.forestGreenAccent)
             }
 
-            Text(text)
-                .font(.caption2)
-                .fontWeight(errorMessage == nil ? .regular : .semibold)
-                .foregroundColor(errorMessage == nil ? .secondary : .red)
-                .lineLimit(2)
+            ScrollView {
+                Text(text)
+                    .font(.caption2)
+                    .fontWeight(errorMessage == nil ? .regular : .semibold)
+                    .foregroundColor(errorMessage == nil ? .secondary : .red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxHeight: errorMessage == nil ? .none : 120)
         }
         .padding(12)
-        .frame(width: 220)
+        .frame(width: 240)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
