@@ -110,10 +110,13 @@ class IosMbtilesStore : MbtilesStore {
             "INSERT OR REPLACE INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?, ?, ?, ?);",
             4
         ) {
-            bindLong(1, zoom.toLong())
-            bindLong(2, column.toLong())
-            bindLong(3, tmsRow.toLong())
-            bindBytes(4, blob)
+            // SQLDelight binders are 0-based (SqliterStatement adds +1 before
+            // calling sqlite3_bind; 1-based indices here threw
+            // "column index out of range" / SQLITE_RANGE on iOS).
+            bindLong(0, zoom.toLong())
+            bindLong(1, column.toLong())
+            bindLong(2, tmsRow.toLong())
+            bindBytes(3, blob)
         }
         cachedTiles += TileRef(z = zoom, x = column, y = tmsRow)
     }
@@ -130,8 +133,8 @@ class IosMbtilesStore : MbtilesStore {
             "INSERT OR REPLACE INTO metadata (name, value) VALUES (?, ?);",
             2
         ) {
-            bindString(1, name)
-            bindString(2, value)
+            bindString(0, name)
+            bindString(1, value)
         }
     }
 }
