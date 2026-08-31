@@ -50,7 +50,7 @@ struct MapView: UIViewRepresentable {
         // stalls. Cap at 30 for a uniform rhythm, and stop background tile
         // prefetch from competing with the visible raster.
         map.preferredFramesPerSecond = .lowPower
-        map.prefetchesTiles = false
+        map.prefetchesTiles = true
         map.showsUserLocation = true
         map.allowsRotating = false
         map.userTrackingMode = .follow
