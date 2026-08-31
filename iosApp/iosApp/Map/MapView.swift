@@ -9,8 +9,13 @@ struct MapView: UIViewRepresentable {
     let bansJson: String
     let poisJson: String
     let showBans: Bool
+    let showAccommodation: Bool
+    let showRest: Bool
     let showShelters: Bool
     let showFireplaces: Bool
+    let showViewpoints: Bool
+    let showParking: Bool
+    let showEducation: Bool
     let showOthers: Bool
     let overlayEnabled: Bool
     let vectorOverlay: Bool
@@ -82,8 +87,13 @@ struct MapView: UIViewRepresentable {
         coordinator.bansJson = bansJson
         coordinator.poisJson = poisJson
         coordinator.showBans = showBans
+        coordinator.showAccommodation = showAccommodation
+        coordinator.showRest = showRest
         coordinator.showShelters = showShelters
         coordinator.showFireplaces = showFireplaces
+        coordinator.showViewpoints = showViewpoints
+        coordinator.showParking = showParking
+        coordinator.showEducation = showEducation
         coordinator.showOthers = showOthers
         coordinator.overlayEnabled = overlayEnabled
         coordinator.vectorOverlay = vectorOverlay
@@ -111,8 +121,13 @@ struct MapView: UIViewRepresentable {
         var bansJson = ""
         var poisJson = ""
         var showBans = true
+        var showAccommodation = true
+        var showRest = true
         var showShelters = true
         var showFireplaces = true
+        var showViewpoints = true
+        var showParking = true
+        var showEducation = true
         var showOthers = true
         var overlayEnabled = true {
             didSet {
@@ -196,6 +211,11 @@ struct MapView: UIViewRepresentable {
         private var poiShelterCount = 0
         private var poiFireplaceCount = 0
         private var poiOtherCount = 0
+        private var poiAccommodationCount = 0
+        private var poiRestCount = 0
+        private var poiViewpointCount = 0
+        private var poiParkingCount = 0
+        private var poiEducationCount = 0
         private var jsonByteCount = (zones: 0, bans: 0, pois: 0)
         private var hasCenteredOnStartup = false
         private var lastRecenterSignal = 0
@@ -239,11 +259,21 @@ struct MapView: UIViewRepresentable {
         private let poiShelterId = "poi-shelter-layer"
         private let poiFireplaceId = "poi-fireplace-layer"
         private let poiOtherId = "poi-other-layer"
+        private let poiAccommodationId = "poi-accommodation-layer"
+        private let poiRestId = "poi-rest-layer"
+        private let poiViewpointId = "poi-viewpoint-layer"
+        private let poiParkingId = "poi-parking-layer"
+        private let poiEducationId = "poi-education-layer"
         private let vectorZoneSourceId = "vec-zone-source"
         private let vectorBanSourceId = "vec-ban-source"
         private let vectorShelterSourceId = "vec-poi-shelter-source"
         private let vectorFireplaceSourceId = "vec-poi-fireplace-source"
         private let vectorOtherSourceId = "vec-poi-other-source"
+        private let vectorAccommodationSourceId = "vec-poi-accommodation-source"
+        private let vectorRestSourceId = "vec-poi-rest-source"
+        private let vectorViewpointSourceId = "vec-poi-viewpoint-source"
+        private let vectorParkingSourceId = "vec-poi-parking-source"
+        private let vectorEducationSourceId = "vec-poi-education-source"
 
         private var parent: MapView
 
@@ -639,6 +669,46 @@ struct MapView: UIViewRepresentable {
                                           source: otherSource,
                                           color: UIColor.systemBlue,
                                           isOpaque: showOthers))
+            let accommodationSource = MLNShapeSource(identifier: vectorAccommodationSourceId,
+                                                     url: files.accommodationURL,
+                                                     options: nil)
+            style.addSource(accommodationSource)
+            style.addLayer(poiCircleLayer(identifier: poiAccommodationId,
+                                          source: accommodationSource,
+                                          color: UIColor(red: 0.11, green: 0.37, blue: 0.13, alpha: 1.0),
+                                          isOpaque: showAccommodation))
+            let restSource = MLNShapeSource(identifier: vectorRestSourceId,
+                                            url: files.restURL,
+                                            options: nil)
+            style.addSource(restSource)
+            style.addLayer(poiCircleLayer(identifier: poiRestId,
+                                          source: restSource,
+                                          color: UIColor(red: 0.33, green: 0.55, blue: 0.18, alpha: 1.0),
+                                          isOpaque: showRest))
+            let viewpointSource = MLNShapeSource(identifier: vectorViewpointSourceId,
+                                                 url: files.viewpointURL,
+                                                 options: nil)
+            style.addSource(viewpointSource)
+            style.addLayer(poiCircleLayer(identifier: poiViewpointId,
+                                          source: viewpointSource,
+                                          color: UIColor(red: 0.0, green: 0.59, blue: 0.65, alpha: 1.0),
+                                          isOpaque: showViewpoints))
+            let parkingSource = MLNShapeSource(identifier: vectorParkingSourceId,
+                                               url: files.parkingURL,
+                                               options: nil)
+            style.addSource(parkingSource)
+            style.addLayer(poiCircleLayer(identifier: poiParkingId,
+                                          source: parkingSource,
+                                          color: UIColor(red: 0.36, green: 0.25, blue: 0.22, alpha: 1.0),
+                                          isOpaque: showParking))
+            let educationSource = MLNShapeSource(identifier: vectorEducationSourceId,
+                                                 url: files.educationURL,
+                                                 options: nil)
+            style.addSource(educationSource)
+            style.addLayer(poiCircleLayer(identifier: poiEducationId,
+                                          source: educationSource,
+                                          color: UIColor(red: 0.48, green: 0.12, blue: 0.64, alpha: 1.0),
+                                          isOpaque: showEducation))
 
             vectorInstalled = true
             layersReady = true
@@ -660,13 +730,15 @@ struct MapView: UIViewRepresentable {
                                     color: UIColor,
                                     isOpaque: Bool) -> MLNCircleStyleLayer {
             let layer = MLNCircleStyleLayer(identifier: identifier, source: source)
-            // Zoom-scaled radius (Android parity): dots shrink when zoomed out.
+            // Zoom-scaled radius (Android parity): dots shrink hard at far zoom
+            // (region scale) so they don't block the map, then grow with zoom.
             layer.circleRadius = NSExpression(mglJSONObject: [
-                "step", ["zoom"], 2,
-                11, 3,
-                12.5, 5,
-                14, 8,
-                16, 12
+                "step", ["zoom"], 3,
+                7, 4,
+                9, 5.5,
+                11, 7,
+                13, 11,
+                14, 7
             ] as [Any])
             layer.circleColor = NSExpression(forConstantValue: color)
             layer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
@@ -692,11 +764,14 @@ struct MapView: UIViewRepresentable {
 
         private func removeVectorOverlay(_ style: MLNStyle) {
             for id in [zoneFillId, zoneLineId, banFillId, banLineId,
-                       poiShelterId, poiFireplaceId, poiOtherId] {
+                       poiShelterId, poiFireplaceId, poiOtherId,
+                       poiAccommodationId, poiRestId, poiViewpointId, poiParkingId, poiEducationId] {
                 removeLayerIfPresent(id, style: style)
             }
             for id in [vectorZoneSourceId, vectorBanSourceId,
-                       vectorShelterSourceId, vectorFireplaceSourceId, vectorOtherSourceId] {
+                       vectorShelterSourceId, vectorFireplaceSourceId, vectorOtherSourceId,
+                       vectorAccommodationSourceId, vectorRestSourceId, vectorViewpointSourceId,
+                       vectorParkingSourceId, vectorEducationSourceId] {
                 removeSourceIfPresent(id, style: style)
             }
         }
@@ -802,7 +877,7 @@ struct MapView: UIViewRepresentable {
         /// gate a much more expensive style/string pipeline on the main thread.
         private func contentSignature() -> String {
             var sig = "v2|\(zonesJson.count)|\(bansJson.count)|\(poisJson.count)"
-            sig += "|\(showBans ? "1" : "0")\(showShelters ? "1" : "0")\(showFireplaces ? "1" : "0")\(showOthers ? "1" : "0")"
+            sig += "|\(showBans ? "1" : "0")\(showAccommodation ? "1" : "0")\(showRest ? "1" : "0")\(showShelters ? "1" : "0")\(showFireplaces ? "1" : "0")\(showViewpoints ? "1" : "0")\(showParking ? "1" : "0")\(showEducation ? "1" : "0")\(showOthers ? "1" : "0")"
             sig += "|\(overlayEnabled ? "1" : "0")\(vectorOverlay ? "1" : "0")\(baseEnabled ? "1" : "0")"
             sig += "|\(followsUser ? "1" : "0")\(showHeading ? "1" : "0")\(showUserDot ? "1" : "0")"
             return sig
@@ -846,9 +921,15 @@ struct MapView: UIViewRepresentable {
             zoneFeatureCount = files.zoneCount
             banFeatureCount = files.banCount
             poiFeatureCount = files.shelterCount + files.fireplaceCount + files.otherCount
+                + files.accommodationCount + files.restCount + files.viewpointCount + files.parkingCount + files.educationCount
             poiShelterCount = files.shelterCount
             poiFireplaceCount = files.fireplaceCount
             poiOtherCount = files.otherCount
+            poiAccommodationCount = files.accommodationCount
+            poiRestCount = files.restCount
+            poiViewpointCount = files.viewpointCount
+            poiParkingCount = files.parkingCount
+            poiEducationCount = files.educationCount
 
             // New dataset: invalidate whichever overlay pipeline is active — the
             // on-disk files changed underneath it.
@@ -876,7 +957,7 @@ struct MapView: UIViewRepresentable {
         /// geometry, no data rebuild, no filter pass.
         private func refreshLayerVisibility() {
             guard layersReady, let style = mapView?.style else { return }
-            let signature = "\(showBans)|\(showShelters)|\(showFireplaces)|\(showOthers)"
+            let signature = "\(showBans)|\(showAccommodation)|\(showRest)|\(showShelters)|\(showFireplaces)|\(showViewpoints)|\(showParking)|\(showEducation)|\(showOthers)"
             guard signature != lastToggleSignature else { return }
             lastToggleSignature = signature
 
@@ -904,7 +985,11 @@ struct MapView: UIViewRepresentable {
             }
             for entry in [(poiShelterId, showShelters),
                           (poiFireplaceId, showFireplaces),
-                          (poiOtherId, showOthers)] {
+                          (poiOtherId, showOthers),
+                          (poiAccommodationId, showAccommodation),
+                          (poiViewpointId, showViewpoints),
+                          (poiParkingId, showParking),
+                          (poiEducationId, showEducation)] {
                 if let layer = style.layer(withIdentifier: entry.0) as? MLNCircleStyleLayer {
                     let opacity: Double = entry.1 ? 1.0 : 0.0
                     layer.circleOpacity = NSExpression(forConstantValue: opacity)
@@ -954,7 +1039,7 @@ struct MapView: UIViewRepresentable {
             overlay: \(overlayText)
             zones: json \(jsonByteCount.zones) feat \(zoneFeatureCount)
             bans:  json \(jsonByteCount.bans) feat \(banFeatureCount)
-            pois:  json \(jsonByteCount.pois) feat \(poiFeatureCount) (sh \(poiShelterCount) fp \(poiFireplaceCount) ot \(poiOtherCount))
+            pois:  json \(jsonByteCount.pois) feat \(poiFeatureCount) (sh \(poiShelterCount) fp \(poiFireplaceCount) ot \(poiOtherCount) nc \(poiAccommodationCount) wd \(poiViewpointCount) pk \(poiParkingCount) ed \(poiEducationCount))
             """
             // `@Published` always emits on assignment, so writing back an unchanged
             // string here would trigger a SwiftUI re-render loop that freezes the
@@ -1066,7 +1151,8 @@ struct MapView: UIViewRepresentable {
         private func handleVectorTap(_ mapView: MLNMapView, _ tapRect: CGRect) {
             let pois = mapView.visibleFeatures(
                 in: tapRect,
-                styleLayerIdentifiers: [poiShelterId, poiFireplaceId, poiOtherId]
+                styleLayerIdentifiers: [poiShelterId, poiFireplaceId, poiOtherId,
+                                        poiAccommodationId, poiViewpointId, poiParkingId, poiEducationId]
             )
             if let poiFeature = pois.first {
                 if let name = poiFeature.attribute(forKey: "name") as? String {

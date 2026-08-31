@@ -164,13 +164,17 @@ class ForestApp(
     suspend fun syncPois(): Boolean = withContext(Dispatchers.Default) {
         try {
             val allPois = mutableListOf<Poi>()
-            for (layerId in listOf(1, 2, 3, 4)) {
+            for (layerId in listOf(0, 1, 2, 3, 4)) {
                 var offset = 0
                 val recordCount = 2000
                 while (true) {
                     val response = arcgisApi.getTouristPoints(
                         layerId = layerId,
-                        outFields = if (layerId == 4) "tur_edu_pnt_cd,tur_obj_desc,nzw_ob" else "tur_rec_pnt_cd,tur_obj_desc,nzw_ob",
+                        outFields = when (layerId) {
+                            0 -> "tur_sleep_pnt_cd,tur_obj_desc,nzw_ob"
+                            4 -> "tur_edu_pnt_cd,tur_obj_desc,nzw_ob"
+                            else -> "tur_rec_pnt_cd,tur_obj_desc,nzw_ob"
+                        },
                         resultOffset = offset,
                         resultRecordCount = recordCount
                     )

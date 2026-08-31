@@ -8,6 +8,7 @@ import org.locationtech.jts.io.WKTReader
 import org.locationtech.jts.geom.Coordinate
 import org.maplibre.android.geometry.LatLng
 import com.indiana.zwl.domain.util.classify
+import com.indiana.zwl.domain.util.uiGroup
 import java.util.concurrent.ConcurrentHashMap
 
 data class PolygonRings(val outer: List<LatLng>, val holes: List<List<LatLng>>)
@@ -220,7 +221,7 @@ fun buildPoiGeoJson(pois: List<com.indiana.zwl.domain.model.Poi>): String {
     for (poi in pois) {
         if (!first) sb.append(",")
         first = false
-        val category = poi.classify()
+        val category = poi.classify().uiGroup().key
         sb.append("{\"type\":\"Feature\",\"properties\":{")
         sb.append("\"id\":").append(poi.id).append(",")
         sb.append("\"category\":\"").append(category).append("\",")

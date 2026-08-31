@@ -9,6 +9,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+private fun getPoiOutFields(layerId: Int): String = when (layerId) {
+    0 -> "tur_sleep_pnt_cd,tur_obj_desc,nzw_ob"
+    4 -> "tur_edu_pnt_cd,tur_obj_desc,nzw_ob"
+    else -> "tur_rec_pnt_cd,tur_obj_desc,nzw_ob"
+}
+
 class SyncPoiUseCase @Inject constructor(
     private val arcgisApi: BdlArcgisApi,
     private val poiRepository: PoiRepository
@@ -16,7 +22,7 @@ class SyncPoiUseCase @Inject constructor(
     suspend operator fun invoke(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val allPois = mutableListOf<Poi>()
-            val layers = listOf(1, 2, 3, 4)
+            val layers = listOf(0, 1, 2, 3, 4)
 
             for (layerId in layers) {
                 var offset = 0
@@ -26,7 +32,7 @@ class SyncPoiUseCase @Inject constructor(
                 while (hasMore) {
                     val response = arcgisApi.getTouristPoints(
                         layerId = layerId,
-                        outFields = if (layerId == 4) "tur_edu_pnt_cd,tur_obj_desc,nzw_ob" else "tur_rec_pnt_cd,tur_obj_desc,nzw_ob",
+                        outFields = getPoiOutFields(layerId),
                         resultOffset = offset,
                         resultRecordCount = recordCount
                     )

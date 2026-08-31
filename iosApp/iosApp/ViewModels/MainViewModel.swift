@@ -44,11 +44,26 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var showShelters: Bool = true {
         didSet { UserDefaults.standard.set(showShelters, forKey: Self.keyShowShelters) }
     }
+    @Published var showRest: Bool = true {
+        didSet { UserDefaults.standard.set(showRest, forKey: Self.keyShowRest) }
+    }
     @Published var showFireplaces: Bool = true {
         didSet { UserDefaults.standard.set(showFireplaces, forKey: Self.keyShowFireplaces) }
     }
     @Published var showOthers: Bool = true {
         didSet { UserDefaults.standard.set(showOthers, forKey: Self.keyShowOthers) }
+    }
+    @Published var showAccommodation: Bool = true {
+        didSet { UserDefaults.standard.set(showAccommodation, forKey: Self.keyShowAccommodation) }
+    }
+    @Published var showViewpoints: Bool = true {
+        didSet { UserDefaults.standard.set(showViewpoints, forKey: Self.keyShowViewpoints) }
+    }
+    @Published var showParking: Bool = true {
+        didSet { UserDefaults.standard.set(showParking, forKey: Self.keyShowParking) }
+    }
+    @Published var showEducation: Bool = true {
+        didSet { UserDefaults.standard.set(showEducation, forKey: Self.keyShowEducation) }
     }
 
     // Selections
@@ -115,8 +130,13 @@ final class MainViewModel: NSObject, ObservableObject {
     private let pathMonitor = NWPathMonitor()
     private static let keyShowBans = "mapSettings.showBans"
     private static let keyShowShelters = "mapSettings.showShelters"
+    private static let keyShowRest = "mapSettings.showRest"
     private static let keyShowFireplaces = "mapSettings.showFireplaces"
     private static let keyShowOthers = "mapSettings.showOthers"
+    private static let keyShowAccommodation = "mapSettings.showAccommodation"
+    private static let keyShowViewpoints = "mapSettings.showViewpoints"
+    private static let keyShowParking = "mapSettings.showParking"
+    private static let keyShowEducation = "mapSettings.showEducation"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
     // re-renders the map on the main thread (the iPad-class bottleneck), so
@@ -131,8 +151,13 @@ final class MainViewModel: NSObject, ObservableObject {
         let defaults = UserDefaults.standard
         showBans = defaults.object(forKey: Self.keyShowBans) as? Bool ?? true
         showShelters = defaults.object(forKey: Self.keyShowShelters) as? Bool ?? true
+        showRest = defaults.object(forKey: Self.keyShowRest) as? Bool ?? true
         showFireplaces = defaults.object(forKey: Self.keyShowFireplaces) as? Bool ?? true
         showOthers = defaults.object(forKey: Self.keyShowOthers) as? Bool ?? true
+        showAccommodation = defaults.object(forKey: Self.keyShowAccommodation) as? Bool ?? true
+        showViewpoints = defaults.object(forKey: Self.keyShowViewpoints) as? Bool ?? true
+        showParking = defaults.object(forKey: Self.keyShowParking) as? Bool ?? true
+        showEducation = defaults.object(forKey: Self.keyShowEducation) as? Bool ?? true
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor [weak self] in

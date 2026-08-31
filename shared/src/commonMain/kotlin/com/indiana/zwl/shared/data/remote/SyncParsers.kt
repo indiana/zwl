@@ -105,6 +105,7 @@ object PoiSyncParser {
 
                         val code = properties?.get("tur_rec_pnt_cd")?.jsonPrimitive?.contentOrNull
                             ?: properties?.get("tur_edu_pnt_cd")?.jsonPrimitive?.contentOrNull
+                            ?: properties?.get("tur_sleep_pnt_cd")?.jsonPrimitive?.contentOrNull
                             ?: ""
                         val desc = properties?.get("tur_obj_desc")?.jsonPrimitive?.contentOrNull ?: ""
                         val name = properties?.get("nzw_ob")?.jsonPrimitive?.contentOrNull ?: ""

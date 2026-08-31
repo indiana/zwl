@@ -10,8 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.indiana.zwl.domain.util.classify
-import com.indiana.zwl.domain.util.displayName
+import com.indiana.zwl.domain.util.displayGroupName
 import com.indiana.zwl.presentation.SelectedPoiDetails
 
 @Composable
@@ -20,7 +19,7 @@ fun PoiDetailsCard(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val categoryName = details.poi.classify().displayName()
+    val categoryName = details.poi.displayGroupName()
 
     Card(
         modifier = modifier

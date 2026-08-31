@@ -3,6 +3,7 @@ package com.indiana.zwl.presentation.map
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -26,8 +27,6 @@ import com.indiana.zwl.presentation.ZoneDetailViewModel
 import com.indiana.zwl.presentation.map.MapViewModel
 import com.indiana.zwl.presentation.DownloadEvent
 import com.indiana.zwl.domain.model.Poi
-import com.indiana.zwl.domain.util.PoiCategory
-import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.presentation.theme.ZwlTheme
 import com.indiana.zwl.shared.map.MapStyle
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +41,7 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.RasterLayer
@@ -91,8 +91,13 @@ fun MapViewContainer(
     val selectedZone by zoneDetailViewModel.selectedZoneDetails.collectAsState()
     val selectedPoi by zoneDetailViewModel.selectedPoiDetails.collectAsState()
     val pois by viewModel.pois.collectAsState()
-    val showFireplaces by viewModel.showFireplaces.collectAsState()
+    val showAccommodation by viewModel.showAccommodation.collectAsState()
+    val showRest by viewModel.showRest.collectAsState()
     val showShelters by viewModel.showShelters.collectAsState()
+    val showFireplaces by viewModel.showFireplaces.collectAsState()
+    val showViewpoints by viewModel.showViewpoints.collectAsState()
+    val showParking by viewModel.showParking.collectAsState()
+    val showEducation by viewModel.showEducation.collectAsState()
     val showOthers by viewModel.showOthers.collectAsState()
     val showForestBans by viewModel.showForestBans.collectAsState()
     val forestBans by viewModel.forestBans.collectAsState()
@@ -113,13 +118,10 @@ fun MapViewContainer(
     var banGeoJson by remember { mutableStateOf<String?>(null) }
     var lastAppliedPois by remember { mutableStateOf<List<Poi>?>(null) }
 
-    LaunchedEffect(rememberedMapView, isActive, uiState) {
+    LaunchedEffect(rememberedMapView, isActive, uiState, mapboxMapInstance) {
+        if (hasCenteredOnStartup) return@LaunchedEffect
         val map = mapboxMapInstance ?: return@LaunchedEffect
-        if (!isActive || hasCenteredOnStartup) return@LaunchedEffect
-        if (mapViewModel.savedMapCenterLat != null) {
-            hasCenteredOnStartup = true
-            return@LaunchedEffect
-        }
+        if (!isActive) return@LaunchedEffect
         val state = uiState
         if (state is MainUiState.Success) {
             val lat = state.latitude
@@ -127,7 +129,7 @@ fun MapViewContainer(
             if (lat != null && lon != null) {
                 map.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(lat, lon))
-                    .zoom(15.0)
+                    .zoom(MapStyle.DEFAULT_ZOOM)
                     .build()
                 hasCenteredOnStartup = true
             }
@@ -181,16 +183,7 @@ fun MapViewContainer(
         }
     }
 
-    val filteredPois = remember(pois, showFireplaces, showShelters, showOthers) {
-        pois.filter { poi ->
-            val cat = poi.classify()
-            when (cat) {
-                PoiCategory.SHELTER -> showShelters
-                PoiCategory.FIREPLACE -> showFireplaces
-                PoiCategory.OTHER -> showOthers
-            }
-        }
-    }
+    val filteredPois = pois
 
     LaunchedEffect(zones) {
         if (zones.isEmpty()) return@LaunchedEffect
@@ -352,20 +345,6 @@ fun MapViewContainer(
                                 map.cameraPosition?.zoom?.let { currentZoom = it.toFloat() }
                             }
 
-                            val savedLat = mapViewModel.savedMapCenterLat
-                            val savedLng = mapViewModel.savedMapCenterLng
-                            val savedZoom = mapViewModel.savedMapZoom
-
-                            map.cameraPosition = CameraPosition.Builder()
-                                .target(
-                                    LatLng(
-                                        savedLat ?: MapStyle.DEFAULT_LAT,
-                                        savedLng ?: MapStyle.DEFAULT_LNG
-                                    )
-                                )
-                                .zoom(savedZoom ?: MapStyle.DEFAULT_ZOOM)
-                                .build()
-
                             map.setStyle(Style.Builder().fromJson(MapStyle.OSM_STYLE_JSON)) { style ->
                                 styleInstance = style
 
@@ -380,22 +359,30 @@ fun MapViewContainer(
                                             Expression.match(
                                                 Expression.get("category"),
                                                 Expression.literal("#1976D2"),
-                                                Expression.stop("SHELTER", Expression.literal("#4E342E")),
-                                                Expression.stop("FIREPLACE", Expression.literal("#E65100"))
+                                                Expression.stop("noclegi", Expression.literal("#1B5E20")),
+                                                Expression.stop("wypoczynek", Expression.literal("#558B2F")),
+                                                Expression.stop("wiaty", Expression.literal("#4E342E")),
+                                                Expression.stop("ogniska", Expression.literal("#E65100")),
+                                                Expression.stop("widoki", Expression.literal("#0097A7")),
+                                                Expression.stop("parkingi", Expression.literal("#5D4037")),
+                                                Expression.stop("edukacja", Expression.literal("#7B1FA2")),
+                                                Expression.stop("inne", Expression.literal("#1976D2"))
                                             )
                                         ),
                                         PropertyFactory.circleRadius(
                                             Expression.step(
                                                 Expression.zoom(),
-                                                Expression.literal(2f),
-                                                Expression.literal(11.0),
                                                 Expression.literal(3f),
-                                                Expression.literal(12.5),
-                                                Expression.literal(5f),
+                                                Expression.literal(7.0),
+                                                Expression.literal(4f),
+                                                Expression.literal(9.0),
+                                                Expression.literal(5.5f),
+                                                Expression.literal(11.0),
+                                                Expression.literal(7f),
+                                                Expression.literal(13.0),
+                                                Expression.literal(11f),
                                                 Expression.literal(14.0),
-                                                Expression.literal(8f),
-                                                Expression.literal(16.0),
-                                                Expression.literal(12f)
+                                                Expression.literal(7f)
                                             )
                                         ),
                                         PropertyFactory.circleStrokeWidth(1.5f),
@@ -500,22 +487,29 @@ fun MapViewContainer(
                                     Expression.match(
                                         Expression.get("category"),
                                         Expression.literal("#1976D2"),
-                                        Expression.stop("SHELTER", Expression.literal("#4E342E")),
-                                        Expression.stop("FIREPLACE", Expression.literal("#E65100"))
+                                        Expression.stop("noclegi", Expression.literal("#1B5E20")),
+                                        Expression.stop("wiaty", Expression.literal("#4E342E")),
+                                        Expression.stop("ogniska", Expression.literal("#E65100")),
+                                        Expression.stop("widoki", Expression.literal("#0097A7")),
+                                        Expression.stop("parkingi", Expression.literal("#5D4037")),
+                                        Expression.stop("edukacja", Expression.literal("#7B1FA2")),
+                                        Expression.stop("inne", Expression.literal("#1976D2"))
                                     )
                                 ),
                                 PropertyFactory.circleRadius(
                                     Expression.step(
                                         Expression.zoom(),
-                                        Expression.literal(2f),
-                                        Expression.literal(11.0),
                                         Expression.literal(3f),
-                                        Expression.literal(12.5),
-                                        Expression.literal(5f),
+                                        Expression.literal(7.0),
+                                        Expression.literal(4f),
+                                        Expression.literal(9.0),
+                                        Expression.literal(5.5f),
+                                        Expression.literal(11.0),
+                                        Expression.literal(7f),
+                                        Expression.literal(13.0),
+                                        Expression.literal(11f),
                                         Expression.literal(14.0),
-                                        Expression.literal(8f),
-                                        Expression.literal(16.0),
-                                        Expression.literal(12f)
+                                        Expression.literal(7f)
                                     )
                                 ),
                                 PropertyFactory.circleStrokeWidth(1.5f),
@@ -649,8 +643,58 @@ fun MapViewContainer(
                                                 onCheckedChange = { viewModel.setShowForestBans(it) },
                                                 colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.error)
                                             )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .padding(horizontal = 4.dp)
+                                                    .background(MaterialTheme.colorScheme.error, CircleShape)
+                                            )
                                             Text(
                                                 text = "Zakazy wstępu do lasu",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Checkbox(
+                                                checked = showAccommodation,
+                                                onCheckedChange = { viewModel.setShowAccommodation(it) },
+                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .padding(horizontal = 4.dp)
+                                                    .background(Color(0xFF1B5E20), CircleShape)
+                                            )
+                                            Text(
+                                                text = "Noclegi i biwakowanie",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Checkbox(
+                                                checked = showRest,
+                                                onCheckedChange = { viewModel.setShowRest(it) },
+                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .padding(horizontal = 4.dp)
+                                                    .background(Color(0xFF558B2F), CircleShape)
+                                            )
+                                            Text(
+                                                text = "Miejsca wypoczynku",
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
@@ -665,8 +709,14 @@ fun MapViewContainer(
                                                 onCheckedChange = { viewModel.setShowShelters(it) },
                                                 colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
                                             )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .padding(horizontal = 4.dp)
+                                                    .background(Color(0xFF4E342E), CircleShape)
+                                            )
                                             Text(
-                                                text = "Wiaty i wiatopodobne",
+                                                text = "Wiaty i schronienia",
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
@@ -681,8 +731,80 @@ fun MapViewContainer(
                                                 onCheckedChange = { viewModel.setShowFireplaces(it) },
                                                 colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
                                             )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .padding(horizontal = 4.dp)
+                                                    .background(Color(0xFFE65100), CircleShape)
+                                            )
                                             Text(
                                                 text = "Miejsca na ognisko",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Checkbox(
+                                                checked = showViewpoints,
+                                                onCheckedChange = { viewModel.setShowViewpoints(it) },
+                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .padding(horizontal = 4.dp)
+                                                    .background(Color(0xFF0097A7), CircleShape)
+                                            )
+                                            Text(
+                                                text = "Punkty widokowe i rekreacja",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Checkbox(
+                                                checked = showParking,
+                                                onCheckedChange = { viewModel.setShowParking(it) },
+                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .padding(horizontal = 4.dp)
+                                                    .background(Color(0xFF5D4037), CircleShape)
+                                            )
+                                            Text(
+                                                text = "Parkingi",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Checkbox(
+                                                checked = showEducation,
+                                                onCheckedChange = { viewModel.setShowEducation(it) },
+                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .padding(horizontal = 4.dp)
+                                                    .background(Color(0xFF7B1FA2), CircleShape)
+                                            )
+                                            Text(
+                                                text = "Edukacja leśna",
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
@@ -696,6 +818,12 @@ fun MapViewContainer(
                                                 checked = showOthers,
                                                 onCheckedChange = { viewModel.setShowOthers(it) },
                                                 colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .padding(horizontal = 4.dp)
+                                                    .background(Color(0xFF1976D2), CircleShape)
                                             )
                                             Text(
                                                 text = "Inne punkty",

@@ -62,9 +62,7 @@ class MainViewModelTest {
     @Before
     fun setUp() {
         every { context.getSharedPreferences("zwl_map_settings", Context.MODE_PRIVATE) } returns sharedPreferences
-        every { sharedPreferences.getBoolean("show_fireplaces", true) } returns true
-        every { sharedPreferences.getBoolean("show_shelters", true) } returns true
-        every { sharedPreferences.getBoolean("show_others", true) } returns true
+        every { sharedPreferences.getBoolean(match<String> { it.startsWith("show_poi_") }, true) } returns true
         every { sharedPreferences.getBoolean("show_forest_bans", true) } returns true
         every { sharedPreferences.edit() } returns sharedPreferencesEditor
         every { sharedPreferencesEditor.putBoolean(any(), any()) } returns sharedPreferencesEditor
@@ -120,9 +118,10 @@ class MainViewModelTest {
     @Test
     fun `pois flow should filter POIs correctly based on toggle settings`() = runBlocking {
         val testPois = listOf(
-            Poi(id = 1, code = "S1", description = "Wiata leśna", name = "Schron Turystyczny Wiata", latitude = 52.0, longitude = 21.0),
-            Poi(id = 2, code = "F1", description = "Palenisko", name = "Miejsce na ognisko pod dębem", latitude = 52.1, longitude = 21.1),
-            Poi(id = 3, code = "O1", description = "Punkt widokowy", name = "Góra widokowa", latitude = 52.2, longitude = 21.2)
+            Poi(id = 1, code = "MSC WYPOCZ", description = "Wiata turystyczna", name = "Schron Turystyczny Wiata", latitude = 52.0, longitude = 21.0),
+            Poi(id = 2, code = "MSC WYPOCZ", description = "Miejsce wypoczynku", name = "Miejsce na ognisko pod dębem", latitude = 52.1, longitude = 21.1),
+            Poi(id = 3, code = "PKT WIDOK", description = "Punkt widokowy", name = "Góra widokowa", latitude = 52.2, longitude = 21.2),
+            Poi(id = 4, code = "IN PT NIEN", description = "Inne", name = "Obiekt inny", latitude = 52.3, longitude = 21.3)
         )
         allPoisFlow.value = testPois
 
@@ -135,21 +134,26 @@ class MainViewModelTest {
 
         viewModel.pois.test {
             val initialList = awaitItem()
-            assertEquals(3, initialList.size)
+            assertEquals(4, initialList.size)
 
             viewModel.setShowShelters(false)
             val listAfterShelters = awaitItem()
-            assertEquals(2, listAfterShelters.size)
+            assertEquals(3, listAfterShelters.size)
             assertTrue(listAfterShelters.none { it.name.contains("Wiata", ignoreCase = true) })
 
             viewModel.setShowFireplaces(false)
             val listAfterFireplaces = awaitItem()
-            assertEquals(1, listAfterFireplaces.size)
-            assertEquals("Góra widokowa", listAfterFireplaces.first().name)
+            assertEquals(2, listAfterFireplaces.size)
+            assertTrue(listAfterFireplaces.none { it.name.contains("ognis", ignoreCase = true) })
 
             viewModel.setShowOthers(false)
             val listAfterOthers = awaitItem()
-            assertTrue(listAfterOthers.isEmpty())
+            assertEquals(1, listAfterOthers.size)
+            assertEquals("Góra widokowa", listAfterOthers.first().name)
+
+            viewModel.setShowViewpoints(false)
+            val listAfterViewpoints = awaitItem()
+            assertTrue(listAfterViewpoints.isEmpty())
         }
     }
 
