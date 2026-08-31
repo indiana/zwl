@@ -194,8 +194,13 @@ struct MainView: View {
             bansJson: viewModel.bansGeoJson,
             poisJson: viewModel.poisGeoJson,
             showBans: viewModel.showBans,
+            showAccommodation: viewModel.showAccommodation,
+            showRest: viewModel.showRest,
             showShelters: viewModel.showShelters,
             showFireplaces: viewModel.showFireplaces,
+            showViewpoints: viewModel.showViewpoints,
+            showParking: viewModel.showParking,
+            showEducation: viewModel.showEducation,
             showOthers: viewModel.showOthers,
             overlayEnabled: overlayEnabled,
             vectorOverlay: vectorOverlay,
@@ -261,10 +266,60 @@ struct MainView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            Toggle("Zakazy wstępu do lasu", isOn: $viewModel.showBans)
-            Toggle("Wiaty i wiatopodobne", isOn: $viewModel.showShelters)
-            Toggle("Miejsca na ognisko", isOn: $viewModel.showFireplaces)
-            Toggle("Inne punkty", isOn: $viewModel.showOthers)
+            Toggle(isOn: $viewModel.showBans) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color.red).frame(width: 10, height: 10)
+                    Text("Zakazy wstępu do lasu")
+                }
+            }
+            Toggle(isOn: $viewModel.showAccommodation) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: 0x1B5E20)).frame(width: 10, height: 10)
+                    Text("Noclegi i biwakowanie")
+                }
+            }
+            Toggle(isOn: $viewModel.showRest) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: 0x558B2F)).frame(width: 10, height: 10)
+                    Text("Miejsca wypoczynku")
+                }
+            }
+            Toggle(isOn: $viewModel.showShelters) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: 0x4E342E)).frame(width: 10, height: 10)
+                    Text("Wiaty i schronienia")
+                }
+            }
+            Toggle(isOn: $viewModel.showFireplaces) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: 0xE65100)).frame(width: 10, height: 10)
+                    Text("Miejsca na ognisko")
+                }
+            }
+            Toggle(isOn: $viewModel.showViewpoints) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: 0x0097A7)).frame(width: 10, height: 10)
+                    Text("Punkty widokowe i rekreacja")
+                }
+            }
+            Toggle(isOn: $viewModel.showParking) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: 0x5D4037)).frame(width: 10, height: 10)
+                    Text("Parkingi")
+                }
+            }
+            Toggle(isOn: $viewModel.showEducation) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: 0x7B1FA2)).frame(width: 10, height: 10)
+                    Text("Edukacja leśna")
+                }
+            }
+            Toggle(isOn: $viewModel.showOthers) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: 0x1976D2)).frame(width: 10, height: 10)
+                    Text("Inne punkty")
+                }
+            }
 
             Divider()
 

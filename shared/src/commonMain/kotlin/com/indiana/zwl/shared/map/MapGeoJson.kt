@@ -3,8 +3,8 @@ package com.indiana.zwl.shared.map
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.Zone
-import com.indiana.zwl.domain.util.PoiCategory
 import com.indiana.zwl.domain.util.classify
+import com.indiana.zwl.domain.util.uiGroup
 import com.indiana.zwl.shared.data.remote.model.GeoJsonGeometry
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -76,17 +76,11 @@ object MapGeoJson {
                     put("name", poi.name)
                     put("description", poi.description)
                     put("code", poi.code)
-                    put("categoryKey", poi.classify().categoryKey())
+                    put("categoryKey", poi.classify().uiGroup().key)
                 }
             )
         }
         return collection(features)
-    }
-
-    private fun PoiCategory.categoryKey(): String = when (this) {
-        PoiCategory.SHELTER -> "shelter"
-        PoiCategory.FIREPLACE -> "fireplace"
-        PoiCategory.OTHER -> "other"
     }
 
     private fun feature(geometry: GeoJsonGeometry, properties: JsonObject): JsonObject {
