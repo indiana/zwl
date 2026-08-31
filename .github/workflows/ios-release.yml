@@ -3,6 +3,11 @@ name: iOS Release (TestFlight)
 on:
   workflow_dispatch:
     inputs:
+      branch:
+        description: 'Branch to build (default: development)'
+        required: true
+        default: 'development'
+        type: string
       upload_to_testflight:
         description: 'Upload the built .ipa to App Store Connect / TestFlight'
         required: true
@@ -24,6 +29,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
