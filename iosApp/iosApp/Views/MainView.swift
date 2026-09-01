@@ -6,15 +6,8 @@ struct MainView: View {
     @State private var isSettingsOpen = false
     @State private var cacheAlertPresented = false
     @State private var cacheAlertMessage = ""
-    // Persisted so A/B configs survive a cold restart (i.e. Baza OFF measured
-    // at true startup, not after a mid-session style reload). Follow/heading
-    // are user preferences, the rest are diagnostics toggles.
-    @AppStorage("settings.overlayEnabled") private var overlayEnabled = true
-    @AppStorage("settings.vectorOverlay") private var vectorOverlay = true
-    @AppStorage("settings.baseEnabled") private var baseEnabled = true
-    @AppStorage("settings.showUserDot") private var showUserDot = true
-    @AppStorage("settings.followsUser") private var followsUser = true
-    @AppStorage("settings.showHeading") private var showHeading = true
+    // followsUser lives on the view model (selecting a saved point turns it
+    // off so the camera stays on the point; "my location" re-enables it).
     // Dismisses the end-of-download card (bug: it used to stay on screen
     // forever once the download finished/failed).
     @State private var dismissDownloadCard = false
@@ -75,6 +68,31 @@ struct MainView: View {
                     .presentationDetents([.medium])
             }
         }
+        .sheet(isPresented: isPendingPointSheetPresented) {
+            if let point = viewModel.pendingPoint {
+                PointDetailView(
+                    point: point,
+                    onSave: { name in viewModel.savePendingPoint(name: name) },
+                    shareLink: pendingPointShareLink,
+                    onClose: { viewModel.clearPendingPoint() }
+                )
+                .presentationDetents([.medium, .large])
+            }
+        }
+        .sheet(isPresented: isSavedPointListPresented) {
+            SavedPointListView(viewModel: viewModel)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: isSavedPointPropertiesPresented) {
+            if let point = viewModel.selectedSavedPoint {
+                SavedPointPropertiesView(point: point, viewModel: viewModel)
+                    .presentationDetents([.medium])
+            }
+        }
+        .sheet(isPresented: isLayersSettingsPresented) {
+            LayersSettingsView(viewModel: viewModel)
+                .presentationDetents([.large])
+        }
         .alert("Pamięć podręczna", isPresented: $cacheAlertPresented) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -90,8 +108,7 @@ struct MainView: View {
                 fireRisk: viewModel.fireRiskLevel,
                 ban: viewModel.activeForestBan,
                 onBanTap: { viewModel.openActiveBan() },
-                onDistrictTap: { viewModel.selectZone(named: inZone.forestDistrict) },
-                onDebugToggle: viewModel.debugUiEnabled ? { viewModel.toggleDebugInvertZone() } : nil
+                onDistrictTap: { viewModel.selectZone(named: inZone.forestDistrict) }
             )
         } else if let outside = viewModel.displayOutsideZone {
             OutsideZoneView(
@@ -101,8 +118,7 @@ struct MainView: View {
                 azimuth: viewModel.azimuth,
                 ban: viewModel.activeForestBan,
                 onBanTap: { viewModel.openActiveBan() },
-                onDistrictTap: { viewModel.selectZone(named: outside.nearestDistrict) },
-                onDebugToggle: viewModel.debugUiEnabled ? { viewModel.toggleDebugInvertZone() } : nil
+                onDistrictTap: { viewModel.selectZone(named: outside.nearestDistrict) }
             )
         } else {
             GpsLocatingView()
@@ -170,21 +186,6 @@ struct MainView: View {
             if viewModel.gpsWaitingMessageVisible {
                 gpsWaitingPill
             }
-
-            if viewModel.debugUiEnabled && DebugMapOverlay.isEnabled && !viewModel.mapDiagnostics.isEmpty {
-                VStack {
-                    Spacer()
-                    Text(viewModel.mapDiagnostics)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.white)
-                        .lineSpacing(2)
-                        .padding(6)
-                        .background(.black.opacity(0.6))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .padding([.leading, .bottom], 16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
         }
     }
 
@@ -194,25 +195,32 @@ struct MainView: View {
             bansJson: viewModel.bansGeoJson,
             poisJson: viewModel.poisGeoJson,
             showBans: viewModel.showBans,
+            showAccommodation: viewModel.showAccommodation,
+            showRest: viewModel.showRest,
             showShelters: viewModel.showShelters,
             showFireplaces: viewModel.showFireplaces,
+            showViewpoints: viewModel.showViewpoints,
+            showParking: viewModel.showParking,
+            showEducation: viewModel.showEducation,
             showOthers: viewModel.showOthers,
-            overlayEnabled: overlayEnabled,
-            vectorOverlay: vectorOverlay,
-            baseEnabled: baseEnabled,
-            followsUser: followsUser,
-            showHeading: showHeading,
-            showUserDot: showUserDot,
+            isOffline: viewModel.isOffline,
+            followsUser: viewModel.followsUser,
             userLatitude: viewModel.userLatitude,
             userLongitude: viewModel.userLongitude,
-            recenterSignal: viewModel.recenterSignal,
+recenterSignal: viewModel.recenterSignal,
+            savedPointsJson: viewModel.showOwnPoints ? viewModel.savedPointsGeoJson : "",
+            pendingMarkerJson: pendingMarkerGeoJson,
+            centerSavedPointLatitude: viewModel.centerSavedPointLatitude,
+            centerSavedPointLongitude: viewModel.centerSavedPointLongitude,
+            centerSavedPointSignal: viewModel.centerSavedPointSignal,
             onTapZone: { viewModel.selectZone(named: $0) },
             onTapBan: { viewModel.selectBan(byRemoteId: $0) },
             onTapPoi: { viewModel.selectPoi(named: $0) },
+            onTapSavedPoint: { viewModel.openSavedPointProperties(id: $0) },
             onTapBackground: { viewModel.clearSelection() },
             onVisibleRegionChange: { viewModel.visibleRegion = $0 },
-            onDiagnostics: { viewModel.mapDiagnostics = $0 }
-        )
+            onLongPressPoint: { lat, lng in viewModel.onLongPressPoint(latitude: lat, longitude: lng) }
+            )
         .ignoresSafeArea(edges: .top)
     }
 
@@ -243,7 +251,7 @@ struct MainView: View {
                 isSettingsOpen.toggle()
             }
         }) {
-            Image(systemName: "slider.horizontal.3")
+            Image(systemName: "line.horizontal.3")
                 .font(.system(size: 17, weight: .semibold))
                 .frame(width: 44, height: 44)
                 .foregroundColor(isSettingsOpen ? .white : .primary)
@@ -257,18 +265,33 @@ struct MainView: View {
 
     private var settingsPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Wyświetlaj na mapie")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Toggle("Zakazy wstępu do lasu", isOn: $viewModel.showBans)
-            Toggle("Wiaty i wiatopodobne", isOn: $viewModel.showShelters)
-            Toggle("Miejsca na ognisko", isOn: $viewModel.showFireplaces)
-            Toggle("Inne punkty", isOn: $viewModel.showOthers)
+            Button(action: {
+                isSettingsOpen = false
+                viewModel.openSavedPointList()
+            }) {
+                Label("Zapisane punkty", systemImage: "bookmark")
+            }
+            .font(.system(size: 15))
 
             Divider()
 
-            Button(action: { viewModel.downloadVisibleArea() }) {
+            Button(action: {
+                isSettingsOpen = false
+                viewModel.openLayersOverlay()
+            }) {
+                Label("Wyświetlanie na mapie", systemImage: "square.3.layers.3d")
+            }
+            .font(.system(size: 15))
+
+            Divider()
+
+            Button(action: {
+                // Reset the card-dismissed latch so a new download shows its
+                // progress card again (it used to stay true forever after the
+                // first download, silently hiding every later download's card).
+                dismissDownloadCard = false
+                viewModel.downloadVisibleArea()
+            }) {
                 Label("Pobierz obszar offline", systemImage: "arrow.down.circle")
             }
             .disabled(viewModel.isDownloading)
@@ -278,54 +301,6 @@ struct MainView: View {
                 Label("Wyczyść cache", systemImage: "trash")
             }
             .font(.system(size: 15))
-
-            if viewModel.debugUiEnabled {
-                Divider()
-
-                Text("Diagnostyka (debug)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                // Diagnostics: fades the OSM base raster off to measure how much the
-                // base layer alone costs on the main thread.
-                Toggle("Baza OSM (diagnoza)", isOn: $baseEnabled)
-
-                // Diagnostics-only switch: removes the five raster overlay layers in
-                // place so we can A/B whether the overlay (or the base map) is what
-                // lags on device.
-                Toggle("Overlay (diagnoza)", isOn: $overlayEnabled)
-
-                // Diagnostics A/B: swap the overlay between the baked raster tiles
-                // (default) and the pre-raster vector pipeline (crisp at every
-                // zoom) so we can compare appearance and stall in one session.
-                Toggle("Wektor (diagnoza)", isOn: $vectorOverlay)
-
-                // Diagnostics-only: userTrackingMode .follow re-centers the camera
-                // on every GPS tick, and the heading arrow rotates on every
-                // magnetometer event — both force main-thread re-renders and are
-                // prime suspects for the UI freezes.
-                Toggle("Podążaj za lokalizacją (diagnoza)", isOn: $followsUser)
-                Toggle("Strzałka kierunku (diagnoza)", isOn: $showHeading)
-
-                // Diagnostics: the native MapLibre location dot re-renders the map
-                // on every GPS tick (~1Hz) — the one continuous driver we never
-                // tested except by leaving it on.
-                Toggle("Kropka GPS (diagnoza)", isOn: $showUserDot)
-
-                Divider()
-
-                Text("Tryb testowy")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                Button(action: { viewModel.toggleDebugInvertZone() }) {
-                    Label("Odwróć status: strefa / poza strefą",
-                          systemImage: viewModel.debugInvertZone
-                            ? "arrow.left.arrow.right.circle.fill"
-                            : "arrow.left.arrow.right.circle")
-                }
-                .font(.system(size: 15))
-            }
         }
         .padding(14)
         .frame(width: 280, alignment: .leading)
@@ -389,15 +364,46 @@ struct MainView: View {
         Binding(get: { viewModel.selectedPoi != nil },
                 set: { if !$0 { viewModel.clearSelection() } })
     }
-}
 
-// MARK: - Debug overlay (QA builds only)
+    private var isLayersSettingsPresented: Binding<Bool> {
+        Binding(get: { viewModel.showLayersOverlay },
+                set: { if !$0 { viewModel.closeLayersOverlay() } })
+    }
 
-enum DebugMapOverlay {
-    /// Kept `true` while iterating on the iOS map via TestFlight. Now `false`
-    /// for the release candidate (the overlay also requires
-    /// `MainViewModel.debugUiEnabled`, so both must be fliped to restore it).
-    static let isEnabled = false
+    private var isPendingPointSheetPresented: Binding<Bool> {
+        Binding(get: { viewModel.pendingPoint != nil },
+                set: { if !$0 { viewModel.clearPendingPoint() } })
+    }
+
+    private var isSavedPointListPresented: Binding<Bool> {
+        Binding(get: { viewModel.showSavedPointList },
+                set: { if !$0 { viewModel.closeSavedPointList() } })
+    }
+
+    /// Dedicated sheet for a saved point's properties opened from a map tap
+    /// (Android `PointDetailCard` parity). Without it the properties view only
+    /// nested inside `SavedPointListView`, so a tap on the map set
+    /// `selectedSavedPoint` but nothing ever appeared on screen.
+    private var isSavedPointPropertiesPresented: Binding<Bool> {
+        Binding(get: { viewModel.selectedSavedPoint != nil },
+                set: { if !$0 { viewModel.clearSavedPointProperties() } })
+    }
+
+    /// GeoJSON for the magenta temporary marker of the pending point.
+    private var pendingMarkerGeoJson: String {
+        guard let point = viewModel.pendingPoint else { return "" }
+        let lat = String(format: "%.6f", point.latitude)
+        let lng = String(format: "%.6f", point.longitude)
+        return "{\"type\":\"Feature\",\"properties\":{},\"geometry\":{\"type\":\"Point\",\"coordinates\":[\(lng),\(lat)]}}"
+    }
+
+    /// Share text for the pending (unsaved) point — plain coordinates, since
+    /// messaging apps don't linkify custom schemes (WhatsApp parity).
+    private var pendingPointShareLink: String {
+        guard let point = viewModel.pendingPoint else { return "" }
+        let coords = Formatters.coordinateText(latitude: point.latitude, longitude: point.longitude)
+        return "Legalny Bushcraft — punkt\n\(coords)\nMożesz wkleić te współrzędne w aplikacji, aby otworzyć punkt."
+    }
 }
 
 // MARK: - Loading / Error states (Android parity)

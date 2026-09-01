@@ -3,6 +3,7 @@ package com.indiana.zwl.presentation.map
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -20,16 +21,16 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.presentation.MainUiState
 import com.indiana.zwl.presentation.MainViewModel
 import com.indiana.zwl.presentation.ZoneDetailViewModel
 import com.indiana.zwl.presentation.map.MapViewModel
 import com.indiana.zwl.presentation.DownloadEvent
 import com.indiana.zwl.domain.model.Poi
-import com.indiana.zwl.domain.util.PoiCategory
-import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.presentation.theme.ZwlTheme
 import com.indiana.zwl.shared.map.MapStyle
+import com.indiana.zwl.shared.map.MapGeoJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,6 +44,7 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.RasterLayer
@@ -57,7 +59,6 @@ import com.indiana.zwl.presentation.map.util.rememberIsOnline
 import com.indiana.zwl.presentation.map.util.GeometryCache
 import com.indiana.zwl.presentation.map.util.buildZoneGeoJson
 import com.indiana.zwl.presentation.map.util.buildBanGeoJson
-import com.indiana.zwl.presentation.map.util.buildPoiGeoJson
 import com.indiana.zwl.presentation.map.util.buildUserArrowGeoJson
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -73,10 +74,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Layers
 
 @Composable
 fun MapViewContainer(
@@ -92,11 +95,23 @@ fun MapViewContainer(
     val selectedZone by zoneDetailViewModel.selectedZoneDetails.collectAsState()
     val selectedPoi by zoneDetailViewModel.selectedPoiDetails.collectAsState()
     val pois by viewModel.pois.collectAsState()
-    val showFireplaces by viewModel.showFireplaces.collectAsState()
+    val showAccommodation by viewModel.showAccommodation.collectAsState()
+    val showRest by viewModel.showRest.collectAsState()
     val showShelters by viewModel.showShelters.collectAsState()
+    val showFireplaces by viewModel.showFireplaces.collectAsState()
+    val showViewpoints by viewModel.showViewpoints.collectAsState()
+    val showParking by viewModel.showParking.collectAsState()
+    val showEducation by viewModel.showEducation.collectAsState()
     val showOthers by viewModel.showOthers.collectAsState()
     val showForestBans by viewModel.showForestBans.collectAsState()
     val forestBans by viewModel.forestBans.collectAsState()
+    val savedPoints by viewModel.savedPoints.collectAsState()
+    val showOwnPoints by viewModel.showOwnPoints.collectAsState()
+    val latestSavedPointList by rememberUpdatedState(savedPoints)
+    val latestShowOwnPoints by rememberUpdatedState(showOwnPoints)
+    val pendingPoint by viewModel.pendingPoint.collectAsState()
+    val showLayersOverlay by viewModel.showLayersOverlay.collectAsState()
+    val focusSavedPoint by viewModel.focusSavedPoint.collectAsState()
 
     val rememberedMapView = remember {
         try {
@@ -119,13 +134,10 @@ fun MapViewContainer(
     var banGeoJson by remember { mutableStateOf<String?>(null) }
     var lastAppliedPois by remember { mutableStateOf<List<Poi>?>(null) }
 
-    LaunchedEffect(rememberedMapView, isActive, uiState) {
+    LaunchedEffect(rememberedMapView, isActive, uiState, mapboxMapInstance) {
+        if (hasCenteredOnStartup) return@LaunchedEffect
         val map = mapboxMapInstance ?: return@LaunchedEffect
-        if (!isActive || hasCenteredOnStartup) return@LaunchedEffect
-        if (mapViewModel.savedMapCenterLat != null) {
-            hasCenteredOnStartup = true
-            return@LaunchedEffect
-        }
+        if (!isActive) return@LaunchedEffect
         val state = uiState
         if (state is MainUiState.Success) {
             val lat = state.latitude
@@ -133,7 +145,7 @@ fun MapViewContainer(
             if (lat != null && lon != null) {
                 map.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(lat, lon))
-                    .zoom(15.0)
+                    .zoom(MapStyle.DEFAULT_ZOOM)
                     .build()
                 hasCenteredOnStartup = true
             }
@@ -187,16 +199,7 @@ fun MapViewContainer(
         }
     }
 
-    val filteredPois = remember(pois, showFireplaces, showShelters, showOthers) {
-        pois.filter { poi ->
-            val cat = poi.classify()
-            when (cat) {
-                PoiCategory.SHELTER -> showShelters
-                PoiCategory.FIREPLACE -> showFireplaces
-                PoiCategory.OTHER -> showOthers
-            }
-        }
-    }
+    val filteredPois = pois
 
     LaunchedEffect(zones) {
         if (zones.isEmpty()) return@LaunchedEffect
@@ -358,25 +361,11 @@ fun MapViewContainer(
                                 map.cameraPosition?.zoom?.let { currentZoom = it.toFloat() }
                             }
 
-                            val savedLat = mapViewModel.savedMapCenterLat
-                            val savedLng = mapViewModel.savedMapCenterLng
-                            val savedZoom = mapViewModel.savedMapZoom
-
-                            map.cameraPosition = CameraPosition.Builder()
-                                .target(
-                                    LatLng(
-                                        savedLat ?: MapStyle.DEFAULT_LAT,
-                                        savedLng ?: MapStyle.DEFAULT_LNG
-                                    )
-                                )
-                                .zoom(savedZoom ?: MapStyle.DEFAULT_ZOOM)
-                                .build()
-
                             map.setStyle(Style.Builder().fromJson(MapStyle.OSM_STYLE_JSON)) { style ->
                                 styleInstance = style
 
                                 val ps = GeoJsonSource("poi-source").apply {
-                                    setGeoJson(buildPoiGeoJson(filteredPois))
+                                    setGeoJson(MapGeoJson.poisToGeoJson(filteredPois))
                                 }
                                 poiSource = ps
                                 style.addSource(ps)
@@ -384,24 +373,32 @@ fun MapViewContainer(
                                     CircleLayer("poi-layer", "poi-source").withProperties(
                                         PropertyFactory.circleColor(
                                             Expression.match(
-                                                Expression.get("category"),
+                                                Expression.get("categoryKey"),
                                                 Expression.literal("#1976D2"),
-                                                Expression.stop("SHELTER", Expression.literal("#4E342E")),
-                                                Expression.stop("FIREPLACE", Expression.literal("#E65100"))
+                                                Expression.stop("noclegi", Expression.literal("#1B5E20")),
+                                                Expression.stop("wypoczynek", Expression.literal("#558B2F")),
+                                                Expression.stop("wiaty", Expression.literal("#4E342E")),
+                                                Expression.stop("ogniska", Expression.literal("#E65100")),
+                                                Expression.stop("widoki", Expression.literal("#0097A7")),
+                                                Expression.stop("parkingi", Expression.literal("#5D4037")),
+                                                Expression.stop("edukacja", Expression.literal("#7B1FA2")),
+                                                Expression.stop("inne", Expression.literal("#1976D2"))
                                             )
                                         ),
                                         PropertyFactory.circleRadius(
                                             Expression.step(
                                                 Expression.zoom(),
-                                                Expression.literal(2f),
-                                                Expression.literal(11.0),
                                                 Expression.literal(3f),
-                                                Expression.literal(12.5),
-                                                Expression.literal(5f),
+                                                Expression.literal(7.0),
+                                                Expression.literal(4f),
+                                                Expression.literal(9.0),
+                                                Expression.literal(5.5f),
+                                                Expression.literal(11.0),
+                                                Expression.literal(7f),
+                                                Expression.literal(13.0),
+                                                Expression.literal(11f),
                                                 Expression.literal(14.0),
-                                                Expression.literal(8f),
-                                                Expression.literal(16.0),
-                                                Expression.literal(12f)
+                                                Expression.literal(7f)
                                             )
                                         ),
                                         PropertyFactory.circleStrokeWidth(1.5f),
@@ -415,8 +412,57 @@ fun MapViewContainer(
                                 banSource = bs
                                 style.addSource(bs)
 
+                                val op = GeoJsonSource("own-points-source").apply {
+                                    setGeoJson(MapGeoJson.savedPointsToGeoJson(savedPoints))
+                                }
+                                style.addSource(op)
+                                style.addLayer(
+                                    CircleLayer("own-points-layer", "own-points-source").withProperties(
+                                        PropertyFactory.circleColor("#E91E63"),
+                                        PropertyFactory.circleRadius(7f),
+                                        PropertyFactory.circleStrokeWidth(1.5f),
+                                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                                        PropertyFactory.circleOpacity(0.9f)
+                                    )
+                                )
+
+                                val pm = GeoJsonSource("pending-marker-source").apply { setGeoJson("""{"type":"FeatureCollection","features":[]}""") }
+                                style.addSource(pm)
+                                style.addLayer(
+                                    CircleLayer("pending-marker-layer", "pending-marker-source").withProperties(
+                                        PropertyFactory.circleColor("#E91E63"),
+                                        PropertyFactory.circleRadius(4f),
+                                        PropertyFactory.circleStrokeWidth(4f),
+                                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                                        PropertyFactory.circleOpacity(0.9f)
+                                    )
+                                )
+
+                                map.addOnMapLongClickListener { latlng ->
+                                    viewModel.onLongPressPoint(latlng.latitude, latlng.longitude)
+                                    true
+                                }
+
                                 map.addOnMapClickListener { point ->
                                     val clickedPoint = geometryCache.createPoint(point.longitude, point.latitude)
+
+                                    if (latestShowOwnPoints && latestSavedPointList.isNotEmpty()) {
+                                        val screenPoint = map.projection.toScreenLocation(point)
+                                        val hitOwnFeatures = map.queryRenderedFeatures(
+                                            android.graphics.RectF(
+                                                screenPoint.x - 24f, screenPoint.y - 24f,
+                                                screenPoint.x + 24f, screenPoint.y + 24f
+                                            ),
+                                            "own-points-layer"
+                                        )
+                                        val hitOwnId = hitOwnFeatures.firstOrNull()
+                                            ?.properties()?.get("id")?.asLong
+                                        val ownPoint = latestSavedPointList.firstOrNull { it.id == hitOwnId }
+                                        if (ownPoint != null) {
+                                            viewModel.openSavedPointProperties(ownPoint)
+                                            return@addOnMapClickListener true
+                                        }
+                                    }
 
                                     val hitZoneId = geometryCache.findZoneIdAt(clickedPoint)
                                     if (hitZoneId != null) {
@@ -477,13 +523,7 @@ fun MapViewContainer(
                         }
                     }
                 },
-                modifier = Modifier.fillMaxSize(),
-                onRelease = { mapView ->
-                    mapboxMapInstance?.let { map ->
-                        val pos = map.cameraPosition
-                        mapViewModel.saveMapState(pos.target?.latitude, pos.target?.longitude, pos.zoom)
-                    }
-                }
+                modifier = Modifier.fillMaxSize()
             )
 
             LaunchedEffect(filteredPois, poiSource) {
@@ -496,7 +536,7 @@ fun MapViewContainer(
                     }
                 } else {
                     if (lastAppliedPois === filteredPois) return@LaunchedEffect
-                    val json = withContext(Dispatchers.Default) { buildPoiGeoJson(filteredPois) }
+                    val json = withContext(Dispatchers.Default) { MapGeoJson.poisToGeoJson(filteredPois) }
                     src.setGeoJson(json)
                     lastAppliedPois = filteredPois
                     if (style.getLayer("poi-layer") == null) {
@@ -504,24 +544,31 @@ fun MapViewContainer(
                             CircleLayer("poi-layer", "poi-source").withProperties(
                                 PropertyFactory.circleColor(
                                     Expression.match(
-                                        Expression.get("category"),
+                                        Expression.get("categoryKey"),
                                         Expression.literal("#1976D2"),
-                                        Expression.stop("SHELTER", Expression.literal("#4E342E")),
-                                        Expression.stop("FIREPLACE", Expression.literal("#E65100"))
+                                        Expression.stop("noclegi", Expression.literal("#1B5E20")),
+                                        Expression.stop("wiaty", Expression.literal("#4E342E")),
+                                        Expression.stop("ogniska", Expression.literal("#E65100")),
+                                        Expression.stop("widoki", Expression.literal("#0097A7")),
+                                        Expression.stop("parkingi", Expression.literal("#5D4037")),
+                                        Expression.stop("edukacja", Expression.literal("#7B1FA2")),
+                                        Expression.stop("inne", Expression.literal("#1976D2"))
                                     )
                                 ),
                                 PropertyFactory.circleRadius(
                                     Expression.step(
                                         Expression.zoom(),
-                                        Expression.literal(2f),
-                                        Expression.literal(11.0),
                                         Expression.literal(3f),
-                                        Expression.literal(12.5),
-                                        Expression.literal(5f),
+                                        Expression.literal(7.0),
+                                        Expression.literal(4f),
+                                        Expression.literal(9.0),
+                                        Expression.literal(5.5f),
+                                        Expression.literal(11.0),
+                                        Expression.literal(7f),
+                                        Expression.literal(13.0),
+                                        Expression.literal(11f),
                                         Expression.literal(14.0),
-                                        Expression.literal(8f),
-                                        Expression.literal(16.0),
-                                        Expression.literal(12f)
+                                        Expression.literal(7f)
                                     )
                                 ),
                                 PropertyFactory.circleStrokeWidth(1.5f),
@@ -532,6 +579,34 @@ fun MapViewContainer(
                         )
                     }
                 }
+            }
+
+            LaunchedEffect(savedPoints, showOwnPoints, styleInstance) {
+                val style = styleInstance ?: return@LaunchedEffect
+                if (style.getSource("own-points-source") == null) return@LaunchedEffect
+                (style.getSource("own-points-source") as GeoJsonSource)
+                    .setGeoJson(
+                        if (showOwnPoints) MapGeoJson.savedPointsToGeoJson(savedPoints)
+                        else """{"type":"FeatureCollection","features":[]}"""
+                    )
+            }
+
+            LaunchedEffect(pendingPoint, styleInstance) {
+                val style = styleInstance ?: return@LaunchedEffect
+                if (style.getSource("pending-marker-source") == null) return@LaunchedEffect
+                val json = pendingPoint?.let {
+                    buildPendingMarkerGeoJson(it.lat, it.lng)
+                } ?: """{"type":"FeatureCollection","features":[]}"""
+                (style.getSource("pending-marker-source") as GeoJsonSource).setGeoJson(json)
+            }
+
+            LaunchedEffect(focusSavedPoint, mapboxMapInstance) {
+                val focus = focusSavedPoint ?: return@LaunchedEffect
+                val map = mapboxMapInstance ?: return@LaunchedEffect
+                map.cameraPosition = CameraPosition.Builder()
+                    .target(LatLng(focus.latitude, focus.longitude))
+                    .zoom(15.0)
+                    .build()
             }
 
             Box(
@@ -613,8 +688,8 @@ fun MapViewContainer(
                                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Ustawienia mapy"
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "Menu mapy"
                                 )
                             }
                             DropdownMenu(
@@ -629,86 +704,54 @@ fun MapViewContainer(
                                     modifier = Modifier.padding(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Text(
-                                        text = "Ustawienia Mapy",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    Button(
+                                        onClick = {
+                                            isSettingsOpen = false
+                                            viewModel.openSavedPointList()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Bookmark,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Zapisane punkty",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
 
-                                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
-
-                                    Text(
-                                        text = "Wyświetlaj na mapie:",
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-
-                                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showForestBans,
-                                                onCheckedChange = { viewModel.setShowForestBans(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.error)
-                                            )
-                                            Text(
-                                                text = "Zakazy wstępu do lasu",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showShelters,
-                                                onCheckedChange = { viewModel.setShowShelters(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Text(
-                                                text = "Wiaty i wiatopodobne",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showFireplaces,
-                                                onCheckedChange = { viewModel.setShowFireplaces(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Text(
-                                                text = "Miejsca na ognisko",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showOthers,
-                                                onCheckedChange = { viewModel.setShowOthers(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Text(
-                                                text = "Inne punkty",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
+                                    Button(
+                                        onClick = {
+                                            isSettingsOpen = false
+                                            viewModel.openLayersOverlay()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Layers,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Wyświetlanie na mapie",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
                                     }
 
                                     HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
@@ -874,13 +917,42 @@ fun MapViewContainer(
                     )
                 }
             }
+
+            if (showLayersOverlay) {
+                MapLayersOverlay(
+                    showOwnPoints = showOwnPoints,
+                    showForestBans = showForestBans,
+                    showAccommodation = showAccommodation,
+                    showRest = showRest,
+                    showShelters = showShelters,
+                    showFireplaces = showFireplaces,
+                    showViewpoints = showViewpoints,
+                    showParking = showParking,
+                    showEducation = showEducation,
+                    showOthers = showOthers,
+                    onShowOwnPointsChange = viewModel::setShowOwnPoints,
+                    onShowForestBansChange = viewModel::setShowForestBans,
+                    onShowAccommodationChange = viewModel::setShowAccommodation,
+                    onShowRestChange = viewModel::setShowRest,
+                    onShowSheltersChange = viewModel::setShowShelters,
+                    onShowFireplacesChange = viewModel::setShowFireplaces,
+                    onShowViewpointsChange = viewModel::setShowViewpoints,
+                    onShowParkingChange = viewModel::setShowParking,
+                    onShowEducationChange = viewModel::setShowEducation,
+                    onShowOthersChange = viewModel::setShowOthers,
+                    onClose = viewModel::closeLayersOverlay
+                )
+            }
         }
     }
 }
 
+private fun buildPendingMarkerGeoJson(lat: Double, lng: Double): String {
+    return """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[$lng,$lat]}}]}"""
+}
+
 @Composable
-private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
-    Canvas(modifier = modifier) {
+private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.White) {    Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
         val path = Path().apply {

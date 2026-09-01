@@ -12,6 +12,26 @@ struct MapRegion {
     let lonEast: Double
 }
 
+/// A map coordinate awaiting the user's confirmation to save it. Filled by a
+/// long-press on the map or a `zwl://point` deep link (Android parity).
+struct PendingPoint: Identifiable {
+    enum Source: Equatable {
+        case longPress
+        case link
+        case paste
+    }
+
+    let id = UUID()
+    let source: Source
+    var name: String
+    let latitude: Double
+    let longitude: Double
+    // Zone status computed offline via the shared SpatialEngine (Android
+    // parity): nil until the async lookup finishes.
+    var status: LocationStatus?
+    var ban: ForestBan?
+}
+
 @MainActor
 final class MainViewModel: NSObject, ObservableObject {
 
@@ -44,11 +64,35 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var showShelters: Bool = true {
         didSet { UserDefaults.standard.set(showShelters, forKey: Self.keyShowShelters) }
     }
+    @Published var showRest: Bool = true {
+        didSet { UserDefaults.standard.set(showRest, forKey: Self.keyShowRest) }
+    }
     @Published var showFireplaces: Bool = true {
         didSet { UserDefaults.standard.set(showFireplaces, forKey: Self.keyShowFireplaces) }
     }
     @Published var showOthers: Bool = true {
         didSet { UserDefaults.standard.set(showOthers, forKey: Self.keyShowOthers) }
+    }
+    @Published var showAccommodation: Bool = true {
+        didSet { UserDefaults.standard.set(showAccommodation, forKey: Self.keyShowAccommodation) }
+    }
+    @Published var showViewpoints: Bool = true {
+        didSet { UserDefaults.standard.set(showViewpoints, forKey: Self.keyShowViewpoints) }
+    }
+    @Published var showParking: Bool = true {
+        didSet { UserDefaults.standard.set(showParking, forKey: Self.keyShowParking) }
+    }
+    @Published var showEducation: Bool = true {
+        didSet { UserDefaults.standard.set(showEducation, forKey: Self.keyShowEducation) }
+    }
+
+    /// Whether the map follows the user's live location (`MLNMapView`
+    /// `userTrackingMode == .follow`). Owned here (not MainView's @AppStorage)
+    /// so selecting a saved point can drop follow and keep the camera on the
+    /// point (Android parity: the camera doesn't snap back to the user). The
+    /// user can re-enable it with the settings-panel toggle.
+    @Published var followsUser: Bool = true {
+        didSet { UserDefaults.standard.set(followsUser, forKey: Self.keyFollowsUser) }
     }
 
     // Selections
@@ -57,9 +101,29 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var selectedPoi: Poi?
     @Published var selectedPoiDistanceMeters: Double?
 
-    // User location
-    @Published var userLatitude: Double?
-    @Published var userLongitude: Double?
+    // Saved points (Android parity: magenta markers, long-press to save,
+    // shared via `zwl://point` deep links).
+    @Published var savedPoints: [SavedPoint] = []
+    @Published var savedPointsGeoJson: String = ""
+    @Published var pendingPoint: PendingPoint?
+    @Published var showSavedPointList = false
+    @Published var selectedSavedPoint: SavedPoint?
+    // Layer-visible toggles (Android parity). showOwnPoints resets to true on
+    // launch like Android; the POI/ban toggles above persist.
+    @Published var showOwnPoints = true
+    @Published var showLayersOverlay = false
+    // Increment to ask the map to center on a saved point (zoom 15).
+    @Published var centerSavedPointSignal: Int = 0
+    private(set) var centerSavedPointLatitude: Double?
+    private(set) var centerSavedPointLongitude: Double?
+
+    // User location. Published as ONE coordinate pair per GPS fix instead of
+    // separate lat/lon: every @Published write re-evaluates MainView's body,
+    // so two writes per ~1Hz fix doubled the SwiftUI churn that trips the
+    // iPad CPU watchdog. Coordinates are degenerate only between fixes.
+    @Published var userCoordinate: CLLocationCoordinate2D?
+    var userLatitude: Double? { userCoordinate?.latitude }
+    var userLongitude: Double? { userCoordinate?.longitude }
     // Not `@Published`: it's written on every pan/zoom frame via
     // regionDidChange, so publishing would force a SwiftUI re-render (and an
     // updateUIView) per frame and make map scrolling stutter.
@@ -81,12 +145,6 @@ final class MainViewModel: NSObject, ObservableObject {
     // Fire risk
     @Published var fireRiskLevel: Int = -1
 
-    // Debug / QA overrides. `debugUiEnabled` gates all diagnostics UI
-    // (status-tab flip, menu diagnostics toggles, map overlay). Kept `false`
-    // for the release candidate; flip back to `true` when QA needs them again.
-    var debugUiEnabled: Bool { false }
-    @Published var debugInvertZone = false
-
     // Zone detail sheet state (distance + fire risk + stove rule + BDL forest
     // stand card — Android parity).
     @Published var selectedZoneDistanceMeters: Double?
@@ -94,10 +152,6 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var isLoadingZoneFireRisk = false
     @Published var selectedZoneForestStand: ForestStandSummary?
     @Published var isLoadingZoneForestStand = false
-
-    // Live map diagnostics (overlay shown while the map overlays are being
-    // debugged on device; remove once rendering is confirmed).
-    @Published var mapDiagnostics: String = ""
 
     // Offline download
     @Published var isDownloading = false
@@ -115,8 +169,14 @@ final class MainViewModel: NSObject, ObservableObject {
     private let pathMonitor = NWPathMonitor()
     private static let keyShowBans = "mapSettings.showBans"
     private static let keyShowShelters = "mapSettings.showShelters"
+    private static let keyShowRest = "mapSettings.showRest"
     private static let keyShowFireplaces = "mapSettings.showFireplaces"
     private static let keyShowOthers = "mapSettings.showOthers"
+    private static let keyShowAccommodation = "mapSettings.showAccommodation"
+    private static let keyShowViewpoints = "mapSettings.showViewpoints"
+    private static let keyShowParking = "mapSettings.showParking"
+    private static let keyShowEducation = "mapSettings.showEducation"
+    private static let keyFollowsUser = "settings.followsUser"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
     // re-renders the map on the main thread (the iPad-class bottleneck), so
@@ -131,8 +191,14 @@ final class MainViewModel: NSObject, ObservableObject {
         let defaults = UserDefaults.standard
         showBans = defaults.object(forKey: Self.keyShowBans) as? Bool ?? true
         showShelters = defaults.object(forKey: Self.keyShowShelters) as? Bool ?? true
+        showRest = defaults.object(forKey: Self.keyShowRest) as? Bool ?? true
         showFireplaces = defaults.object(forKey: Self.keyShowFireplaces) as? Bool ?? true
         showOthers = defaults.object(forKey: Self.keyShowOthers) as? Bool ?? true
+        showAccommodation = defaults.object(forKey: Self.keyShowAccommodation) as? Bool ?? true
+        showViewpoints = defaults.object(forKey: Self.keyShowViewpoints) as? Bool ?? true
+        showParking = defaults.object(forKey: Self.keyShowParking) as? Bool ?? true
+        showEducation = defaults.object(forKey: Self.keyShowEducation) as? Bool ?? true
+        followsUser = defaults.object(forKey: Self.keyFollowsUser) as? Bool ?? true
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor [weak self] in
@@ -214,20 +280,28 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func computeLocationStatus() async {
         guard let lat = userLatitude, let lon = userLongitude else {
-            activeForestBan = nil
+            if activeForestBan != nil { activeForestBan = nil }
             return
         }
         guard let newStatus = try? await app.checkLocation(latitude: lat, longitude: lon) else { return }
-        activeForestBan = try? await app.checkForestBan(latitude: lat, longitude: lon)
+        let newBan = try? await app.checkForestBan(latitude: lat, longitude: lon)
         let district = (newStatus as? LocationStatusInZone)?.forestDistrict
         if district != lastInZoneDistrict {
             lastInZoneDistrict = district
-            fireRiskLevel = -1
+            if fireRiskLevel != -1 { fireRiskLevel = -1 }
             if district != nil {
                 Task { await self.refreshFireRiskIfNeeded() }
             }
         }
-        locationStatus = newStatus
+        // Only publish when the value actually changed (each @Published write
+        // re-evaluates the whole MainView body; on a stationary fix this used
+        // to republish 3 identical values ~1Hz).
+        if !Self.locationStatusEquals(newStatus, locationStatus) {
+            locationStatus = newStatus
+        }
+        if !Self.forestBanEquals(newBan, activeForestBan) {
+            activeForestBan = newBan
+        }
     }
 
     func refreshFireRiskIfNeeded() async {
@@ -238,6 +312,40 @@ final class MainViewModel: NSObject, ObservableObject {
             fireRiskLevel = try await app.getFireRisk(latitude: lat, longitude: lon).intValue
         } catch {
             fireRiskLevel = -1
+        }
+    }
+
+    /// Structural equality for the bridged `LocationStatus`: SKIE/Kotlin data
+    /// classes don't conform to Swift `Equatable`, so compare the fields that
+    /// drive the UI. Used to skip redundant `@Published` writes on stationary
+    /// GPS fixes (each write re-evaluates the whole MainView body).
+    private static func locationStatusEquals(_ a: LocationStatus?, _ b: LocationStatus?) -> Bool {
+        switch (a, b) {
+        case (nil, nil):
+            return true
+        case let (aIn as LocationStatusInZone, bIn as LocationStatusInZone):
+            return aIn.forestDistrict == bIn.forestDistrict
+        case let (aOut as LocationStatusOutsideZone, bOut as LocationStatusOutsideZone):
+            return aOut.nearestDistrict == bOut.nearestDistrict
+                && aOut.distanceMeters == bOut.distanceMeters
+                && aOut.bearingDegrees == bOut.bearingDegrees
+        case (is LocationStatusEmptyData, is LocationStatusEmptyData):
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// The ban is compared by its stable remote id (a bare `==` is unavailable
+    /// on the bridged Kotlin class).
+    private static func forestBanEquals(_ a: ForestBan?, _ b: ForestBan?) -> Bool {
+        switch (a, b) {
+        case (nil, nil):
+            return true
+        case let (aBan?, bBan?):
+            return aBan.remoteId == bBan.remoteId
+        default:
+            return false
         }
     }
 
@@ -410,9 +518,140 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedPoiDistanceMeters = nil
     }
 
+    // MARK: - Saved points
+
+    /// Handles an incoming `zwl://point?lat=..&lng=..[&name=..]` deep link
+    /// (custom URL scheme; Android intent-filter parity).
+    func openPointFromLink(_ url: URL) {
+        guard url.scheme?.lowercased() == "zwl", url.host?.lowercased() == "point" else { return }
+        guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        let lat = comps.queryItems?.first(where: { $0.name == "lat" }).flatMap { Double($0.value ?? "") }
+        let lng = comps.queryItems?.first(where: { $0.name == "lng" }).flatMap { Double($0.value ?? "") }
+        guard let lat = lat, let lng = lng else { return }
+        let name = comps.queryItems?.first(where: { $0.name == "name" })?.value ?? ""
+        openPointFromLink(latitude: lat, longitude: lng, name: name)
+    }
+
+    func onLongPressPoint(latitude: Double, longitude: Double) {
+        setPendingPoint(latitude: latitude, longitude: longitude, name: "", source: .longPress)
+    }
+
+    func openPointFromLink(latitude: Double, longitude: Double, name: String?) {
+        setPendingPoint(latitude: latitude, longitude: longitude, name: name ?? "", source: .link)
+    }
+
+    /// Pasted coordinates (Android `openPointFromPaste` parity).
+    func openPointFromPaste(latitude: Double, longitude: Double) {
+        setPendingPoint(latitude: latitude, longitude: longitude, name: "", source: .paste)
+    }
+
+    /// Fills the pending-point card and asynchronously computes its zone status
+    /// / forest ban off the shared spatial engine (Android parity). These
+    /// events are rare (a tap / link), so no `@Published` throttling needed —
+    /// but the Kotlin callbacks still hop through `Task { @MainActor }`.
+    private func setPendingPoint(latitude: Double, longitude: Double, name: String, source: PendingPoint.Source) {
+        pendingPoint = PendingPoint(source: source, name: name, latitude: latitude, longitude: longitude)
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let status = try? await self.app.checkLocation(latitude: latitude, longitude: longitude)
+            let ban = try? await self.app.checkForestBan(latitude: latitude, longitude: longitude)
+            self.pendingPoint?.status = status
+            self.pendingPoint?.ban = ban
+        }
+    }
+
+    func savePendingPoint(name: String) {
+        guard var point = pendingPoint else { return }
+        point.name = name
+        pendingPoint = point
+        let trimmed = name.isEmpty ? "Zapisany punkt" : name
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            _ = try? await self.app.savePoint(name: trimmed, latitude: point.latitude, longitude: point.longitude)
+            self.pendingPoint = nil
+            await self.loadSavedPointData()
+        }
+    }
+
+    func clearPendingPoint() {
+        pendingPoint = nil
+    }
+
+    func loadSavedPointData() async {
+        let points = (try? await app.savedPoints()).map { Array($0) } ?? []
+        savedPoints = points
+        savedPointsGeoJson = (try? await app.savedPointsGeoJson()) ?? ""
+    }
+
+    func openSavedPointList() {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            await self.loadSavedPointData()
+            self.showSavedPointList = true
+        }
+    }
+
+    func closeSavedPointList() {
+        showSavedPointList = false
+    }
+
+    func openLayersOverlay() {
+        showLayersOverlay = true
+    }
+
+    func closeLayersOverlay() {
+        showLayersOverlay = false
+    }
+
+    /// Short tap on a list row: center the camera on the point (map stays
+    /// visible under the closed list). Also drops follow-the-user so the
+    /// camera stays parked on the chosen point instead of snapping back on the
+    /// next GPS fix (Android parity: it doesn't follow). Re-enable follow via
+    /// the settings toggle or a fresh app kill.
+    func selectSavedPoint(_ point: SavedPoint) {
+        centerSavedPointLatitude = point.latitude
+        centerSavedPointLongitude = point.longitude
+        centerSavedPointSignal += 1
+        followsUser = false
+    }
+
+    func openSavedPointProperties(_ point: SavedPoint) {
+        selectedSavedPoint = point
+    }
+
+    func openSavedPointProperties(id: Int64) {
+        guard let point = savedPoints.first(where: { $0.id == id }) else { return }
+        openSavedPointProperties(point)
+    }
+
+    func clearSavedPointProperties() {
+        selectedSavedPoint = nil
+    }
+
+    func renameSavedPoint(_ point: SavedPoint, to name: String) {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            _ = try? await self.app.renameSavedPoint(id: point.id, name: name)
+            await self.loadSavedPointData()
+        }
+    }
+
+    func deleteSavedPoint(_ point: SavedPoint) {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            _ = try? await self.app.deleteSavedPoint(id: point.id)
+            self.selectedSavedPoint = nil
+            await self.loadSavedPointData()
+        }
+    }
+
     // MARK: - Offline download
 
     func recenterMap() {
+        // "My location" re-enables follow-the-user (e.g. after it was dropped
+        // to keep the camera parked on a selected saved point) and centers on
+        // the current fix.
+        followsUser = true
         guard userLatitude != nil else {
             // Android shows a toast here ("Oczekiwanie na sygnał GPS...");
             // render a transient pill and hide it after ~2.5s.
@@ -536,39 +775,11 @@ final class MainViewModel: NSObject, ObservableObject {
 
     // MARK: - Helpers
 
-    /// Debug/QA flipping of the zone classification shown in the Status tab
-    /// (real GPS data is untouched; fire risk / bans are kept as-is).
-    func toggleDebugInvertZone() {
-        debugInvertZone.toggle()
-    }
-
-    var displayStatus: LocationStatus? {
-        guard debugInvertZone else { return locationStatus }
-        switch locationStatus {
-        case let inZone as LocationStatusInZone:
-            return LocationStatusOutsideZone(
-                nearestDistrict: inZone.forestDistrict,
-                distanceMeters: 8500.0,
-                bearingDegrees: 0.0
-            )
-        case let outside as LocationStatusOutsideZone:
-            return LocationStatusInZone(forestDistrict: outside.nearestDistrict)
-        default:
-            return locationStatus
-        }
-    }
-
-    /// Status as shown to the user (respects the debug invert toggle).
-    var displayInZone: LocationStatusInZone? { displayStatus as? LocationStatusInZone }
-    var displayOutsideZone: LocationStatusOutsideZone? { displayStatus as? LocationStatusOutsideZone }
+    /// Status as shown to the user.
+    var displayInZone: LocationStatusInZone? { locationStatus as? LocationStatusInZone }
+    var displayOutsideZone: LocationStatusOutsideZone? { locationStatus as? LocationStatusOutsideZone }
 
     var currentInZone: LocationStatusInZone? { locationStatus as? LocationStatusInZone }
-    var currentOutsideZone: LocationStatusOutsideZone? { locationStatus as? LocationStatusOutsideZone }
-
-    /// True when we have no usable fix yet (GPS locating screen).
-    var isLocationEmpty: Bool {
-        locationStatus == nil || locationStatus is LocationStatusEmptyData
-    }
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -592,10 +803,13 @@ extension MainViewModel: CLLocationManagerDelegate {
             if distance < 5, elapsed < 2 { return }
         }
         lastPublishedLocation = loc
-        userLatitude = loc.coordinate.latitude
-        userLongitude = loc.coordinate.longitude
+        userCoordinate = loc.coordinate
         Task { await self.computeLocationStatus() }
-        Task { await self.refreshFireRiskIfNeeded() }
+        // Refresh the fire risk only while it's unresolved: each fix used to
+        // spawn a redundant Task that immediately returned.
+        if fireRiskLevel < 0 {
+            Task { await self.refreshFireRiskIfNeeded() }
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {

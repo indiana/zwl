@@ -40,12 +40,20 @@ class SyncPoiUseCaseTest {
     }
 
     @Test
-    fun `invoke should fetch all 4 layers and insert features into database`() = runTest {
+    fun `invoke should fetch all 5 layers and insert features into database`() = runTest {
         // Arrange
-        val layers = listOf(1, 2, 3, 4)
+        val layers = listOf(0, 1, 2, 3, 4)
         for (layerId in layers) {
-            val codeField = if (layerId == 4) "tur_edu_pnt_cd" else "tur_rec_pnt_cd"
-            val outFields = if (layerId == 4) "tur_edu_pnt_cd,tur_obj_desc,nzw_ob" else "tur_rec_pnt_cd,tur_obj_desc,nzw_ob"
+            val codeField = when (layerId) {
+                0 -> "tur_sleep_pnt_cd"
+                4 -> "tur_edu_pnt_cd"
+                else -> "tur_rec_pnt_cd"
+            }
+            val outFields = when (layerId) {
+                0 -> "tur_sleep_pnt_cd,tur_obj_desc,nzw_ob"
+                4 -> "tur_edu_pnt_cd,tur_obj_desc,nzw_ob"
+                else -> "tur_rec_pnt_cd,tur_obj_desc,nzw_ob"
+            }
 
             val mockResponse = GeoJsonCollection(
                 type = "FeatureCollection",

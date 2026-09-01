@@ -5,18 +5,22 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.repository.PoiRepository
+import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.Poi
+import com.indiana.zwl.domain.model.SavedPoint
+import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
-import com.indiana.zwl.domain.util.PoiCategory
+import com.indiana.zwl.domain.util.PoiUiGroup
 import com.indiana.zwl.domain.util.classify
+import com.indiana.zwl.domain.util.uiGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
@@ -29,6 +33,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onStart
@@ -55,10 +60,22 @@ data class SelectedPoiDetails(
     val distanceMeters: Double?
 )
 
+enum class PointSource { LINK, LONG_PRESS, PASTE }
+
+data class PendingPoint(
+    val lat: Double,
+    val lng: Double,
+    val name: String?,
+    val source: PointSource,
+    val status: LocationStatus? = null,
+    val ban: ForestBan? = null
+)
+
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val zoneRepository: ZoneRepository,
     private val poiRepository: PoiRepository,
+    private val savedPointRepository: SavedPointRepository,
     private val locationRepository: LocationRepository,
     private val compassRepository: CompassRepository,
     private val syncZonesUseCase: SyncZonesUseCase,
@@ -136,47 +153,150 @@ class MainViewModel @Inject constructor(
         sharedPrefs.edit().putBoolean("show_forest_bans", show).apply()
     }
 
-    private val _showFireplaces = MutableStateFlow(sharedPrefs.getBoolean("show_fireplaces", true))
-    val showFireplaces: StateFlow<Boolean> = _showFireplaces
+    private val _showPoiGroups = MutableStateFlow(
+        PoiUiGroup.entries.associateWith { sharedPrefs.getBoolean("show_poi_${it.key}", true) }
+    )
+    val showPoiGroups: StateFlow<Map<PoiUiGroup, Boolean>> = _showPoiGroups.asStateFlow()
 
-    private val _showShelters = MutableStateFlow(sharedPrefs.getBoolean("show_shelters", true))
-    val showShelters: StateFlow<Boolean> = _showShelters
+    fun setShowPoiGroup(group: PoiUiGroup, show: Boolean) {
+        _showPoiGroups.value = _showPoiGroups.value + (group to show)
+        sharedPrefs.edit().putBoolean("show_poi_${group.key}", show).apply()
+    }
 
-    private val _showOthers = MutableStateFlow(sharedPrefs.getBoolean("show_others", true))
-    val showOthers: StateFlow<Boolean> = _showOthers
+    val showAccommodation: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.ACCOMMODATION] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showRest: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.REST] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showShelters: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.SHELTER] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showFireplaces: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.FIREPLACE] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showViewpoints: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.VIEWPOINT] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showParking: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.PARKING] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showEducation: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.EDUCATION] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showOthers: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.OTHER] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val pois: StateFlow<List<Poi>> = combine(
         poiRepository.getAllPois(),
-        _showFireplaces,
-        _showShelters,
-        _showOthers
-    ) { allPois, showFireplaces, showShelters, showOthers ->
-        allPois.filter { poi ->
-            when (poi.classify()) {
-                PoiCategory.SHELTER -> showShelters
-                PoiCategory.FIREPLACE -> showFireplaces
-                PoiCategory.OTHER -> showOthers
-            }
-        }
+        _showPoiGroups
+    ) { allPois, showGroups ->
+        allPois.filter { poi -> showGroups[poi.classify().uiGroup()] == true }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
 
-    fun setShowFireplaces(show: Boolean) {
-        _showFireplaces.value = show
-        sharedPrefs.edit().putBoolean("show_fireplaces", show).apply()
+    fun setShowAccommodation(show: Boolean) = setShowPoiGroup(PoiUiGroup.ACCOMMODATION, show)
+    fun setShowRest(show: Boolean) = setShowPoiGroup(PoiUiGroup.REST, show)
+    fun setShowShelters(show: Boolean) = setShowPoiGroup(PoiUiGroup.SHELTER, show)
+    fun setShowFireplaces(show: Boolean) = setShowPoiGroup(PoiUiGroup.FIREPLACE, show)
+    fun setShowViewpoints(show: Boolean) = setShowPoiGroup(PoiUiGroup.VIEWPOINT, show)
+    fun setShowParking(show: Boolean) = setShowPoiGroup(PoiUiGroup.PARKING, show)
+    fun setShowEducation(show: Boolean) = setShowPoiGroup(PoiUiGroup.EDUCATION, show)
+    fun setShowOthers(show: Boolean) = setShowPoiGroup(PoiUiGroup.OTHER, show)
+
+    val savedPoints: StateFlow<List<SavedPoint>> = savedPointRepository.getAllPoints().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    private val _showOwnPoints = MutableStateFlow(true)
+    val showOwnPoints: StateFlow<Boolean> = _showOwnPoints.asStateFlow()
+
+    fun setShowOwnPoints(visible: Boolean) {
+        _showOwnPoints.value = visible
     }
 
-    fun setShowShelters(show: Boolean) {
-        _showShelters.value = show
-        sharedPrefs.edit().putBoolean("show_shelters", show).apply()
+    private val _showLayersOverlay = MutableStateFlow(false)
+    val showLayersOverlay: StateFlow<Boolean> = _showLayersOverlay.asStateFlow()
+
+    fun openLayersOverlay() {
+        _showLayersOverlay.value = true
     }
 
-    fun setShowOthers(show: Boolean) {
-        _showOthers.value = show
-        sharedPrefs.edit().putBoolean("show_others", show).apply()
+    fun closeLayersOverlay() {
+        _showLayersOverlay.value = false
+    }
+
+    private val _pendingPoint = MutableStateFlow<PendingPoint?>(null)
+    val pendingPoint: StateFlow<PendingPoint?> = _pendingPoint.asStateFlow()
+
+    private val _focusSavedPoint = MutableStateFlow<SavedPoint?>(null)
+    val focusSavedPoint: StateFlow<SavedPoint?> = _focusSavedPoint.asStateFlow()
+
+    private val _selectedSavedPointInfo = MutableStateFlow<SavedPoint?>(null)
+    val selectedSavedPointInfo: StateFlow<SavedPoint?> = _selectedSavedPointInfo.asStateFlow()
+
+    private val _showSavedPointList = MutableStateFlow(false)
+    val showSavedPointList: StateFlow<Boolean> = _showSavedPointList.asStateFlow()
+
+    fun openSavedPointList() {
+        _showSavedPointList.value = true
+    }
+
+    fun closeSavedPointList() {
+        _showSavedPointList.value = false
+    }
+
+    fun onLongPressPoint(lat: Double, lng: Double) {
+        setPendingPoint(PendingPoint(lat = lat, lng = lng, name = null, source = PointSource.LONG_PRESS))
+    }
+
+    fun openPointFromLink(lat: Double, lng: Double, name: String?) {
+        setPendingPoint(PendingPoint(lat = lat, lng = lng, name = name, source = PointSource.LINK))
+    }
+
+    fun openPointFromPaste(lat: Double, lng: Double) {
+        setPendingPoint(PendingPoint(lat = lat, lng = lng, name = null, source = PointSource.PASTE))
+    }
+
+    private fun setPendingPoint(point: PendingPoint) {
+        _pendingPoint.value = point
+        viewModelScope.launch(Dispatchers.Default) {
+            val status = spatialEngine.checkLocation(point.lat, point.lng)
+            val ban = spatialEngine.checkForestBan(point.lat, point.lng)
+            _pendingPoint.value = point.copy(status = status, ban = ban)
+        }
+    }
+
+    fun clearPendingPoint() {
+        _pendingPoint.value = null
+    }
+
+    fun savePendingPoint(name: String) {
+        val point = _pendingPoint.value ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            savedPointRepository.insert(NewSavedPoint(name = name, latitude = point.lat, longitude = point.lng))
+            _pendingPoint.value = null
+        }
+    }
+
+    fun renameSavedPoint(id: Long, name: String) {
+        _selectedSavedPointInfo.value = _selectedSavedPointInfo.value?.takeIf { it.id == id }?.copy(name = name)
+        viewModelScope.launch(Dispatchers.IO) {
+            savedPointRepository.rename(id, name)
+        }
+    }
+
+    fun deleteSavedPoint(id: Long) {
+        _selectedSavedPointInfo.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            savedPointRepository.delete(id)
+        }
+    }
+
+    fun selectSavedPoint(point: SavedPoint) {
+        _focusSavedPoint.value = point
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(100)
+            _focusSavedPoint.value = null
+        }
+    }
+
+    fun openSavedPointProperties(point: SavedPoint) {
+        _selectedSavedPointInfo.value = point
+    }
+
+    fun clearSavedPointProperties() {
+        _selectedSavedPointInfo.value = null
     }
 
     private val _debugError = MutableStateFlow<String?>(null)

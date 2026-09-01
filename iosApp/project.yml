@@ -37,6 +37,10 @@ targets:
         CFBundleDisplayName: "Legalny Bushcraft"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleURLTypes:
+          - CFBundleURLName: com.indiana.zwl.iosApp.point
+            CFBundleURLSchemes:
+              - zwl
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
@@ -62,7 +66,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.indiana.zwl.iosApp
         PRODUCT_NAME: ZWL
         MARKETING_VERSION: "1.1"
-        CURRENT_PROJECT_VERSION: "37"
+        CURRENT_PROJECT_VERSION: "46"
         FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
         OTHER_LDFLAGS: "$(inherited) -framework shared -lsqlite3"
         SWIFT_VERSION: "5.0"

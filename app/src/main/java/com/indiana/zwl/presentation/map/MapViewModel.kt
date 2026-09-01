@@ -37,19 +37,6 @@ class MapViewModel @Inject constructor(
     )
     val downloadEvent = _downloadEvent.asSharedFlow()
 
-    var savedMapCenterLat: Double? = null
-        private set
-    var savedMapCenterLng: Double? = null
-        private set
-    var savedMapZoom: Double? = null
-        private set
-
-    fun saveMapState(lat: Double?, lng: Double?, zoom: Double?) {
-        if (lat != null) savedMapCenterLat = lat
-        if (lng != null) savedMapCenterLng = lng
-        if (zoom != null) savedMapZoom = zoom
-    }
-
     fun downloadMapArea(
         latSouth: Double, latNorth: Double,
         lonWest: Double, lonEast: Double,

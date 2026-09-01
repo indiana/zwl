@@ -30,7 +30,7 @@ struct PoiDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(poi.name.isEmpty ? "Obiekt rekreacyjny" : poi.name)
                     .font(.system(size: 18, weight: .bold))
-                Text(poi.classify().displayName())
+                Text(poi.displayGroupName())
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }
