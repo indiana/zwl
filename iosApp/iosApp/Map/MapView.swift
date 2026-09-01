@@ -1195,9 +1195,9 @@ struct MapView: UIViewRepresentable {
             }
         }
 
-        private static func shape(fromGeoJson json: String) -> MGLShape? {
+        private static func shape(fromGeoJson json: String) -> MLNShape? {
             guard !json.isEmpty, let data = json.data(using: .utf8),
-                  let shape = try? MGLShape(data: data, encoding: String.Encoding.utf8.rawValue) else {
+                  let shape = try? MLNShape(data: data, encoding: String.Encoding.utf8.rawValue) else {
                 return nil
             }
             return shape
