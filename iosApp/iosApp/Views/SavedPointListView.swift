@@ -48,12 +48,6 @@ struct SavedPointListView: View {
                     }
                 }
             }
-            .sheet(isPresented: isPropertiesPresented) {
-                if let point = viewModel.selectedSavedPoint {
-                    SavedPointPropertiesView(point: point, viewModel: viewModel)
-                        .presentationDetents([.medium])
-                }
-            }
             .alert("Otwórz punkt ze współrzędnych", isPresented: $isPastePromptPresented) {
                 TextField("Szerokość, Długość", text: $pasteInput)
                 Button("Otwórz punkt") {
@@ -74,13 +68,6 @@ struct SavedPointListView: View {
                      : "Wklej współrzędne, np. 52.123456, 21.123456.")
             }
         }
-    }
-
-    /// Properties sheet appears above the list (nested-sheet pattern) so the
-    /// list stays open underneath — mirror of Android's overlay stack.
-    private var isPropertiesPresented: Binding<Bool> {
-        Binding(get: { viewModel.selectedSavedPoint != nil },
-                set: { if !$0 { viewModel.clearSavedPointProperties() } })
     }
 
     private func row(for point: SavedPoint) -> some View {

@@ -86,6 +86,15 @@ final class MainViewModel: NSObject, ObservableObject {
         didSet { UserDefaults.standard.set(showEducation, forKey: Self.keyShowEducation) }
     }
 
+    /// Whether the map follows the user's live location (`MLNMapView`
+    /// `userTrackingMode == .follow`). Owned here (not MainView's @AppStorage)
+    /// so selecting a saved point can drop follow and keep the camera on the
+    /// point (Android parity: the camera doesn't snap back to the user). The
+    /// user can re-enable it with the settings-panel toggle.
+    @Published var followsUser: Bool = true {
+        didSet { UserDefaults.standard.set(followsUser, forKey: Self.keyFollowsUser) }
+    }
+
     // Selections
     @Published var selectedZone: Zone?
     @Published var selectedBan: ForestBan?
@@ -177,6 +186,7 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyShowViewpoints = "mapSettings.showViewpoints"
     private static let keyShowParking = "mapSettings.showParking"
     private static let keyShowEducation = "mapSettings.showEducation"
+    private static let keyFollowsUser = "settings.followsUser"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
     // re-renders the map on the main thread (the iPad-class bottleneck), so
@@ -198,6 +208,7 @@ final class MainViewModel: NSObject, ObservableObject {
         showViewpoints = defaults.object(forKey: Self.keyShowViewpoints) as? Bool ?? true
         showParking = defaults.object(forKey: Self.keyShowParking) as? Bool ?? true
         showEducation = defaults.object(forKey: Self.keyShowEducation) as? Bool ?? true
+        followsUser = defaults.object(forKey: Self.keyFollowsUser) as? Bool ?? true
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor [weak self] in
@@ -603,11 +614,15 @@ final class MainViewModel: NSObject, ObservableObject {
     }
 
     /// Short tap on a list row: center the camera on the point (map stays
-    /// visible under the closed list).
+    /// visible under the closed list). Also drops follow-the-user so the
+    /// camera stays parked on the chosen point instead of snapping back on the
+    /// next GPS fix (Android parity: it doesn't follow). Re-enable follow via
+    /// the settings toggle or a fresh app kill.
     func selectSavedPoint(_ point: SavedPoint) {
         centerSavedPointLatitude = point.latitude
         centerSavedPointLongitude = point.longitude
         centerSavedPointSignal += 1
+        followsUser = false
     }
 
     func openSavedPointProperties(_ point: SavedPoint) {

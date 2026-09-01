@@ -13,7 +13,8 @@ struct MainView: View {
     @AppStorage("settings.vectorOverlay") private var vectorOverlay = true
     @AppStorage("settings.baseEnabled") private var baseEnabled = true
     @AppStorage("settings.showUserDot") private var showUserDot = true
-    @AppStorage("settings.followsUser") private var followsUser = true
+    // followsUser lives on the view model now (selecting a saved point turns
+    // it off so the camera stays on the point); the toggle below binds to it.
     @AppStorage("settings.showHeading") private var showHeading = true
     // Dismisses the end-of-download card (bug: it used to stay on screen
     // forever once the download finished/failed).
@@ -89,6 +90,12 @@ struct MainView: View {
         .sheet(isPresented: isSavedPointListPresented) {
             SavedPointListView(viewModel: viewModel)
                 .presentationDetents([.large])
+        }
+        .sheet(isPresented: isSavedPointPropertiesPresented) {
+            if let point = viewModel.selectedSavedPoint {
+                SavedPointPropertiesView(point: point, viewModel: viewModel)
+                    .presentationDetents([.medium])
+            }
         }
         .sheet(isPresented: isLayersSettingsPresented) {
             LayersSettingsView(viewModel: viewModel)
@@ -225,7 +232,7 @@ struct MainView: View {
             vectorOverlay: vectorOverlay,
             baseEnabled: baseEnabled,
             isOffline: viewModel.isOffline,
-            followsUser: followsUser,
+            followsUser: viewModel.followsUser,
             showHeading: showHeading,
             showUserDot: showUserDot,
             userLatitude: viewModel.userLatitude,
@@ -351,7 +358,7 @@ recenterSignal: viewModel.recenterSignal,
                 // on every GPS tick, and the heading arrow rotates on every
                 // magnetometer event — both force main-thread re-renders and are
                 // prime suspects for the UI freezes.
-                Toggle("Podążaj za lokalizacją (diagnoza)", isOn: $followsUser)
+                Toggle("Podążaj za lokalizacją (diagnoza)", isOn: $viewModel.followsUser)
                 Toggle("Strzałka kierunku (diagnoza)", isOn: $showHeading)
 
                 // Diagnostics: the native MapLibre location dot re-renders the map
@@ -450,6 +457,15 @@ recenterSignal: viewModel.recenterSignal,
     private var isSavedPointListPresented: Binding<Bool> {
         Binding(get: { viewModel.showSavedPointList },
                 set: { if !$0 { viewModel.closeSavedPointList() } })
+    }
+
+    /// Dedicated sheet for a saved point's properties opened from a map tap
+    /// (Android `PointDetailCard` parity). Without it the properties view only
+    /// nested inside `SavedPointListView`, so a tap on the map set
+    /// `selectedSavedPoint` but nothing ever appeared on screen.
+    private var isSavedPointPropertiesPresented: Binding<Bool> {
+        Binding(get: { viewModel.selectedSavedPoint != nil },
+                set: { if !$0 { viewModel.clearSavedPointProperties() } })
     }
 
     /// GeoJSON for the magenta temporary marker of the pending point.
