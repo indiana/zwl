@@ -2,6 +2,7 @@ package com.indiana.zwl.shared.ios
 
 import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.repository.PoiRepository
+import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
@@ -31,6 +32,7 @@ object IosAppBootstrap {
             zoneRepository = koin.get<ZoneRepository>(),
             poiRepository = koin.get<PoiRepository>(),
             forestBanRepository = koin.get<ForestBanRepository>(),
+            savedPointRepository = koin.get<SavedPointRepository>(),
             arcgisApi = koin.get<BdlArcgisApi>(),
             fireApi = koin.get<BdlFireApi>(),
             offlineStore = koin.get<MbtilesStore>(),

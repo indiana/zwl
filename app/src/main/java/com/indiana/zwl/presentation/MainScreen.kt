@@ -1,6 +1,7 @@
 package com.indiana.zwl.presentation
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,6 +35,10 @@ import com.indiana.zwl.presentation.theme.ErrorRedText
 import com.indiana.zwl.presentation.theme.ErrorRedButton
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.indiana.zwl.presentation.map.MapViewContainer
+import com.indiana.zwl.presentation.map.PointDetailCard
+import com.indiana.zwl.presentation.map.SavedPointListOverlay
+import com.indiana.zwl.presentation.map.SavedPointPropertiesCard
+import com.indiana.zwl.domain.model.SavedPoint
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Map
@@ -221,6 +226,10 @@ fun MainScreen(
         is MainUiState.Success -> {
             val selectedZoneDetails by zoneDetailViewModel.selectedZoneDetails.collectAsStateWithLifecycle()
             val selectedForestBan by viewModel.selectedForestBan.collectAsStateWithLifecycle()
+            val pendingPoint by viewModel.pendingPoint.collectAsStateWithLifecycle()
+            val savedPoints by viewModel.savedPoints.collectAsStateWithLifecycle()
+            val showSavedPointList by viewModel.showSavedPointList.collectAsStateWithLifecycle()
+            val selectedSavedPointInfo by viewModel.selectedSavedPointInfo.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
 
             val isDebug = BuildConfig.DEBUG
@@ -407,9 +416,73 @@ fun MainScreen(
                                 } else null
                             )
                         }
+
+                        pendingPoint?.let { point ->
+                            PointDetailCard(
+                                point = point,
+                                onSave = { name -> viewModel.savePendingPoint(name) },
+                                onShare = { sharePoint(context, point.lat, point.lng, null) },
+                                onClose = { viewModel.clearPendingPoint() },
+                                modifier = Modifier.align(Alignment.BottomCenter)
+                            )
+                        }
+
+                        if (showSavedPointList) {
+                            SavedPointListOverlay(
+                                points = savedPoints,
+                                onClose = { viewModel.closeSavedPointList() },
+                                onSelect = { point ->
+                                    viewModel.selectSavedPoint(point)
+                                    viewModel.closeSavedPointList()
+                                },
+                                onOpenProperties = { point ->
+                                    viewModel.openSavedPointProperties(point)
+                                    viewModel.closeSavedPointList()
+                                },
+                                onPasteCoordinates = { lat, lng ->
+                                    viewModel.openPointFromPaste(lat, lng)
+                                    viewModel.closeSavedPointList()
+                                }
+                            )
+                        }
+
+                        selectedSavedPointInfo?.let { point ->
+                            SavedPointPropertiesCard(
+                                point = point,
+                                onRename = { name -> viewModel.renameSavedPoint(point.id, name) },
+                                onShare = { shareSavedPoint(context, point) },
+                                onDelete = {
+                                    viewModel.deleteSavedPoint(point.id)
+                                },
+                                onClose = { viewModel.clearSavedPointProperties() },
+                                modifier = Modifier.align(Alignment.BottomCenter)
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+private fun shareSavedPoint(context: android.content.Context, point: SavedPoint) {
+    sharePoint(context, point.latitude, point.longitude, point.name)
+}
+
+private fun sharePoint(context: android.content.Context, lat: Double, lng: Double, name: String?) {
+    val coords = String.format(java.util.Locale.US, "%.6f, %.6f", lat, lng)
+    val text = buildString {
+        append("Legalny Bushcraft — punkt")
+        if (name != null && name.isNotBlank()) append(": $name")
+        appendLine()
+        append(coords)
+        appendLine()
+        appendLine("Możesz wkleić te współrzędne w aplikacji, aby otworzyć punkt.")
+    }
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, name ?: "Punkt — Legalny Bushcraft")
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(sendIntent, "Podziel się punktem"))
 }

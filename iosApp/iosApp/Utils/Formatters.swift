@@ -103,4 +103,19 @@ enum Formatters {
         let idx = Int((degrees + 22.5) / 45.0) % directions.count
         return directions[idx]
     }
+
+    /// Coordinate text for saved/pending points (Android `PointDetailCard`
+    /// parity — `%.6f` via US locale).
+    static func coordinateText(latitude: Double, longitude: Double) -> String {
+        String(format: "%.6f", latitude) + ", " + String(format: "%.6f", longitude)
+    }
+
+    /// Distance text used in status summaries (Android `formatDistance`
+    /// parity: whole meters below 100 m, otherwise km with one decimal).
+    static func approximateDistanceText(_ meters: Double) -> String {
+        if meters < 100.0 {
+            return "\(Int(meters)) m"
+        }
+        return String(format: "%.1f km", meters / 1000.0)
+    }
 }

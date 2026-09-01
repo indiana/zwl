@@ -4,10 +4,13 @@ import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.ForestStandSummary
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.model.Poi
+import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.repository.PoiRepository
+import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.util.BdlInfo
@@ -39,6 +42,7 @@ class ForestApp(
     private val zoneRepository: ZoneRepository,
     private val poiRepository: PoiRepository,
     private val forestBanRepository: ForestBanRepository,
+    private val savedPointRepository: SavedPointRepository,
     private val arcgisApi: BdlArcgisApi,
     private val fireApi: BdlFireApi,
     private val offlineStore: MbtilesStore,
@@ -227,6 +231,27 @@ class ForestApp(
 
     suspend fun poisGeoJson(): String =
         withContext(Dispatchers.Default) { MapGeoJson.poisToGeoJson(cachedPois) }
+
+    suspend fun savedPoints(): List<SavedPoint> =
+        withContext(Dispatchers.Default) { savedPointRepository.getAllPoints().first() }
+
+    suspend fun savePoint(name: String, latitude: Double, longitude: Double): Long =
+        withContext(Dispatchers.Default) {
+            savedPointRepository.insert(NewSavedPoint(name, latitude, longitude))
+        }
+
+    suspend fun renameSavedPoint(id: Long, name: String) = withContext(Dispatchers.Default) {
+        savedPointRepository.rename(id, name)
+    }
+
+    suspend fun deleteSavedPoint(id: Long) = withContext(Dispatchers.Default) {
+        savedPointRepository.delete(id)
+    }
+
+    suspend fun savedPointsGeoJson(): String =
+        withContext(Dispatchers.Default) {
+            MapGeoJson.savedPointsToGeoJson(savedPointRepository.getAllPoints().first())
+        }
 
     fun cachedZones(): List<Zone> = cachedZones
 

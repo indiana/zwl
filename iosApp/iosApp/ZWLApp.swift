@@ -15,6 +15,9 @@ struct ZWLApp: App {
         WindowGroup {
             MainView(viewModel: viewModel)
                 .preferredColorScheme(.dark)
+                .onOpenURL { url in
+                    viewModel.openPointFromLink(url)
+                }
         }
     }
 }

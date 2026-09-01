@@ -2,6 +2,7 @@ package com.indiana.zwl.shared.map
 
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Poi
+import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.domain.util.uiGroup
@@ -77,6 +78,25 @@ object MapGeoJson {
                     put("description", poi.description)
                     put("code", poi.code)
                     put("categoryKey", poi.classify().uiGroup().key)
+                }
+            )
+        }
+        return collection(features)
+    }
+
+    fun savedPointsToGeoJson(points: List<SavedPoint>): String {
+        val features = points.map { point ->
+            feature(
+                geometry = GeoJsonGeometry(
+                    type = "Point",
+                    coordinates = buildJsonArray {
+                        add(JsonPrimitive(point.longitude))
+                        add(JsonPrimitive(point.latitude))
+                    }
+                ),
+                properties = buildJsonObject {
+                    put("id", point.id)
+                    put("name", point.name)
                 }
             )
         }

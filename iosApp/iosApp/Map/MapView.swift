@@ -26,12 +26,19 @@ struct MapView: UIViewRepresentable {
     let userLatitude: Double?
     let userLongitude: Double?
     let recenterSignal: Int
+    let savedPointsJson: String
+    let pendingMarkerJson: String
+    let centerSavedPointLatitude: Double?
+    let centerSavedPointLongitude: Double?
+    let centerSavedPointSignal: Int
     let onTapZone: (String?) -> Void
     let onTapBan: (Int64) -> Void
     let onTapPoi: (String) -> Void
+    let onTapSavedPoint: (Int64) -> Void
     let onTapBackground: () -> Void
     let onVisibleRegionChange: (MapRegion) -> Void
     let onDiagnostics: (String) -> Void
+    let onLongPressPoint: (Double, Double) -> Void
 
     func makeCoordinator() -> Coordinator {
         let coordinator = Coordinator(self)
@@ -77,6 +84,14 @@ struct MapView: UIViewRepresentable {
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         map.addGestureRecognizer(tap)
 
+        // Long-press to set the pending saved-point card (Android
+        // `onMapLongClickListener` parity). MapLibre short-taps and long-presses
+        // fire independently, so the existing tap handling is untouched.
+        let longPress = UILongPressGestureRecognizer(target: context.coordinator,
+                                                     action: #selector(Coordinator.handleLongPress(_:)))
+        longPress.minimumPressDuration = 0.5
+        map.addGestureRecognizer(longPress)
+
         context.coordinator.scheduleStyleProbe()
         return map
     }
@@ -104,13 +119,22 @@ struct MapView: UIViewRepresentable {
         coordinator.onTapZone = onTapZone
         coordinator.onTapBan = onTapBan
         coordinator.onTapPoi = onTapPoi
+        coordinator.onTapSavedPoint = onTapSavedPoint
         coordinator.onTapBackground = onTapBackground
         coordinator.onVisibleRegionChange = onVisibleRegionChange
         coordinator.onDiagnostics = onDiagnostics
+        coordinator.savedPointsJson = savedPointsJson
+        coordinator.pendingMarkerJson = pendingMarkerJson
+        coordinator.centerSavedPointLatitude = centerSavedPointLatitude
+        coordinator.centerSavedPointLongitude = centerSavedPointLongitude
+        coordinator.centerSavedPointSignal = centerSavedPointSignal
+        coordinator.onLongPressPoint = onLongPressPoint
         coordinator.applySourcesIfReady()
         coordinator.handleCentering(userLatitude: userLatitude,
                                     userLongitude: userLongitude,
                                     recenterSignal: recenterSignal)
+        coordinator.applySavedPointLayersIfNeeded()
+        coordinator.handleSavedPointCentering()
     }
 
     // MARK: - Coordinator
@@ -183,9 +207,19 @@ struct MapView: UIViewRepresentable {
         var onTapZone: ((String?) -> Void) = { _ in }
         var onTapBan: (Int64) -> Void = { _ in }
         var onTapPoi: (String) -> Void = { _ in }
+        var onTapSavedPoint: (Int64) -> Void = { _ in }
         var onTapBackground: () -> Void = {}
         var onVisibleRegionChange: (MapRegion) -> Void = { _ in }
         var onDiagnostics: (String) -> Void = { _ in }
+        var savedPointsJson = ""
+        var pendingMarkerJson = ""
+        var centerSavedPointLatitude: Double?
+        var centerSavedPointLongitude: Double?
+        var centerSavedPointSignal = 0
+        var onLongPressPoint: (Double, Double) -> Void = { _, _ in }
+
+        private var lastSavedPointCenterSignal = 0
+        private var lastSavedPointLayerSignature = ""
 
         private var styleLoaded = false
         private var styleFinishCount = 0
@@ -248,6 +282,14 @@ struct MapView: UIViewRepresentable {
         private let shelterRasterId = "poi-shelter-raster-layer"
         private let fireplaceRasterId = "poi-fireplace-raster-layer"
         private let otherRasterId = "poi-other-raster-layer"
+
+        // Saved-point markers (Android own-points magenta parity) — always-on
+        // circle layers fed from the shared `savedPointsToGeoJson`.
+        private let ownPointsSourceId = "own-points-source"
+        private let ownPointsLayerId = "own-points-layer"
+        private let pendingMarkerSourceId = "pending-marker-source"
+        private let pendingMarkerLayerId = "pending-marker-layer"
+        private static let ownPointColor = UIColor(red: 233.0 / 255.0, green: 30.0 / 255.0, blue: 99.0 / 255.0, alpha: 1.0)
 
         // Vector overlay ids (pre-raster pipeline). Sources are URL-backed so
         // MapLibre tiles them on its worker threads.
@@ -335,6 +377,7 @@ struct MapView: UIViewRepresentable {
             tStyle = Date().timeIntervalSince(startTimestamp)
             installRasterIfCatalogReady()
             applySourcesIfReady()
+            applySavedPointLayersIfNeeded()
             stopStyleProbe()
             publishDiagnostics()
         }
@@ -587,6 +630,8 @@ struct MapView: UIViewRepresentable {
                 }
             }
             refreshLayerVisibility()
+            // Keep the magenta markers above the overlay after a re-install.
+            restackSavedPointLayers(style)
         }
 
         private func removeLayerIfPresent(_ id: String, style: MLNStyle) {
@@ -715,6 +760,8 @@ struct MapView: UIViewRepresentable {
             if tOverlay == nil {
                 tOverlay = Date().timeIntervalSince(startTimestamp)
             }
+            // Keep the magenta markers above the overlay after a re-install.
+            restackSavedPointLayers(style)
         }
 
         private func banFillColor(_ visible: Bool) -> UIColor {
@@ -1098,7 +1145,89 @@ struct MapView: UIViewRepresentable {
             )
         }
 
+        // MARK: Saved-point layers + centering
+
+        /// Installs/refreshes the own-points + pending-marker circle layers
+        /// whenever their GeoJSON content changes. Cheap length-based gate so
+        /// regular `updateUIView` re-runs stay free.
+        func applySavedPointLayersIfNeeded() {
+            guard styleLoaded, let style = mapView?.style else { return }
+            let signature = "\(savedPointsJson.count)|\(pendingMarkerJson.count)"
+            guard signature != lastSavedPointLayerSignature else { return }
+            lastSavedPointLayerSignature = signature
+            installSavedPointLayers(style)
+        }
+
+        /// Unconditionally restacks the saved-point layers on top — used after
+        /// the raster/vector overlay pipeline (re)installs so the magenta
+        /// markers never end up underneath it.
+        private func restackSavedPointLayers(_ style: MLNStyle) {
+            installSavedPointLayers(style)
+        }
+
+        private func installSavedPointLayers(_ style: MLNStyle) {
+            removeLayerIfPresent(ownPointsLayerId, style: style)
+            removeSourceIfPresent(ownPointsSourceId, style: style)
+            removeLayerIfPresent(pendingMarkerLayerId, style: style)
+            removeSourceIfPresent(pendingMarkerSourceId, style: style)
+
+            if let shape = Self.shape(fromGeoJson: savedPointsJson) {
+                let source = MLNShapeSource(identifier: ownPointsSourceId, shape: shape, options: nil)
+                style.addSource(source)
+                let layer = MLNCircleStyleLayer(identifier: ownPointsLayerId, source: source)
+                layer.circleColor = NSExpression(forConstantValue: Self.ownPointColor)
+                layer.circleRadius = NSExpression(forConstantValue: 7.0)
+                layer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+                layer.circleStrokeWidth = NSExpression(forConstantValue: 2.0)
+                style.addLayer(layer)
+            }
+
+            if let markerShape = Self.shape(fromGeoJson: pendingMarkerJson) {
+                let source = MLNShapeSource(identifier: pendingMarkerSourceId, shape: markerShape, options: nil)
+                style.addSource(source)
+                let layer = MLNCircleStyleLayer(identifier: pendingMarkerLayerId, source: source)
+                layer.circleColor = NSExpression(forConstantValue: Self.ownPointColor)
+                layer.circleRadius = NSExpression(forConstantValue: 4.0)
+                layer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+                layer.circleStrokeWidth = NSExpression(forConstantValue: 4.0)
+                layer.circleOpacity = NSExpression(forConstantValue: 0.9)
+                style.addLayer(layer)
+            }
+        }
+
+        private static func shape(fromGeoJson json: String) -> MGLShape? {
+            guard !json.isEmpty, let data = json.data(using: .utf8),
+                  let shape = try? MGLShape(data: data, encoding: String.Encoding.utf8.rawValue) else {
+                return nil
+            }
+            return shape
+        }
+
+        /// Centers the camera on a saved point (zoom 15) when the list signals
+        /// one via `centerSavedPointSignal` (Android `focusSavedPoint` parity).
+        func handleSavedPointCentering() {
+            guard centerSavedPointSignal != lastSavedPointCenterSignal,
+                  let lat = centerSavedPointLatitude,
+                  let lon = centerSavedPointLongitude,
+                  let mapView = mapView else { return }
+            lastSavedPointCenterSignal = centerSavedPointSignal
+            mapView.userTrackingMode = .none
+            mapView.setCenter(CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                              zoomLevel: 15.0,
+                              animated: true)
+            mapView.userTrackingMode = followsUser ? .follow : .none
+        }
+
         // MARK: Tap handling
+
+        /// Long-press on the map opens the pending saved-point card (Android
+        /// `onMapLongClickListener` parity). Only the first `.began` phase fires.
+        @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began, let mapView = mapView else { return }
+            let point = gesture.location(in: mapView)
+            let coord = mapView.convert(point, toCoordinateFrom: mapView)
+            onLongPressPoint(coord.latitude, coord.longitude)
+        }
 
         /// Vector overlays hit-test natively through `visibleFeatures`; the raster
         /// overlay hits against the retained catalog (nearest POI first, then
@@ -1110,6 +1239,20 @@ struct MapView: UIViewRepresentable {
             }
             let point = gesture.location(in: mapView)
             let tapRect = CGRect(x: point.x - 30, y: point.y - 30, width: 60, height: 60)
+
+            // Own saved points are always a vector circle layer, so hit-test
+            // them first regardless of base/overlay mode (Android parity: a tap
+            // on a saved point opens its properties).
+            if !savedPointsJson.isEmpty {
+                let own = mapView.visibleFeatures(in: tapRect,
+                                                  styleLayerIdentifiers: [ownPointsLayerId])
+                if let feature = own.first,
+                   let id = (feature.attribute(forKey: "id") as? NSNumber)?.int64Value {
+                    onTapSavedPoint(id)
+                    return
+                }
+            }
+
             if vectorOverlay {
                 handleVectorTap(mapView, tapRect)
                 return

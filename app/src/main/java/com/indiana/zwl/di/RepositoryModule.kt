@@ -2,6 +2,7 @@ package com.indiana.zwl.di
 
 import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.repository.PoiRepository
+import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import dagger.Module
 import dagger.Provides
@@ -30,5 +31,11 @@ object RepositoryModule {
     @Singleton
     fun provideForestBanRepository(): ForestBanRepository {
         return get(ForestBanRepository::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideSavedPointRepository(): SavedPointRepository {
+        return get(SavedPointRepository::class.java)
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.presentation.MainUiState
 import com.indiana.zwl.presentation.MainViewModel
 import com.indiana.zwl.presentation.ZoneDetailViewModel
@@ -29,6 +30,7 @@ import com.indiana.zwl.presentation.DownloadEvent
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.presentation.theme.ZwlTheme
 import com.indiana.zwl.shared.map.MapStyle
+import com.indiana.zwl.shared.map.MapGeoJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -72,10 +74,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Layers
 
 @Composable
 fun MapViewContainer(
@@ -101,6 +105,13 @@ fun MapViewContainer(
     val showOthers by viewModel.showOthers.collectAsState()
     val showForestBans by viewModel.showForestBans.collectAsState()
     val forestBans by viewModel.forestBans.collectAsState()
+    val savedPoints by viewModel.savedPoints.collectAsState()
+    val showOwnPoints by viewModel.showOwnPoints.collectAsState()
+    val latestSavedPointList by rememberUpdatedState(savedPoints)
+    val latestShowOwnPoints by rememberUpdatedState(showOwnPoints)
+    val pendingPoint by viewModel.pendingPoint.collectAsState()
+    val showLayersOverlay by viewModel.showLayersOverlay.collectAsState()
+    val focusSavedPoint by viewModel.focusSavedPoint.collectAsState()
 
     val rememberedMapView = remember {
         MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true))
@@ -396,8 +407,57 @@ fun MapViewContainer(
                                 banSource = bs
                                 style.addSource(bs)
 
+                                val op = GeoJsonSource("own-points-source").apply {
+                                    setGeoJson(MapGeoJson.savedPointsToGeoJson(savedPoints))
+                                }
+                                style.addSource(op)
+                                style.addLayer(
+                                    CircleLayer("own-points-layer", "own-points-source").withProperties(
+                                        PropertyFactory.circleColor("#E91E63"),
+                                        PropertyFactory.circleRadius(7f),
+                                        PropertyFactory.circleStrokeWidth(1.5f),
+                                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                                        PropertyFactory.circleOpacity(0.9f)
+                                    )
+                                )
+
+                                val pm = GeoJsonSource("pending-marker-source").apply { setGeoJson("""{"type":"FeatureCollection","features":[]}""") }
+                                style.addSource(pm)
+                                style.addLayer(
+                                    CircleLayer("pending-marker-layer", "pending-marker-source").withProperties(
+                                        PropertyFactory.circleColor("#E91E63"),
+                                        PropertyFactory.circleRadius(4f),
+                                        PropertyFactory.circleStrokeWidth(4f),
+                                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                                        PropertyFactory.circleOpacity(0.9f)
+                                    )
+                                )
+
+                                map.addOnMapLongClickListener { latlng ->
+                                    viewModel.onLongPressPoint(latlng.latitude, latlng.longitude)
+                                    true
+                                }
+
                                 map.addOnMapClickListener { point ->
                                     val clickedPoint = geometryCache.createPoint(point.longitude, point.latitude)
+
+                                    if (latestShowOwnPoints && latestSavedPointList.isNotEmpty()) {
+                                        val screenPoint = map.projection.toScreenLocation(point)
+                                        val hitOwnFeatures = map.queryRenderedFeatures(
+                                            android.graphics.RectF(
+                                                screenPoint.x - 24f, screenPoint.y - 24f,
+                                                screenPoint.x + 24f, screenPoint.y + 24f
+                                            ),
+                                            "own-points-layer"
+                                        )
+                                        val hitOwnId = hitOwnFeatures.firstOrNull()
+                                            ?.properties()?.get("id")?.asLong
+                                        val ownPoint = latestSavedPointList.firstOrNull { it.id == hitOwnId }
+                                        if (ownPoint != null) {
+                                            viewModel.openSavedPointProperties(ownPoint)
+                                            return@addOnMapClickListener true
+                                        }
+                                    }
 
                                     val hitZoneId = geometryCache.findZoneIdAt(clickedPoint)
                                     if (hitZoneId != null) {
@@ -522,6 +582,34 @@ fun MapViewContainer(
                 }
             }
 
+            LaunchedEffect(savedPoints, showOwnPoints, styleInstance) {
+                val style = styleInstance ?: return@LaunchedEffect
+                if (style.getSource("own-points-source") == null) return@LaunchedEffect
+                (style.getSource("own-points-source") as GeoJsonSource)
+                    .setGeoJson(
+                        if (showOwnPoints) MapGeoJson.savedPointsToGeoJson(savedPoints)
+                        else """{"type":"FeatureCollection","features":[]}"""
+                    )
+            }
+
+            LaunchedEffect(pendingPoint, styleInstance) {
+                val style = styleInstance ?: return@LaunchedEffect
+                if (style.getSource("pending-marker-source") == null) return@LaunchedEffect
+                val json = pendingPoint?.let {
+                    buildPendingMarkerGeoJson(it.lat, it.lng)
+                } ?: """{"type":"FeatureCollection","features":[]}"""
+                (style.getSource("pending-marker-source") as GeoJsonSource).setGeoJson(json)
+            }
+
+            LaunchedEffect(focusSavedPoint, mapboxMapInstance) {
+                val focus = focusSavedPoint ?: return@LaunchedEffect
+                val map = mapboxMapInstance ?: return@LaunchedEffect
+                map.cameraPosition = CameraPosition.Builder()
+                    .target(LatLng(focus.latitude, focus.longitude))
+                    .zoom(15.0)
+                    .build()
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -601,8 +689,8 @@ fun MapViewContainer(
                                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Ustawienia mapy"
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "Menu mapy"
                                 )
                             }
                             DropdownMenu(
@@ -617,220 +705,54 @@ fun MapViewContainer(
                                     modifier = Modifier.padding(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Text(
-                                        text = "Ustawienia Mapy",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    Button(
+                                        onClick = {
+                                            isSettingsOpen = false
+                                            viewModel.openSavedPointList()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Bookmark,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Zapisane punkty",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
 
-                                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
-
-                                    Text(
-                                        text = "Wyświetlaj na mapie:",
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-
-                                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showForestBans,
-                                                onCheckedChange = { viewModel.setShowForestBans(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.error)
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .padding(horizontal = 4.dp)
-                                                    .background(MaterialTheme.colorScheme.error, CircleShape)
-                                            )
-                                            Text(
-                                                text = "Zakazy wstępu do lasu",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showAccommodation,
-                                                onCheckedChange = { viewModel.setShowAccommodation(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .padding(horizontal = 4.dp)
-                                                    .background(Color(0xFF1B5E20), CircleShape)
-                                            )
-                                            Text(
-                                                text = "Noclegi i biwakowanie",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showRest,
-                                                onCheckedChange = { viewModel.setShowRest(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .padding(horizontal = 4.dp)
-                                                    .background(Color(0xFF558B2F), CircleShape)
-                                            )
-                                            Text(
-                                                text = "Miejsca wypoczynku",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showShelters,
-                                                onCheckedChange = { viewModel.setShowShelters(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .padding(horizontal = 4.dp)
-                                                    .background(Color(0xFF4E342E), CircleShape)
-                                            )
-                                            Text(
-                                                text = "Wiaty i schronienia",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showFireplaces,
-                                                onCheckedChange = { viewModel.setShowFireplaces(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .padding(horizontal = 4.dp)
-                                                    .background(Color(0xFFE65100), CircleShape)
-                                            )
-                                            Text(
-                                                text = "Miejsca na ognisko",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showViewpoints,
-                                                onCheckedChange = { viewModel.setShowViewpoints(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .padding(horizontal = 4.dp)
-                                                    .background(Color(0xFF0097A7), CircleShape)
-                                            )
-                                            Text(
-                                                text = "Punkty widokowe i rekreacja",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showParking,
-                                                onCheckedChange = { viewModel.setShowParking(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .padding(horizontal = 4.dp)
-                                                    .background(Color(0xFF5D4037), CircleShape)
-                                            )
-                                            Text(
-                                                text = "Parkingi",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showEducation,
-                                                onCheckedChange = { viewModel.setShowEducation(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .padding(horizontal = 4.dp)
-                                                    .background(Color(0xFF7B1FA2), CircleShape)
-                                            )
-                                            Text(
-                                                text = "Edukacja leśna",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Checkbox(
-                                                checked = showOthers,
-                                                onCheckedChange = { viewModel.setShowOthers(it) },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .padding(horizontal = 4.dp)
-                                                    .background(Color(0xFF1976D2), CircleShape)
-                                            )
-                                            Text(
-                                                text = "Inne punkty",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
+                                    Button(
+                                        onClick = {
+                                            isSettingsOpen = false
+                                            viewModel.openLayersOverlay()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Layers,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Wyświetlanie na mapie",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
                                     }
 
                                     HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
@@ -996,13 +918,42 @@ fun MapViewContainer(
                     )
                 }
             }
+
+            if (showLayersOverlay) {
+                MapLayersOverlay(
+                    showOwnPoints = showOwnPoints,
+                    showForestBans = showForestBans,
+                    showAccommodation = showAccommodation,
+                    showRest = showRest,
+                    showShelters = showShelters,
+                    showFireplaces = showFireplaces,
+                    showViewpoints = showViewpoints,
+                    showParking = showParking,
+                    showEducation = showEducation,
+                    showOthers = showOthers,
+                    onShowOwnPointsChange = viewModel::setShowOwnPoints,
+                    onShowForestBansChange = viewModel::setShowForestBans,
+                    onShowAccommodationChange = viewModel::setShowAccommodation,
+                    onShowRestChange = viewModel::setShowRest,
+                    onShowSheltersChange = viewModel::setShowShelters,
+                    onShowFireplacesChange = viewModel::setShowFireplaces,
+                    onShowViewpointsChange = viewModel::setShowViewpoints,
+                    onShowParkingChange = viewModel::setShowParking,
+                    onShowEducationChange = viewModel::setShowEducation,
+                    onShowOthersChange = viewModel::setShowOthers,
+                    onClose = viewModel::closeLayersOverlay
+                )
+            }
         }
     }
 }
 
+private fun buildPendingMarkerGeoJson(lat: Double, lng: Double): String {
+    return """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[$lng,$lat]}}]}"""
+}
+
 @Composable
-private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
-    Canvas(modifier = modifier) {
+private fun OfflineIcon(modifier: Modifier = Modifier, color: Color = Color.White) {    Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
         val path = Path().apply {
