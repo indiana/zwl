@@ -101,6 +101,7 @@ struct MapView: UIViewRepresentable {
         coordinator.zonesJson = zonesJson
         coordinator.bansJson = bansJson
         coordinator.poisJson = poisJson
+        coordinator.markJsonDirty()
         coordinator.showBans = showBans
         coordinator.showAccommodation = showAccommodation
         coordinator.showRest = showRest
@@ -260,7 +261,17 @@ struct MapView: UIViewRepresentable {
         private var dataFiles: GeoJsonFileWriter.Files?
         private var lastJsonSignature = ""
         private var lastToggleSignature = ""
-        private var lastAppliedSignature = ""
+        private var lastAppliedSignature: UInt64 = 0
+        /// Cheap cached UTF-8 byte counts of the big GeoJSON blobs, refreshed
+        /// only when a json* stored below changes. Keeps the steady-state
+        /// applySourcesIfReady() gate O(1) instead of re-scanning hundreds of
+        /// KB per grapheme (String.count) at GPS/data-tick frequency.
+        private var zonesByteCount = 0
+        private var bansByteCount = 0
+        private var poisByteCount = 0
+        private var zonesDirty = true
+        private var bansDirty = true
+        private var poisDirty = true
 
         // Raster overlay state. The rasterizer renders ONLY the current integer
         // zoom for the visible viewport (hundreds of tiles), off-main; neighbor
@@ -896,6 +907,15 @@ struct MapView: UIViewRepresentable {
 
         // MARK: Data application
 
+        /// Marks the big JSON blobs as needing a re-hash. Called from
+        /// updateUIView whenever any coordinate's json changes; keep the
+        /// contentSignatureHash byte-count cache in sync with the inputs.
+        fileprivate func markJsonDirty() {
+            zonesDirty = true
+            bansDirty = true
+            poisDirty = true
+        }
+
         func applySourcesIfReady() {
             guard styleLoaded, mapView != nil else { return }
             // Cheap gate. SwiftUI re-runs updateUIView (hence this) far more
@@ -904,9 +924,11 @@ struct MapView: UIViewRepresentable {
             // write on MainView (GPS 1Hz, status, diagnostics) re-invokes it.
             // Never rebuild styles/strings unless the content signature moved;
             // this was the main-thread CPU burn behind the 202 CPU watchdog.
-            let signature = contentSignature()
-            guard signature != lastAppliedSignature else { return }
-            lastAppliedSignature = signature
+            // The hash is a single O(n) pass over UTF-8 bytes (no grapheme
+            // String.count, no string pooling), so repeated calls are cheap.
+            let hash = contentSignatureHash()
+            guard hash != lastAppliedSignature else { return }
+            lastAppliedSignature = hash
             scheduleWriteIfNeeded()
             if vectorOverlay {
                 ensureVectorSourcesAndLayers()
@@ -920,19 +942,36 @@ struct MapView: UIViewRepresentable {
         }
 
         /// Compact, deterministic key for the data + config that feeds the
-        /// overlay pipeline. Cheap to compute (a few .count + bools) so it can
-        /// gate a much more expensive style/string pipeline on the main thread.
-        private func contentSignature() -> String {
-            var sig = "v2|\(zonesJson.count)|\(bansJson.count)|\(poisJson.count)"
-            sig += "|\(showBans ? "1" : "0")\(showAccommodation ? "1" : "0")\(showRest ? "1" : "0")\(showShelters ? "1" : "0")\(showFireplaces ? "1" : "0")\(showViewpoints ? "1" : "0")\(showParking ? "1" : "0")\(showEducation ? "1" : "0")\(showOthers ? "1" : "0")"
-            sig += "|\(overlayEnabled ? "1" : "0")\(vectorOverlay ? "1" : "0")\(baseEnabled ? "1" : "0")"
-            sig += "|\(followsUser ? "1" : "0")\(showHeading ? "1" : "0")\(showUserDot ? "1" : "0")"
-            return sig
+        /// overlay pipeline. Computed via a single O(n) pass over the UTF-8
+        /// bytes — no grapheme String.count and no ~20 interpolated strings
+        /// per call (the previous version cost two full JSON rescans at GPS
+        /// /data-tick frequency and was the main-thread burn in the 202 CPU
+        /// watchdog). Cached: the big blobs only re-hash when their byte
+        /// counts move; the toggles fold in on every call for free.
+        private func contentSignatureHash() -> UInt64 {
+            func byteCount(_ dirty: inout Bool, _ cached: inout Int, _ value: String) -> Int {
+                if dirty {
+                    dirty = false
+                    cached = value.utf8.count
+                }
+                return cached
+            }
+            let zonesCount = byteCount(&zonesDirty, &zonesByteCount, zonesJson)
+            let bansCount = byteCount(&bansDirty, &bansByteCount, bansJson)
+            let poisCount = byteCount(&poisDirty, &poisByteCount, poisJson)
+            let sig = "\(zonesCount)|\(bansCount)|\(poisCount)|"
+                + "\(showBans ? "1" : "0")\(showAccommodation ? "1" : "0")\(showRest ? "1" : "0")\(showShelters ? "1" : "0")\(showFireplaces ? "1" : "0")\(showViewpoints ? "1" : "0")\(showParking ? "1" : "0")\(showEducation ? "1" : "0")\(showOthers ? "1" : "0")"
+                + "|\(overlayEnabled ? "1" : "0")\(vectorOverlay ? "1" : "0")\(baseEnabled ? "1" : "0")"
+                + "|\(followsUser ? "1" : "0")\(showHeading ? "1" : "0")\(showUserDot ? "1" : "0")"
+            return StableHash.hash(sig)
         }
 
         /// Writes the GeoJSON to temp files (the rasterizer's input) on a
         /// background QoS once per data change.
         private func scheduleWriteIfNeeded() {
+            zonesDirty = true
+            bansDirty = true
+            poisDirty = true
             let jsonSignature = "\(zonesJson.count)|\(bansJson.count)|\(poisJson.count)"
             guard jsonSignature != lastJsonSignature else { return }
             lastJsonSignature = jsonSignature
@@ -1321,5 +1360,20 @@ struct MapView: UIViewRepresentable {
 
             onTapBackground()
         }
+    }
+}
+
+/// Stable FNV-1a out of the exact input string that feeds the overlay
+/// pipeline. Kept trivial and dependency-free so the main-thread gate in
+/// applySourcesIfReady() can run at GPS/data tick frequency without doing
+/// myString.count grapheme scans or pooling ~20 interpolated strings.
+fileprivate enum StableHash {
+    static func hash(_ input: String) -> UInt64 {
+        var h: UInt64 = 0xcbf29ce484222325
+        for byte in input.utf8 {
+            h ^= UInt64(byte)
+            h = h &* 0x100000001b3
+        }
+        return h
     }
 }
