@@ -108,9 +108,13 @@ final class MainViewModel: NSObject, ObservableObject {
     private(set) var centerSavedPointLatitude: Double?
     private(set) var centerSavedPointLongitude: Double?
 
-    // User location
-    @Published var userLatitude: Double?
-    @Published var userLongitude: Double?
+    // User location. Published as ONE coordinate pair per GPS fix instead of
+    // separate lat/lon: every @Published write re-evaluates MainView's body,
+    // so two writes per ~1Hz fix doubled the SwiftUI churn that trips the
+    // iPad CPU watchdog. Coordinates are degenerate only between fixes.
+    @Published var userCoordinate: CLLocationCoordinate2D?
+    var userLatitude: Double? { userCoordinate?.latitude }
+    var userLongitude: Double? { userCoordinate?.longitude }
     // Not `@Published`: it's written on every pan/zoom frame via
     // regionDidChange, so publishing would force a SwiftUI re-render (and an
     // updateUIView) per frame and make map scrolling stutter.
@@ -275,20 +279,28 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func computeLocationStatus() async {
         guard let lat = userLatitude, let lon = userLongitude else {
-            activeForestBan = nil
+            if activeForestBan != nil { activeForestBan = nil }
             return
         }
         guard let newStatus = try? await app.checkLocation(latitude: lat, longitude: lon) else { return }
-        activeForestBan = try? await app.checkForestBan(latitude: lat, longitude: lon)
+        let newBan = try? await app.checkForestBan(latitude: lat, longitude: lon)
         let district = (newStatus as? LocationStatusInZone)?.forestDistrict
         if district != lastInZoneDistrict {
             lastInZoneDistrict = district
-            fireRiskLevel = -1
+            if fireRiskLevel != -1 { fireRiskLevel = -1 }
             if district != nil {
                 Task { await self.refreshFireRiskIfNeeded() }
             }
         }
-        locationStatus = newStatus
+        // Only publish when the value actually changed (each @Published write
+        // re-evaluates the whole MainView body; on a stationary fix this used
+        // to republish 3 identical values ~1Hz).
+        if !Self.locationStatusEquals(newStatus, locationStatus) {
+            locationStatus = newStatus
+        }
+        if !Self.forestBanEquals(newBan, activeForestBan) {
+            activeForestBan = newBan
+        }
     }
 
     func refreshFireRiskIfNeeded() async {
@@ -299,6 +311,40 @@ final class MainViewModel: NSObject, ObservableObject {
             fireRiskLevel = try await app.getFireRisk(latitude: lat, longitude: lon).intValue
         } catch {
             fireRiskLevel = -1
+        }
+    }
+
+    /// Structural equality for the bridged `LocationStatus`: SKIE/Kotlin data
+    /// classes don't conform to Swift `Equatable`, so compare the fields that
+    /// drive the UI. Used to skip redundant `@Published` writes on stationary
+    /// GPS fixes (each write re-evaluates the whole MainView body).
+    private static func locationStatusEquals(_ a: LocationStatus?, _ b: LocationStatus?) -> Bool {
+        switch (a, b) {
+        case (nil, nil):
+            return true
+        case let (aIn as LocationStatusInZone, bIn as LocationStatusInZone):
+            return aIn.forestDistrict == bIn.forestDistrict
+        case let (aOut as LocationStatusOutsideZone, bOut as LocationStatusOutsideZone):
+            return aOut.nearestDistrict == bOut.nearestDistrict
+                && aOut.distanceMeters == bOut.distanceMeters
+                && aOut.bearingDegrees == bOut.bearingDegrees
+        case (is LocationStatusEmptyData, is LocationStatusEmptyData):
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// The ban is compared by its stable remote id (a bare `==` is unavailable
+    /// on the bridged Kotlin class).
+    private static func forestBanEquals(_ a: ForestBan?, _ b: ForestBan?) -> Bool {
+        switch (a, b) {
+        case (nil, nil):
+            return true
+        case let (aBan?, bBan?):
+            return aBan.remoteId == bBan.remoteId
+        default:
+            return false
         }
     }
 
@@ -776,10 +822,13 @@ extension MainViewModel: CLLocationManagerDelegate {
             if distance < 5, elapsed < 2 { return }
         }
         lastPublishedLocation = loc
-        userLatitude = loc.coordinate.latitude
-        userLongitude = loc.coordinate.longitude
+        userCoordinate = loc.coordinate
         Task { await self.computeLocationStatus() }
-        Task { await self.refreshFireRiskIfNeeded() }
+        // Refresh the fire risk only while it's unresolved: each fix used to
+        // spawn a redundant Task that immediately returned.
+        if fireRiskLevel < 0 {
+            Task { await self.refreshFireRiskIfNeeded() }
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
