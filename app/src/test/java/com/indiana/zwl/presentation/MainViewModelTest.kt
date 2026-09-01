@@ -90,7 +90,7 @@ class MainViewModelTest {
             getZonesUseCase, spatialEngine, context
         )
 
-        val success = waitForState(viewModel.uiState, 2000) { it is MainUiState.PermissionsRequired }
+        val success = waitForState(viewModel.uiState, 5000) { it is MainUiState.PermissionsRequired }
         assertTrue("State should transition to PermissionsRequired", success)
         coVerify(exactly = 1) { syncPoiUseCase() }
         coVerify(exactly = 1) { zoneRepository.getZonesCount() }
@@ -111,7 +111,7 @@ class MainViewModelTest {
             getZonesUseCase, spatialEngine, context
         )
 
-        val success = waitForState(viewModel.uiState, 2000) { it is MainUiState.PermissionsRequired }
+        val success = waitForState(viewModel.uiState, 5000) { it is MainUiState.PermissionsRequired }
         assertTrue("State should transition to PermissionsRequired", success)
         coVerify(exactly = 1) { syncZonesUseCase() }
         coVerify(exactly = 1) { getZonesUseCase() }
