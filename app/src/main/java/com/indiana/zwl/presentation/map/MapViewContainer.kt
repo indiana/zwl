@@ -524,13 +524,7 @@ fun MapViewContainer(
                         }
                     }
                 },
-                modifier = Modifier.fillMaxSize(),
-                onRelease = { mapView ->
-                    mapboxMapInstance?.let { map ->
-                        val pos = map.cameraPosition
-                        mapViewModel.saveMapState(pos.target?.latitude, pos.target?.longitude, pos.zoom)
-                    }
-                }
+                modifier = Modifier.fillMaxSize()
             )
 
             LaunchedEffect(filteredPois, poiSource) {

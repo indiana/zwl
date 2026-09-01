@@ -145,12 +145,6 @@ final class MainViewModel: NSObject, ObservableObject {
     // Fire risk
     @Published var fireRiskLevel: Int = -1
 
-    // Debug / QA overrides. `debugUiEnabled` gates all diagnostics UI
-    // (status-tab flip, menu diagnostics toggles, map overlay). Kept `false`
-    // for the release candidate; flip back to `true` when QA needs them again.
-    var debugUiEnabled: Bool { false }
-    @Published var debugInvertZone = false
-
     // Zone detail sheet state (distance + fire risk + stove rule + BDL forest
     // stand card — Android parity).
     @Published var selectedZoneDistanceMeters: Double?
@@ -158,10 +152,6 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var isLoadingZoneFireRisk = false
     @Published var selectedZoneForestStand: ForestStandSummary?
     @Published var isLoadingZoneForestStand = false
-
-    // Live map diagnostics (overlay shown while the map overlays are being
-    // debugged on device; remove once rendering is confirmed).
-    @Published var mapDiagnostics: String = ""
 
     // Offline download
     @Published var isDownloading = false
@@ -658,6 +648,10 @@ final class MainViewModel: NSObject, ObservableObject {
     // MARK: - Offline download
 
     func recenterMap() {
+        // "My location" re-enables follow-the-user (e.g. after it was dropped
+        // to keep the camera parked on a selected saved point) and centers on
+        // the current fix.
+        followsUser = true
         guard userLatitude != nil else {
             // Android shows a toast here ("Oczekiwanie na sygnał GPS...");
             // render a transient pill and hide it after ~2.5s.
@@ -781,39 +775,11 @@ final class MainViewModel: NSObject, ObservableObject {
 
     // MARK: - Helpers
 
-    /// Debug/QA flipping of the zone classification shown in the Status tab
-    /// (real GPS data is untouched; fire risk / bans are kept as-is).
-    func toggleDebugInvertZone() {
-        debugInvertZone.toggle()
-    }
-
-    var displayStatus: LocationStatus? {
-        guard debugInvertZone else { return locationStatus }
-        switch locationStatus {
-        case let inZone as LocationStatusInZone:
-            return LocationStatusOutsideZone(
-                nearestDistrict: inZone.forestDistrict,
-                distanceMeters: 8500.0,
-                bearingDegrees: 0.0
-            )
-        case let outside as LocationStatusOutsideZone:
-            return LocationStatusInZone(forestDistrict: outside.nearestDistrict)
-        default:
-            return locationStatus
-        }
-    }
-
-    /// Status as shown to the user (respects the debug invert toggle).
-    var displayInZone: LocationStatusInZone? { displayStatus as? LocationStatusInZone }
-    var displayOutsideZone: LocationStatusOutsideZone? { displayStatus as? LocationStatusOutsideZone }
+    /// Status as shown to the user.
+    var displayInZone: LocationStatusInZone? { locationStatus as? LocationStatusInZone }
+    var displayOutsideZone: LocationStatusOutsideZone? { locationStatus as? LocationStatusOutsideZone }
 
     var currentInZone: LocationStatusInZone? { locationStatus as? LocationStatusInZone }
-    var currentOutsideZone: LocationStatusOutsideZone? { locationStatus as? LocationStatusOutsideZone }
-
-    /// True when we have no usable fix yet (GPS locating screen).
-    var isLocationEmpty: Bool {
-        locationStatus == nil || locationStatus is LocationStatusEmptyData
-    }
 }
 
 // MARK: - CLLocationManagerDelegate

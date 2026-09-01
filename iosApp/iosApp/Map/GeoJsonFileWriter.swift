@@ -18,16 +18,6 @@ enum GeoJsonFileWriter {
         let parkingURL: URL
         let educationURL: URL
         let otherURL: URL
-        let zoneCount: Int
-        let banCount: Int
-        let accommodationCount: Int
-        let restCount: Int
-        let shelterCount: Int
-        let fireplaceCount: Int
-        let viewpointCount: Int
-        let parkingCount: Int
-        let educationCount: Int
-        let otherCount: Int
     }
 
     /// Writes `zones`/`bans` verbatim and splits `pois` by `categoryKey` into
@@ -106,17 +96,7 @@ enum GeoJsonFileWriter {
                      viewpointURL: viewpointURL,
                      parkingURL: parkingURL,
                      educationURL: educationURL,
-                     otherURL: otherURL,
-                     zoneCount: zoneFeatures.count,
-                     banCount: banFeatures.count,
-                     accommodationCount: accommodation.count,
-                     restCount: rest.count,
-                     shelterCount: shelter.count,
-                     fireplaceCount: fireplace.count,
-                     viewpointCount: viewpoint.count,
-                     parkingCount: parking.count,
-                     educationCount: education.count,
-                     otherCount: other.count)
+                     otherURL: otherURL)
     }
 
     private static func write(features: [[String: Any]], to url: URL) -> Bool {
