@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
@@ -98,6 +99,11 @@ fun MapViewContainer(
     val forestBans by viewModel.forestBans.collectAsState()
 
     val rememberedMapView = remember {
+        try {
+            MapLibre.getInstance(context)
+        } catch (t: Throwable) {
+            android.util.Log.e("MapViewContainer", "MapLibre global init failed", t)
+        }
         MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true))
     }
     var mapboxMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
