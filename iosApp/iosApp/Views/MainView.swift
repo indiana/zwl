@@ -75,6 +75,25 @@ struct MainView: View {
                     .presentationDetents([.medium])
             }
         }
+        .sheet(isPresented: isPendingPointSheetPresented) {
+            if let point = viewModel.pendingPoint {
+                PointDetailView(
+                    point: point,
+                    onSave: { name in viewModel.savePendingPoint(name: name) },
+                    shareLink: pendingPointShareLink,
+                    onClose: { viewModel.clearPendingPoint() }
+                )
+                .presentationDetents([.medium, .large])
+            }
+        }
+        .sheet(isPresented: isSavedPointListPresented) {
+            SavedPointListView(viewModel: viewModel)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: isLayersSettingsPresented) {
+            LayersSettingsView(viewModel: viewModel)
+                .presentationDetents([.large])
+        }
         .alert("Pamięć podręczna", isPresented: $cacheAlertPresented) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -210,14 +229,21 @@ struct MainView: View {
             showUserDot: showUserDot,
             userLatitude: viewModel.userLatitude,
             userLongitude: viewModel.userLongitude,
-            recenterSignal: viewModel.recenterSignal,
+recenterSignal: viewModel.recenterSignal,
+            savedPointsJson: viewModel.showOwnPoints ? viewModel.savedPointsGeoJson : "",
+            pendingMarkerJson: pendingMarkerGeoJson,
+            centerSavedPointLatitude: viewModel.centerSavedPointLatitude,
+            centerSavedPointLongitude: viewModel.centerSavedPointLongitude,
+            centerSavedPointSignal: viewModel.centerSavedPointSignal,
             onTapZone: { viewModel.selectZone(named: $0) },
             onTapBan: { viewModel.selectBan(byRemoteId: $0) },
             onTapPoi: { viewModel.selectPoi(named: $0) },
+            onTapSavedPoint: { viewModel.openSavedPointProperties(id: $0) },
             onTapBackground: { viewModel.clearSelection() },
             onVisibleRegionChange: { viewModel.visibleRegion = $0 },
-            onDiagnostics: { viewModel.mapDiagnostics = $0 }
-        )
+            onDiagnostics: { viewModel.mapDiagnostics = $0 },
+            onLongPressPoint: { lat, lng in viewModel.onLongPressPoint(latitude: lat, longitude: lng) }
+            )
         .ignoresSafeArea(edges: .top)
     }
 
@@ -248,7 +274,7 @@ struct MainView: View {
                 isSettingsOpen.toggle()
             }
         }) {
-            Image(systemName: "slider.horizontal.3")
+            Image(systemName: "line.horizontal.3")
                 .font(.system(size: 17, weight: .semibold))
                 .frame(width: 44, height: 44)
                 .foregroundColor(isSettingsOpen ? .white : .primary)
@@ -262,64 +288,23 @@ struct MainView: View {
 
     private var settingsPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Wyświetlaj na mapie")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            Button(action: {
+                isSettingsOpen = false
+                viewModel.openSavedPointList()
+            }) {
+                Label("Zapisane punkty", systemImage: "bookmark")
+            }
+            .font(.system(size: 15))
 
-            Toggle(isOn: $viewModel.showBans) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color.red).frame(width: 10, height: 10)
-                    Text("Zakazy wstępu do lasu")
-                }
+            Divider()
+
+            Button(action: {
+                isSettingsOpen = false
+                viewModel.openLayersOverlay()
+            }) {
+                Label("Wyświetlanie na mapie", systemImage: "square.3.layers.3d")
             }
-            Toggle(isOn: $viewModel.showAccommodation) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color(hex: 0x1B5E20)).frame(width: 10, height: 10)
-                    Text("Noclegi i biwakowanie")
-                }
-            }
-            Toggle(isOn: $viewModel.showRest) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color(hex: 0x558B2F)).frame(width: 10, height: 10)
-                    Text("Miejsca wypoczynku")
-                }
-            }
-            Toggle(isOn: $viewModel.showShelters) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color(hex: 0x4E342E)).frame(width: 10, height: 10)
-                    Text("Wiaty i schronienia")
-                }
-            }
-            Toggle(isOn: $viewModel.showFireplaces) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color(hex: 0xE65100)).frame(width: 10, height: 10)
-                    Text("Miejsca na ognisko")
-                }
-            }
-            Toggle(isOn: $viewModel.showViewpoints) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color(hex: 0x0097A7)).frame(width: 10, height: 10)
-                    Text("Punkty widokowe i rekreacja")
-                }
-            }
-            Toggle(isOn: $viewModel.showParking) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color(hex: 0x5D4037)).frame(width: 10, height: 10)
-                    Text("Parkingi")
-                }
-            }
-            Toggle(isOn: $viewModel.showEducation) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color(hex: 0x7B1FA2)).frame(width: 10, height: 10)
-                    Text("Edukacja leśna")
-                }
-            }
-            Toggle(isOn: $viewModel.showOthers) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color(hex: 0x1976D2)).frame(width: 10, height: 10)
-                    Text("Inne punkty")
-                }
-            }
+            .font(.system(size: 15))
 
             Divider()
 
@@ -443,6 +428,37 @@ struct MainView: View {
     private var isPoiSheetPresented: Binding<Bool> {
         Binding(get: { viewModel.selectedPoi != nil },
                 set: { if !$0 { viewModel.clearSelection() } })
+    }
+
+    private var isLayersSettingsPresented: Binding<Bool> {
+        Binding(get: { viewModel.showLayersOverlay },
+                set: { if !$0 { viewModel.closeLayersOverlay() } })
+    }
+
+    private var isPendingPointSheetPresented: Binding<Bool> {
+        Binding(get: { viewModel.pendingPoint != nil },
+                set: { if !$0 { viewModel.clearPendingPoint() } })
+    }
+
+    private var isSavedPointListPresented: Binding<Bool> {
+        Binding(get: { viewModel.showSavedPointList },
+                set: { if !$0 { viewModel.closeSavedPointList() } })
+    }
+
+    /// GeoJSON for the magenta temporary marker of the pending point.
+    private var pendingMarkerGeoJson: String {
+        guard let point = viewModel.pendingPoint else { return "" }
+        let lat = String(format: "%.6f", point.latitude)
+        let lng = String(format: "%.6f", point.longitude)
+        return "{\"type\":\"Feature\",\"properties\":{},\"geometry\":{\"type\":\"Point\",\"coordinates\":[\(lng),\(lat)]}}"
+    }
+
+    /// Share text for the pending (unsaved) point — plain coordinates, since
+    /// messaging apps don't linkify custom schemes (WhatsApp parity).
+    private var pendingPointShareLink: String {
+        guard let point = viewModel.pendingPoint else { return "" }
+        let coords = Formatters.coordinateText(latitude: point.latitude, longitude: point.longitude)
+        return "Legalny Bushcraft — punkt\n\(coords)\nMożesz wkleić te współrzędne w aplikacji, aby otworzyć punkt."
     }
 }
 

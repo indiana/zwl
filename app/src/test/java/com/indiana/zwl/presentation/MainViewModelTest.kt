@@ -10,6 +10,7 @@ import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.PoiRepository
+import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestBansUseCase
@@ -44,6 +45,7 @@ class MainViewModelTest {
 
     private val zoneRepository: ZoneRepository = mockk()
     private val poiRepository: PoiRepository = mockk()
+    private val savedPointRepository: SavedPointRepository = mockk(relaxed = true)
     private val locationRepository: LocationRepository = mockk(relaxed = true)
     private val compassRepository: CompassRepository = mockk(relaxed = true)
     private val syncZonesUseCase: SyncZonesUseCase = mockk()
@@ -82,7 +84,7 @@ class MainViewModelTest {
         coEvery { getZonesUseCase() } returns emptyList()
 
         val viewModel = MainViewModel(
-            zoneRepository, poiRepository, locationRepository, compassRepository,
+            zoneRepository, poiRepository, savedPointRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
             getForestBansUseCase, getFireRiskUseCase,
             getZonesUseCase, spatialEngine, context
@@ -103,7 +105,7 @@ class MainViewModelTest {
         coEvery { getZonesUseCase() } returns emptyList()
 
         val viewModel = MainViewModel(
-            zoneRepository, poiRepository, locationRepository, compassRepository,
+            zoneRepository, poiRepository, savedPointRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
             getForestBansUseCase, getFireRiskUseCase,
             getZonesUseCase, spatialEngine, context
@@ -126,7 +128,7 @@ class MainViewModelTest {
         allPoisFlow.value = testPois
 
         val viewModel = MainViewModel(
-            zoneRepository, poiRepository, locationRepository, compassRepository,
+            zoneRepository, poiRepository, savedPointRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
             getForestBansUseCase, getFireRiskUseCase,
             getZonesUseCase, spatialEngine, context

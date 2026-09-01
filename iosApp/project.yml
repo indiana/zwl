@@ -37,6 +37,10 @@ targets:
         CFBundleDisplayName: "Legalny Bushcraft"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleURLTypes:
+          - CFBundleURLName: com.indiana.zwl.iosApp.point
+            CFBundleURLSchemes:
+              - zwl
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:

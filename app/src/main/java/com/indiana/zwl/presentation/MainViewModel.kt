@@ -5,12 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.repository.PoiRepository
+import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.Poi
+import com.indiana.zwl.domain.model.SavedPoint
+import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
@@ -57,10 +60,22 @@ data class SelectedPoiDetails(
     val distanceMeters: Double?
 )
 
+enum class PointSource { LINK, LONG_PRESS, PASTE }
+
+data class PendingPoint(
+    val lat: Double,
+    val lng: Double,
+    val name: String?,
+    val source: PointSource,
+    val status: LocationStatus? = null,
+    val ban: ForestBan? = null
+)
+
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val zoneRepository: ZoneRepository,
     private val poiRepository: PoiRepository,
+    private val savedPointRepository: SavedPointRepository,
     private val locationRepository: LocationRepository,
     private val compassRepository: CompassRepository,
     private val syncZonesUseCase: SyncZonesUseCase,
@@ -176,6 +191,113 @@ class MainViewModel @Inject constructor(
     fun setShowParking(show: Boolean) = setShowPoiGroup(PoiUiGroup.PARKING, show)
     fun setShowEducation(show: Boolean) = setShowPoiGroup(PoiUiGroup.EDUCATION, show)
     fun setShowOthers(show: Boolean) = setShowPoiGroup(PoiUiGroup.OTHER, show)
+
+    val savedPoints: StateFlow<List<SavedPoint>> = savedPointRepository.getAllPoints().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    private val _showOwnPoints = MutableStateFlow(true)
+    val showOwnPoints: StateFlow<Boolean> = _showOwnPoints.asStateFlow()
+
+    fun setShowOwnPoints(visible: Boolean) {
+        _showOwnPoints.value = visible
+    }
+
+    private val _showLayersOverlay = MutableStateFlow(false)
+    val showLayersOverlay: StateFlow<Boolean> = _showLayersOverlay.asStateFlow()
+
+    fun openLayersOverlay() {
+        _showLayersOverlay.value = true
+    }
+
+    fun closeLayersOverlay() {
+        _showLayersOverlay.value = false
+    }
+
+    private val _pendingPoint = MutableStateFlow<PendingPoint?>(null)
+    val pendingPoint: StateFlow<PendingPoint?> = _pendingPoint.asStateFlow()
+
+    private val _focusSavedPoint = MutableStateFlow<SavedPoint?>(null)
+    val focusSavedPoint: StateFlow<SavedPoint?> = _focusSavedPoint.asStateFlow()
+
+    private val _selectedSavedPointInfo = MutableStateFlow<SavedPoint?>(null)
+    val selectedSavedPointInfo: StateFlow<SavedPoint?> = _selectedSavedPointInfo.asStateFlow()
+
+    private val _showSavedPointList = MutableStateFlow(false)
+    val showSavedPointList: StateFlow<Boolean> = _showSavedPointList.asStateFlow()
+
+    fun openSavedPointList() {
+        _showSavedPointList.value = true
+    }
+
+    fun closeSavedPointList() {
+        _showSavedPointList.value = false
+    }
+
+    fun onLongPressPoint(lat: Double, lng: Double) {
+        setPendingPoint(PendingPoint(lat = lat, lng = lng, name = null, source = PointSource.LONG_PRESS))
+    }
+
+    fun openPointFromLink(lat: Double, lng: Double, name: String?) {
+        setPendingPoint(PendingPoint(lat = lat, lng = lng, name = name, source = PointSource.LINK))
+    }
+
+    fun openPointFromPaste(lat: Double, lng: Double) {
+        setPendingPoint(PendingPoint(lat = lat, lng = lng, name = null, source = PointSource.PASTE))
+    }
+
+    private fun setPendingPoint(point: PendingPoint) {
+        _pendingPoint.value = point
+        viewModelScope.launch(Dispatchers.Default) {
+            val status = spatialEngine.checkLocation(point.lat, point.lng)
+            val ban = spatialEngine.checkForestBan(point.lat, point.lng)
+            _pendingPoint.value = point.copy(status = status, ban = ban)
+        }
+    }
+
+    fun clearPendingPoint() {
+        _pendingPoint.value = null
+    }
+
+    fun savePendingPoint(name: String) {
+        val point = _pendingPoint.value ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            savedPointRepository.insert(NewSavedPoint(name = name, latitude = point.lat, longitude = point.lng))
+            _pendingPoint.value = null
+        }
+    }
+
+    fun renameSavedPoint(id: Long, name: String) {
+        _selectedSavedPointInfo.value = _selectedSavedPointInfo.value?.takeIf { it.id == id }?.copy(name = name)
+        viewModelScope.launch(Dispatchers.IO) {
+            savedPointRepository.rename(id, name)
+        }
+    }
+
+    fun deleteSavedPoint(id: Long) {
+        _selectedSavedPointInfo.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            savedPointRepository.delete(id)
+        }
+    }
+
+    fun selectSavedPoint(point: SavedPoint) {
+        _focusSavedPoint.value = point
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(100)
+            _focusSavedPoint.value = null
+        }
+    }
+
+    fun openSavedPointProperties(point: SavedPoint) {
+        _selectedSavedPointInfo.value = point
+    }
+
+    fun clearSavedPointProperties() {
+        _selectedSavedPointInfo.value = null
+    }
 
     private val _debugError = MutableStateFlow<String?>(null)
     val debugError: StateFlow<String?> = _debugError

@@ -12,6 +12,26 @@ struct MapRegion {
     let lonEast: Double
 }
 
+/// A map coordinate awaiting the user's confirmation to save it. Filled by a
+/// long-press on the map or a `zwl://point` deep link (Android parity).
+struct PendingPoint: Identifiable {
+    enum Source: Equatable {
+        case longPress
+        case link
+        case paste
+    }
+
+    let id = UUID()
+    let source: Source
+    var name: String
+    let latitude: Double
+    let longitude: Double
+    // Zone status computed offline via the shared SpatialEngine (Android
+    // parity): nil until the async lookup finishes.
+    var status: LocationStatus?
+    var ban: ForestBan?
+}
+
 @MainActor
 final class MainViewModel: NSObject, ObservableObject {
 
@@ -71,6 +91,22 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var selectedBan: ForestBan?
     @Published var selectedPoi: Poi?
     @Published var selectedPoiDistanceMeters: Double?
+
+    // Saved points (Android parity: magenta markers, long-press to save,
+    // shared via `zwl://point` deep links).
+    @Published var savedPoints: [SavedPoint] = []
+    @Published var savedPointsGeoJson: String = ""
+    @Published var pendingPoint: PendingPoint?
+    @Published var showSavedPointList = false
+    @Published var selectedSavedPoint: SavedPoint?
+    // Layer-visible toggles (Android parity). showOwnPoints resets to true on
+    // launch like Android; the POI/ban toggles above persist.
+    @Published var showOwnPoints = true
+    @Published var showLayersOverlay = false
+    // Increment to ask the map to center on a saved point (zoom 15).
+    @Published var centerSavedPointSignal: Int = 0
+    private(set) var centerSavedPointLatitude: Double?
+    private(set) var centerSavedPointLongitude: Double?
 
     // User location
     @Published var userLatitude: Double?
@@ -433,6 +469,129 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedBan = nil
         selectedPoi = nil
         selectedPoiDistanceMeters = nil
+    }
+
+    // MARK: - Saved points
+
+    /// Handles an incoming `zwl://point?lat=..&lng=..[&name=..]` deep link
+    /// (custom URL scheme; Android intent-filter parity).
+    func openPointFromLink(_ url: URL) {
+        guard url.scheme?.lowercased() == "zwl", url.host?.lowercased() == "point" else { return }
+        guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        let lat = comps.queryItems?.first(where: { $0.name == "lat" }).flatMap { Double($0.value ?? "") }
+        let lng = comps.queryItems?.first(where: { $0.name == "lng" }).flatMap { Double($0.value ?? "") }
+        guard let lat = lat, let lng = lng else { return }
+        let name = comps.queryItems?.first(where: { $0.name == "name" })?.value ?? ""
+        openPointFromLink(latitude: lat, longitude: lng, name: name)
+    }
+
+    func onLongPressPoint(latitude: Double, longitude: Double) {
+        setPendingPoint(latitude: latitude, longitude: longitude, name: "", source: .longPress)
+    }
+
+    func openPointFromLink(latitude: Double, longitude: Double, name: String?) {
+        setPendingPoint(latitude: latitude, longitude: longitude, name: name ?? "", source: .link)
+    }
+
+    /// Pasted coordinates (Android `openPointFromPaste` parity).
+    func openPointFromPaste(latitude: Double, longitude: Double) {
+        setPendingPoint(latitude: latitude, longitude: longitude, name: "", source: .paste)
+    }
+
+    /// Fills the pending-point card and asynchronously computes its zone status
+    /// / forest ban off the shared spatial engine (Android parity). These
+    /// events are rare (a tap / link), so no `@Published` throttling needed —
+    /// but the Kotlin callbacks still hop through `Task { @MainActor }`.
+    private func setPendingPoint(latitude: Double, longitude: Double, name: String, source: PendingPoint.Source) {
+        pendingPoint = PendingPoint(source: source, name: name, latitude: latitude, longitude: longitude)
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let status = try? await self.app.checkLocation(latitude: latitude, longitude: longitude)
+            let ban = try? await self.app.checkForestBan(latitude: latitude, longitude: longitude)
+            self.pendingPoint?.status = status
+            self.pendingPoint?.ban = ban
+        }
+    }
+
+    func savePendingPoint(name: String) {
+        guard var point = pendingPoint else { return }
+        point.name = name
+        pendingPoint = point
+        let trimmed = name.isEmpty ? "Zapisany punkt" : name
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            _ = try? await self.app.savePoint(name: trimmed, latitude: point.latitude, longitude: point.longitude)
+            self.pendingPoint = nil
+            await self.loadSavedPointData()
+        }
+    }
+
+    func clearPendingPoint() {
+        pendingPoint = nil
+    }
+
+    func loadSavedPointData() async {
+        let points = (try? await app.savedPoints()).map { Array($0) } ?? []
+        savedPoints = points
+        savedPointsGeoJson = (try? await app.savedPointsGeoJson()) ?? ""
+    }
+
+    func openSavedPointList() {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            await self.loadSavedPointData()
+            self.showSavedPointList = true
+        }
+    }
+
+    func closeSavedPointList() {
+        showSavedPointList = false
+    }
+
+    func openLayersOverlay() {
+        showLayersOverlay = true
+    }
+
+    func closeLayersOverlay() {
+        showLayersOverlay = false
+    }
+
+    /// Short tap on a list row: center the camera on the point (map stays
+    /// visible under the closed list).
+    func selectSavedPoint(_ point: SavedPoint) {
+        centerSavedPointLatitude = point.latitude
+        centerSavedPointLongitude = point.longitude
+        centerSavedPointSignal += 1
+    }
+
+    func openSavedPointProperties(_ point: SavedPoint) {
+        selectedSavedPoint = point
+    }
+
+    func openSavedPointProperties(id: Int64) {
+        guard let point = savedPoints.first(where: { $0.id == id }) else { return }
+        openSavedPointProperties(point)
+    }
+
+    func clearSavedPointProperties() {
+        selectedSavedPoint = nil
+    }
+
+    func renameSavedPoint(_ point: SavedPoint, to name: String) {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            _ = try? await self.app.renameSavedPoint(id: point.id, name: name)
+            await self.loadSavedPointData()
+        }
+    }
+
+    func deleteSavedPoint(_ point: SavedPoint) {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            _ = try? await self.app.deleteSavedPoint(id: point.id)
+            self.selectedSavedPoint = nil
+            await self.loadSavedPointData()
+        }
     }
 
     // MARK: - Offline download

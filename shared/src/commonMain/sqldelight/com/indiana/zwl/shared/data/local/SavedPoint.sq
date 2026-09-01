@@ -1,0 +1,25 @@
+CREATE TABLE IF NOT EXISTS SavedPoint (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL
+);
+
+selectAll:
+SELECT * FROM SavedPoint;
+
+insert:
+INSERT INTO SavedPoint(name, latitude, longitude)
+VALUES (?, ?, ?);
+
+lastInsertRowId:
+SELECT last_insert_rowid();
+
+renameById:
+UPDATE SavedPoint SET name = :name WHERE id = :id;
+
+deleteById:
+DELETE FROM SavedPoint WHERE id = :id;
+
+deleteAll:
+DELETE FROM SavedPoint;
