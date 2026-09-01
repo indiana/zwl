@@ -308,7 +308,13 @@ recenterSignal: viewModel.recenterSignal,
 
             Divider()
 
-            Button(action: { viewModel.downloadVisibleArea() }) {
+            Button(action: {
+                // Reset the card-dismissed latch so a new download shows its
+                // progress card again (it used to stay true forever after the
+                // first download, silently hiding every later download's card).
+                dismissDownloadCard = false
+                viewModel.downloadVisibleArea()
+            }) {
                 Label("Pobierz obszar offline", systemImage: "arrow.down.circle")
             }
             .disabled(viewModel.isDownloading)
