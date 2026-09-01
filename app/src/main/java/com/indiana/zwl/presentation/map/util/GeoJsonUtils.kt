@@ -7,8 +7,6 @@ import org.locationtech.jts.index.strtree.STRtree
 import org.locationtech.jts.io.WKTReader
 import org.locationtech.jts.geom.Coordinate
 import org.maplibre.android.geometry.LatLng
-import com.indiana.zwl.domain.util.classify
-import com.indiana.zwl.domain.util.uiGroup
 import java.util.concurrent.ConcurrentHashMap
 
 data class PolygonRings(val outer: List<LatLng>, val holes: List<List<LatLng>>)
@@ -62,6 +60,17 @@ private fun parseWktGeometry(wkt: String): CachedGeometry? {
     }
 }
 
+/**
+ * Android-side geometry helpers for the map.
+ *
+ * Zones and bans are deliberately built here, NOT in the shared `MapGeoJson`:
+ * their WKT must be parsed once through JTS (with the `buffer(0.0)` repair for
+ * invalid polygons) and the very same parsed polygons feed both the GeoJSON
+ * rings and the STRtree hit-testing used by map taps. JTS is JVM-only, so this
+ * cannot move to commonMain. POIs moved to shared `MapGeoJson.poisToGeoJson`
+ * (plain points, no geometry repair needed); `buildUserArrowGeoJson` is an
+ * Android-only UI construct (iOS uses the native location dot).
+ */
 class GeometryCache {
     private var zoneIndex = STRtree()
     private var banIndex = STRtree()
@@ -210,28 +219,6 @@ fun buildZoneGeoJson(geometryCache: GeometryCache, zoneIds: Collection<Long>): S
             sb.append("]}")
         }
         sb.append("}")
-    }
-    sb.append("]}")
-    return sb.toString()
-}
-
-fun buildPoiGeoJson(pois: List<com.indiana.zwl.domain.model.Poi>): String {
-    val sb = StringBuilder("{\"type\":\"FeatureCollection\",\"features\":[")
-    var first = true
-    for (poi in pois) {
-        if (!first) sb.append(",")
-        first = false
-        val category = poi.classify().uiGroup().key
-        sb.append("{\"type\":\"Feature\",\"properties\":{")
-        sb.append("\"id\":").append(poi.id).append(",")
-        sb.append("\"category\":\"").append(category).append("\",")
-        sb.append("\"name\":\"").append(poi.name.replace("\\", "\\\\").replace("\"", "\\\"")).append("\",")
-        sb.append("\"desc\":\"").append(poi.description.replace("\\", "\\\\").replace("\"", "\\\"")).append("\",")
-        sb.append("\"poiLat\":").append(poi.latitude).append(",")
-        sb.append("\"poiLon\":").append(poi.longitude)
-        sb.append("},\"geometry\":{\"type\":\"Point\",\"coordinates\":[")
-        sb.append(poi.longitude).append(",").append(poi.latitude)
-        sb.append("]}}")
     }
     sb.append("]}")
     return sb.toString()

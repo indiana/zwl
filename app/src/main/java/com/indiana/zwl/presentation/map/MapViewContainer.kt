@@ -59,7 +59,6 @@ import com.indiana.zwl.presentation.map.util.rememberIsOnline
 import com.indiana.zwl.presentation.map.util.GeometryCache
 import com.indiana.zwl.presentation.map.util.buildZoneGeoJson
 import com.indiana.zwl.presentation.map.util.buildBanGeoJson
-import com.indiana.zwl.presentation.map.util.buildPoiGeoJson
 import com.indiana.zwl.presentation.map.util.buildUserArrowGeoJson
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -366,7 +365,7 @@ fun MapViewContainer(
                                 styleInstance = style
 
                                 val ps = GeoJsonSource("poi-source").apply {
-                                    setGeoJson(buildPoiGeoJson(filteredPois))
+                                    setGeoJson(MapGeoJson.poisToGeoJson(filteredPois))
                                 }
                                 poiSource = ps
                                 style.addSource(ps)
@@ -374,7 +373,7 @@ fun MapViewContainer(
                                     CircleLayer("poi-layer", "poi-source").withProperties(
                                         PropertyFactory.circleColor(
                                             Expression.match(
-                                                Expression.get("category"),
+                                                Expression.get("categoryKey"),
                                                 Expression.literal("#1976D2"),
                                                 Expression.stop("noclegi", Expression.literal("#1B5E20")),
                                                 Expression.stop("wypoczynek", Expression.literal("#558B2F")),
@@ -537,7 +536,7 @@ fun MapViewContainer(
                     }
                 } else {
                     if (lastAppliedPois === filteredPois) return@LaunchedEffect
-                    val json = withContext(Dispatchers.Default) { buildPoiGeoJson(filteredPois) }
+                    val json = withContext(Dispatchers.Default) { MapGeoJson.poisToGeoJson(filteredPois) }
                     src.setGeoJson(json)
                     lastAppliedPois = filteredPois
                     if (style.getLayer("poi-layer") == null) {
@@ -545,7 +544,7 @@ fun MapViewContainer(
                             CircleLayer("poi-layer", "poi-source").withProperties(
                                 PropertyFactory.circleColor(
                                     Expression.match(
-                                        Expression.get("category"),
+                                        Expression.get("categoryKey"),
                                         Expression.literal("#1976D2"),
                                         Expression.stop("noclegi", Expression.literal("#1B5E20")),
                                         Expression.stop("wiaty", Expression.literal("#4E342E")),
