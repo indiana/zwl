@@ -224,6 +224,7 @@ struct MainView: View {
             overlayEnabled: overlayEnabled,
             vectorOverlay: vectorOverlay,
             baseEnabled: baseEnabled,
+            isOffline: viewModel.isOffline,
             followsUser: followsUser,
             showHeading: showHeading,
             showUserDot: showUserDot,

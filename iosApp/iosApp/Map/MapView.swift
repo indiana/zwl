@@ -20,6 +20,7 @@ struct MapView: UIViewRepresentable {
     let overlayEnabled: Bool
     let vectorOverlay: Bool
     let baseEnabled: Bool
+    let isOffline: Bool
     let followsUser: Bool
     let showHeading: Bool
     let showUserDot: Bool
@@ -114,6 +115,7 @@ struct MapView: UIViewRepresentable {
         coordinator.overlayEnabled = overlayEnabled
         coordinator.vectorOverlay = vectorOverlay
         coordinator.baseEnabled = baseEnabled
+        coordinator.isOffline = isOffline
         coordinator.followsUser = followsUser
         coordinator.showHeading = showHeading
         coordinator.showUserDot = showUserDot
@@ -179,6 +181,17 @@ struct MapView: UIViewRepresentable {
                 guard oldValue != baseEnabled else { return }
                 resetStallMeter()
                 applyBaseEnabled()
+            }
+        }
+        /// Whether the device currently has no network path (`isOffline` from
+        /// the main view model, NWPathMonitor). When true we add a local
+        /// `mbtiles://` source over the packed offline database so the map keeps
+        /// rendering without network (Android `RasterSource(url: mbtiles://...)`
+        /// parity). Idempotent; only re-runs when the flag actually flips.
+        var isOffline = false {
+            didSet {
+                guard oldValue != isOffline else { return }
+                applyOfflineTileSource()
             }
         }
         var followsUser = true {
@@ -389,6 +402,7 @@ struct MapView: UIViewRepresentable {
             installRasterIfCatalogReady()
             applySourcesIfReady()
             applySavedPointLayersIfNeeded()
+            applyOfflineTileSource()
             stopStyleProbe()
             publishDiagnostics()
         }
@@ -902,6 +916,63 @@ struct MapView: UIViewRepresentable {
             guard let style = mapView?.style else { return }
             if let layer = style.layer(withIdentifier: "osm") as? MLNRasterStyleLayer {
                 layer.rasterOpacity = NSExpression(forConstantValue: baseEnabled ? 1.0 : 0.0)
+            }
+        }
+
+        // MARK: Offline tile source (mbtiles://)
+
+        private static let offlineSourceId = "osm-offline"
+        private static let offlineLayerId = "osm-offline-layer"
+
+        /// The absolute path to the packed offline database. SQLiter's
+        /// NativeSqliteDriver keeps it under Application Support/databases
+        /// (`IosMbtilesStore` + `clearOfflineCache` parity). The driver is
+        /// closed by the packer once a download finishes, so the WAL is
+        /// checkpointed and the file is safe for MapLibre to read directly.
+        private static func offlineMbtilesPath() -> String? {
+            guard let appSupport = FileManager.default
+                .urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+            return appSupport
+                .appendingPathComponent("databases", isDirectory: true)
+                .appendingPathComponent("map.mbtiles").path
+        }
+
+        /// Adds (offline) or removes (online) a local `mbtiles://` raster source
+        /// over the packed offline database, inserted below the OSM base so the
+        /// vector/raster overlay stay on top (Android `addLayerBelow` parity).
+        /// Called from `isOffline`'s `didSet` whenever the flag flips.
+        private func applyOfflineTileSource() {
+            guard let style = mapView?.style else { return }
+            let sourceId = Self.offlineSourceId
+            let layerId = Self.offlineLayerId
+
+            if !isOffline {
+                if let layer = style.layer(withIdentifier: layerId) {
+                    style.removeLayer(layer)
+                }
+                if let source = style.source(withIdentifier: sourceId) {
+                    style.removeSource(source)
+                }
+                return
+            }
+
+            guard let dbPath = Self.offlineMbtilesPath(),
+                  FileManager.default.fileExists(atPath: dbPath) else { return }
+
+            if style.layer(withIdentifier: layerId) != nil { return }
+
+            let source = MLNRasterTileSource(
+                identifier: sourceId,
+                tileURLTemplates: ["mbtiles://file://\(dbPath)"],
+                options: [.tileSize: 256]
+            )
+            style.addSource(source)
+            let layer = MLNRasterStyleLayer(identifier: layerId, source: source)
+            layer.rasterOpacity = NSExpression(forConstantValue: 1.0)
+            if let osm = style.layer(withIdentifier: "osm") {
+                style.insertLayer(layer, below: osm)
+            } else {
+                style.addLayer(layer)
             }
         }
 
