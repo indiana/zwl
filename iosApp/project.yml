@@ -65,7 +65,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.indiana.zwl.iosApp
         PRODUCT_NAME: ZWL
-        MARKETING_VERSION: "1.1"
+        MARKETING_VERSION: "1.2"
         CURRENT_PROJECT_VERSION: "47"
         FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
         OTHER_LDFLAGS: "$(inherited) -framework shared -lsqlite3"
