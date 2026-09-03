@@ -27,12 +27,20 @@ fun rememberIsOnline(): State<Boolean> {
             return@produceState
         }
         val callback = object : ConnectivityManager.NetworkCallback() {
+            // Always re-query the authoritative active-network state instead of
+            // trusting the event: registerDefaultNetworkCallback fires per
+            // network, so `onLost(wifi)` fires while mobile data is already
+            // carrying traffic — trusting the event flipped the UI to "offline"
+            // for seconds and silently swapped the download button for a
+            // static label.
             override fun onAvailable(network: Network) {
-                value = true
+                value = isOnline(context)
             }
+
             override fun onLost(network: Network) {
-                value = false
+                value = isOnline(context)
             }
+
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
                 value = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             }

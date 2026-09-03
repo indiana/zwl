@@ -1,6 +1,7 @@
 package com.indiana.zwl.shared.ios
 
 import com.indiana.zwl.domain.SpatialEngine
+import com.indiana.zwl.domain.model.DownloadedArea
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.ForestStandSummary
 import com.indiana.zwl.domain.model.LocationStatus
@@ -9,12 +10,14 @@ import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ForestBanRepository
+import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.domain.util.NadlesnictwoUrls
+import com.indiana.zwl.shared.data.offline.KtorIosTileFetcher
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
 import com.indiana.zwl.shared.data.remote.ForestBanSyncParser
@@ -22,10 +25,14 @@ import com.indiana.zwl.shared.data.remote.PoiSyncParser
 import com.indiana.zwl.shared.data.remote.ZoneSyncParser
 import com.indiana.zwl.shared.data.remote.model.GeoJsonCollection
 import com.indiana.zwl.shared.map.MapGeoJson
-import com.indiana.zwl.shared.offline.MbtilesStore
-import com.indiana.zwl.shared.offline.MbtilesTilePackager
+import com.indiana.zwl.shared.offline.MbtilesStoreFactory
+import com.indiana.zwl.shared.offline.OfflineAreaDownloadCoordinator
+import com.indiana.zwl.shared.offline.OfflineAreaFiles
+import com.indiana.zwl.shared.offline.OfflineAreaJanitor
+import com.indiana.zwl.shared.offline.OfflineAreaNames
+import com.indiana.zwl.shared.offline.OfflineLimits
 import com.indiana.zwl.shared.offline.Region
-import com.indiana.zwl.shared.data.offline.KtorIosTileFetcher
+import com.indiana.zwl.shared.offline.TileMath
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +40,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import platform.Foundation.NSTimeZone
 
 /**
  * SKIE-friendly facade for the iOS app (SwiftUI). All heavy/suspending work is
@@ -43,15 +51,27 @@ class ForestApp(
     private val poiRepository: PoiRepository,
     private val forestBanRepository: ForestBanRepository,
     private val savedPointRepository: SavedPointRepository,
+    private val offlineAreaRepository: OfflineAreaRepository,
+    private val offlineStoreFactory: MbtilesStoreFactory,
+    private val offlineAreaFiles: OfflineAreaFiles,
     private val arcgisApi: BdlArcgisApi,
     private val fireApi: BdlFireApi,
-    private val offlineStore: MbtilesStore,
     private val httpClient: HttpClient,
     private val forestStandUseCase: GetForestStandUseCase
 ) {
 
     private val zoneEngine = SpatialEngine()
     private val banEngine = SpatialEngine()
+
+    private val offlineCoordinator = OfflineAreaDownloadCoordinator(
+        repository = offlineAreaRepository,
+        storeFactory = offlineStoreFactory,
+        fetcherProvider = { KtorIosTileFetcher(httpClient) },
+        files = offlineAreaFiles,
+        nameFormatter = { now ->
+            OfflineAreaNames.autoName(now, timeZoneOffsetMinutes(now))
+        }
+    )
 
     private var cachedZones: List<Zone> = emptyList()
 
@@ -64,6 +84,16 @@ class ForestApp(
     }
 
     suspend fun initialize(): Boolean = withContext(Dispatchers.Default) {
+        // One-shot housekeeping: drop the legacy map.mbtiles + orphaned
+        // area files from killed downloads. Best-effort, must not block init.
+        try {
+            OfflineAreaJanitor(offlineAreaRepository, offlineAreaFiles).run()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            println("ForestApp: offline area janitor failed: ${e.message}")
+        }
+
         var ok = true
         try {
             if (zoneRepository.getZonesCount() == 0) {
@@ -322,30 +352,80 @@ class ForestApp(
 
     fun nadlesnictwoWebsiteHost(url: String?): String? = NadlesnictwoUrls.displayHost(url)
 
-    suspend fun downloadArea(
-        latSouth: Double,
-        latNorth: Double,
-        lonWest: Double,
-        lonEast: Double,
-        minZoom: Int,
-        maxZoom: Int,
-        maxTiles: Int,
+    suspend fun offlineAreas(): List<DownloadedArea> = withContext(Dispatchers.Default) {
+        offlineAreaRepository.getAll()
+    }
+
+    suspend fun deleteOfflineArea(id: Long) = withContext(Dispatchers.Default) {
+        val area = offlineAreaRepository.getAll().find { it.id == id } ?: return@withContext
+        offlineAreaRepository.delete(id)
+        offlineAreaFiles.deleteFile(area.fileName)
+    }
+
+    suspend fun renameOfflineArea(id: Long, name: String) = withContext(Dispatchers.Default) {
+        offlineAreaRepository.rename(id, name)
+    }
+
+    suspend fun deleteAllOfflineAreas() = withContext(Dispatchers.Default) {
+        val areas = offlineAreaRepository.getAll()
+        offlineAreaRepository.deleteAll()
+        areas.forEach { offlineAreaFiles.deleteFile(it.fileName) }
+    }
+
+    suspend fun refreshOfflineArea(
+        id: Long,
         onProgress: (Float, String) -> Unit,
         onSuccess: (Int) -> Unit,
         onError: (String) -> Unit
-    ) {
-        val packager = MbtilesTilePackager(
-            fetcher = KtorIosTileFetcher(httpClient),
-            store = offlineStore
-        )
-        packager.download(
-            region = Region(latSouth, latNorth, lonWest, lonEast),
-            minZoom = minZoom,
-            maxZoom = maxZoom,
-            maxTiles = maxTiles,
+    ) = withContext(Dispatchers.Default) {
+        val area = offlineAreaRepository.getAll().find { it.id == id }
+        if (area == null) {
+            onError("Nie znaleziono obszaru do odświeżenia.")
+            return@withContext
+        }
+        offlineCoordinator.refresh(
+            area = area,
             onProgress = onProgress,
             onSuccess = onSuccess,
             onError = onError
         )
     }
+
+    /** Absolute path of an area file — feeds MapLibre's `mbtiles://` source. */
+    fun offlineAreaFilePath(fileName: String): String = offlineAreaFiles.filePath(fileName)
+
+    /** Tile count the view spans — lets Swift reject oversized areas with a
+     *  clear alert before any download starts (Android parity). */
+    suspend fun estimateAreaTiles(
+        latSouth: Double,
+        latNorth: Double,
+        lonWest: Double,
+        lonEast: Double
+    ): Int = withContext(Dispatchers.Default) {
+        TileMath.estimateTileCount(
+            Region(latSouth, latNorth, lonWest, lonEast),
+            OfflineLimits.MIN_ZOOM,
+            OfflineLimits.MAX_ZOOM
+        )
+    }
+
+    suspend fun downloadArea(
+        latSouth: Double,
+        latNorth: Double,
+        lonWest: Double,
+        lonEast: Double,
+        onProgress: (Float, String) -> Unit,
+        onSuccess: (Int) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        offlineCoordinator.download(
+            region = Region(latSouth, latNorth, lonWest, lonEast),
+            onProgress = onProgress,
+            onSuccess = onSuccess,
+            onError = onError
+        )
+    }
+
+    private fun timeZoneOffsetMinutes(atMillis: Long): Int =
+        (NSTimeZone.localTimeZone.secondsFromGMT) / 60
 }

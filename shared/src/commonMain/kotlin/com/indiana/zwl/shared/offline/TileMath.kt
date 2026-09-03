@@ -17,6 +17,27 @@ object TileMath {
         val host = hosts[((x xor y) and Int.MAX_VALUE) % hosts.size]
         return "https://$host/$z/$x/$y.png"
     }
+
+    /**
+     * Number of tiles the region spans across [minZoom]..[maxZoom] — the same
+     * math the packager uses to enumerate, exposed so the UI can reject an
+     * oversized view with a clear message before downloading starts.
+     */
+    fun estimateTileCount(
+        region: Region,
+        minZoom: Int = OfflineLimits.MIN_ZOOM,
+        maxZoom: Int = OfflineLimits.MAX_ZOOM
+    ): Int {
+        var total = 0
+        for (z in minZoom..maxZoom) {
+            val x1 = getTileX(region.lonWest, z)
+            val x2 = getTileX(region.lonEast, z)
+            val y1 = getTileY(region.latNorth, z)
+            val y2 = getTileY(region.latSouth, z)
+            total += (maxOf(x1, x2) - minOf(x1, x2) + 1) * (maxOf(y1, y2) - minOf(y1, y2) + 1)
+        }
+        return total
+    }
 }
 
 private fun ln(x: Double): Double = kotlin.math.ln(x)

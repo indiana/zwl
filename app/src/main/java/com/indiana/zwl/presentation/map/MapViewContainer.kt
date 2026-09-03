@@ -35,7 +35,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
@@ -78,8 +80,12 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Layers
+
+/** Upper bound for cleanup sweeps of generation-stamped offline sources. */
+private const val MAX_OFFLINE_AREA_SOURCES = 64
 
 @Composable
 fun MapViewContainer(
@@ -129,6 +135,7 @@ fun MapViewContainer(
 
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
+    var isOfflineAreasOpen by remember { mutableStateOf(false) }
     val geometryCache = remember { GeometryCache() }
     var zoneGeoJson by remember { mutableStateOf<String?>(null) }
     var banGeoJson by remember { mutableStateOf<String?>(null) }
@@ -322,24 +329,39 @@ fun MapViewContainer(
     val isOnlineState by rememberIsOnline()
     val isInZone = (uiState as? MainUiState.Success)?.locationStatus is LocationStatus.InZone
 
-    val offlineContext = LocalContext.current
-    LaunchedEffect(isOnlineState, styleInstance) {
+    val offlineAreas by mapViewModel.offlineAreas.collectAsState()
+    val downloadBlockedMessage by mapViewModel.downloadBlockedMessage.collectAsState()
+
+    // Offline rendering: every downloaded area is its own `mbtiles://` raster
+    // source, layered under the online OSM layer (same style, overlaps are
+    // harmless). Sources are rebuilt whenever the area list or connectivity
+    // changes; ids are generation-stamped so stale ones can always be found
+    // and removed.
+    LaunchedEffect(isOnlineState, styleInstance, offlineAreas) {
         val style = styleInstance ?: return@LaunchedEffect
-        val offlineLayerId = "osm-offline-layer"
-        val existing = style.getLayer(offlineLayerId)
-        if (isOnlineState) {
-            if (existing != null) {
-                style.removeLayer(offlineLayerId)
-                style.removeSource("osm-offline")
-            }
-        } else {
-            if (existing == null) {
-                val cacheRoot = File(offlineContext.externalCacheDir ?: offlineContext.cacheDir, "mapcache")
-                val dbFile = File(cacheRoot, "map.mbtiles")
-                val localUrl = "mbtiles://file://${dbFile.absolutePath}"
-                style.addSource(RasterSource("osm-offline", localUrl, 256))
-                style.addLayerBelow(RasterLayer(offlineLayerId, "osm-offline"), "osm")
-            }
+        for (index in 0 until MAX_OFFLINE_AREA_SOURCES) {
+            val layerId = "osm-offline-layer-$index"
+            if (style.getLayer(layerId) != null) style.removeLayer(layerId)
+            val sourceId = "osm-offline-$index"
+            if (style.getSource(sourceId) != null) style.removeSource(sourceId)
+        }
+        if (isOnlineState) return@LaunchedEffect
+        offlineAreas.forEachIndexed { index, area ->
+            val path = mapViewModel.offlineFilePath(area.fileName)
+            if (!File(path).isFile) return@forEachIndexed
+            val sourceId = "osm-offline-$index"
+            val layerId = "osm-offline-layer-$index"
+            style.addSource(RasterSource(sourceId, "mbtiles://file://$path", 256))
+            style.addLayerBelow(RasterLayer(layerId, sourceId), "osm")
+        }
+    }
+
+    // Tap on a managed area -> animate the camera to its bounding box.
+    LaunchedEffect(Unit) {
+        mapViewModel.flyToArea.collect { area ->
+            val map = mapboxMapInstance ?: return@collect
+            val bounds = LatLngBounds.from(area.latNorth, area.lonEast, area.latSouth, area.lonWest)
+            map.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100), 800)
         }
     }
 
@@ -782,8 +804,7 @@ fun MapViewContainer(
                                                             latSouth = center.latitude - latSpan,
                                                             latNorth = center.latitude + latSpan,
                                                             lonWest = center.longitude - lngSpan,
-                                                            lonEast = center.longitude + lngSpan,
-                                                            cacheDir = File(context.externalCacheDir, "mapcache")
+                                                            lonEast = center.longitude + lngSpan
                                                         )
                                                     } else {
                                                         Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
@@ -823,21 +844,7 @@ fun MapViewContainer(
                                     OutlinedButton(
                                         onClick = {
                                             isSettingsOpen = false
-                                            coroutineScope.launch {
-                                                val success = withContext(Dispatchers.IO) {
-                                                    val cacheDir = File(context.externalCacheDir, "mapcache")
-                                                    if (cacheDir.exists()) {
-                                                        cacheDir.deleteRecursively()
-                                                    } else {
-                                                        false
-                                                    }
-                                                }
-                                                Toast.makeText(
-                                                    context,
-                                                    if (success) "Pamięć podręczna została wyczyszczona" else "Brak pamięci podręcznej do wyczyszczenia",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
+                                            isOfflineAreasOpen = true
                                         },
                                         shape = RoundedCornerShape(8.dp),
                                         modifier = Modifier.fillMaxWidth(),
@@ -845,14 +852,14 @@ fun MapViewContainer(
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Delete,
+                                            imageVector = Icons.Default.Map,
                                             contentDescription = null,
                                             modifier = Modifier.size(16.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "Wyczyść cache",
+                                            text = "Pobrane obszary",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -862,6 +869,34 @@ fun MapViewContainer(
                         }
                     }
                 }
+            }
+
+            downloadBlockedMessage?.let { message ->
+                AlertDialog(
+                    onDismissRequest = mapViewModel::dismissDownloadBlocked,
+                    title = { Text("Obszar za duży") },
+                    text = { Text(message) },
+                    confirmButton = {
+                        TextButton(onClick = mapViewModel::dismissDownloadBlocked) { Text("OK") }
+                    }
+                )
+            }
+
+            if (isOfflineAreasOpen) {
+                OfflineAreasScreen(
+                    areas = offlineAreas,
+                    isOffline = !isOnlineState,
+                    isDownloading = isDownloadingArea,
+                    onDismiss = { isOfflineAreasOpen = false },
+                    onAreaTap = { area ->
+                        isOfflineAreasOpen = false
+                        mapViewModel.focusArea(area)
+                    },
+                    onDeleteArea = mapViewModel::deleteArea,
+                    onDeleteAll = mapViewModel::deleteAllAreas,
+                    onRenameArea = mapViewModel::renameArea,
+                    onRefreshArea = mapViewModel::refreshArea
+                )
             }
 
             if (isDownloadingArea) {

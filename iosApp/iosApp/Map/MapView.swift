@@ -3,6 +3,13 @@ import MapLibre
 import CoreLocation
 import shared
 
+/// One downloaded offline area as a MapLibre-ready `mbtiles://` source input
+/// (path resolved by the view model via the shared `OfflineAreaFiles`).
+struct OfflineTileArea {
+    let id: Int64
+    let path: String
+}
+
 struct MapView: UIViewRepresentable {
 
     let zonesJson: String
@@ -27,6 +34,10 @@ struct MapView: UIViewRepresentable {
     let centerSavedPointLatitude: Double?
     let centerSavedPointLongitude: Double?
     let centerSavedPointSignal: Int
+    let offlineTileSources: [OfflineTileArea]
+    let offlineSourcesSignal: Int
+    let focusAreaRegion: MapRegion?
+    let focusAreaSignal: Int
     let onTapZone: (String?) -> Void
     let onTapBan: (Int64) -> Void
     let onTapPoi: (String) -> Void
@@ -115,6 +126,11 @@ struct MapView: UIViewRepresentable {
         coordinator.centerSavedPointLatitude = centerSavedPointLatitude
         coordinator.centerSavedPointLongitude = centerSavedPointLongitude
         coordinator.centerSavedPointSignal = centerSavedPointSignal
+        // Sources must be current BEFORE isOffline's didSet re-applies them.
+        coordinator.offlineTileSources = offlineTileSources
+        coordinator.focusAreaRegion = focusAreaRegion
+        coordinator.offlineSourcesSignal = offlineSourcesSignal
+        coordinator.focusAreaSignal = focusAreaSignal
         coordinator.onLongPressPoint = onLongPressPoint
         coordinator.applySourcesIfReady()
         coordinator.handleCentering(userLatitude: userLatitude,
@@ -141,14 +157,32 @@ struct MapView: UIViewRepresentable {
         var showEducation = true
         var showOthers = true
         /// Whether the device currently has no network path (`isOffline` from
-        /// the main view model, NWPathMonitor). When true we add a local
-        /// `mbtiles://` source over the packed offline database so the map keeps
-        /// rendering without network (Android `RasterSource(url: mbtiles://...)`
-        /// parity). Idempotent; only re-runs when the flag actually flips.
+        /// the main view model, NWPathMonitor). When true we add one local
+        /// `mbtiles://` source per downloaded area so the map keeps rendering
+        /// without network (Android `RasterSource(url: mbtiles://...)`
+        /// parity). Idempotent; re-runs when the flag flips.
         var isOffline = false {
             didSet {
                 guard oldValue != isOffline else { return }
                 applyOfflineTileSource()
+            }
+        }
+        /// Downloaded areas as `mbtiles://` source inputs; re-applied when the
+        /// view model bumps `offlineSourcesSignal` (download/delete/refresh).
+        var offlineTileSources: [OfflineTileArea] = []
+        var offlineSourcesSignal = 0 {
+            didSet {
+                guard oldValue != offlineSourcesSignal else { return }
+                applyOfflineTileSource()
+            }
+        }
+        /// Tap on a managed area -> fly the camera to its bounding box.
+        var focusAreaRegion: MapRegion?
+        var focusAreaSignal = 0 {
+            didSet {
+                guard oldValue != focusAreaSignal else { return }
+                guard let region = focusAreaRegion else { return }
+                flyToArea(region)
             }
         }
         var followsUser = true {
@@ -507,61 +541,56 @@ struct MapView: UIViewRepresentable {
             }
         }
 
-        // MARK: Offline tile source (mbtiles://)
+        // MARK: Offline tile sources (mbtiles://)
 
-        private static let offlineSourceId = "osm-offline"
-        private static let offlineLayerId = "osm-offline-layer"
+        private static let maxOfflineSources = 64
 
-        /// The absolute path to the packed offline database. SQLiter's
-        /// NativeSqliteDriver keeps it under Application Support/databases
-        /// (`IosMbtilesStore` + `clearOfflineCache` parity). The driver is
-        /// closed by the packer once a download finishes, so the WAL is
-        /// checkpointed and the file is safe for MapLibre to read directly.
-        private static func offlineMbtilesPath() -> String? {
-            guard let appSupport = FileManager.default
-                .urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
-            return appSupport
-                .appendingPathComponent("databases", isDirectory: true)
-                .appendingPathComponent("map.mbtiles").path
-        }
-
-        /// Adds (offline) or removes (online) a local `mbtiles://` raster source
-        /// over the packed offline database, inserted below the OSM base so the
-        /// vector/raster overlay stay on top (Android `addLayerBelow` parity).
-        /// Called from `isOffline`'s `didSet` whenever the flag flips.
+        /// Re-applies the offline raster sources: every downloaded area gets
+        /// its own `mbtiles://` source + layer below the OSM base layer (same
+        /// style, so overlapping areas are harmless — Android parity). Sources
+        /// are generation-stamped by index so stale ones can always be found
+        /// and removed. The driver is closed by the packer once a download
+        /// finishes, so the WAL is checkpointed and the files are safe for
+        /// MapLibre to read directly.
         private func applyOfflineTileSource() {
             guard let style = mapView?.style else { return }
-            let sourceId = Self.offlineSourceId
-            let layerId = Self.offlineLayerId
 
-            if !isOffline {
-                if let layer = style.layer(withIdentifier: layerId) {
+            for index in 0..<Self.maxOfflineSources {
+                if let layer = style.layer(withIdentifier: "osm-offline-layer-\(index)") {
                     style.removeLayer(layer)
                 }
-                if let source = style.source(withIdentifier: sourceId) {
+                if let source = style.source(withIdentifier: "osm-offline-\(index)") {
                     style.removeSource(source)
                 }
-                return
             }
+            guard isOffline else { return }
 
-            guard let dbPath = Self.offlineMbtilesPath(),
-                  FileManager.default.fileExists(atPath: dbPath) else { return }
+            for (index, area) in offlineTileSources.enumerated() where index < Self.maxOfflineSources {
+                guard FileManager.default.fileExists(atPath: area.path) else { continue }
+                let source = MLNRasterTileSource(
+                    identifier: "osm-offline-\(index)",
+                    tileURLTemplates: ["mbtiles://file://\(area.path)"],
+                    options: [.tileSize: 256]
+                )
+                style.addSource(source)
+                let layer = MLNRasterStyleLayer(identifier: "osm-offline-layer-\(index)", source: source)
+                layer.rasterOpacity = NSExpression(forConstantValue: 1.0)
+                if let osm = style.layer(withIdentifier: "osm") {
+                    style.insertLayer(layer, below: osm)
+                } else {
+                    style.addLayer(layer)
+                }
+            }
+        }
 
-            if style.layer(withIdentifier: layerId) != nil { return }
-
-            let source = MLNRasterTileSource(
-                identifier: sourceId,
-                tileURLTemplates: ["mbtiles://file://\(dbPath)"],
-                options: [.tileSize: 256]
+        /// Animates the camera so the area's bounding box fits the viewport.
+        private func flyToArea(_ region: MapRegion) {
+            guard let map = mapView else { return }
+            let bounds = MLNCoordinateBounds(
+                sw: CLLocationCoordinate2D(latitude: region.latSouth, longitude: region.lonWest),
+                ne: CLLocationCoordinate2D(latitude: region.latNorth, longitude: region.lonEast)
             )
-            style.addSource(source)
-            let layer = MLNRasterStyleLayer(identifier: layerId, source: source)
-            layer.rasterOpacity = NSExpression(forConstantValue: 1.0)
-            if let osm = style.layer(withIdentifier: "osm") {
-                style.insertLayer(layer, below: osm)
-            } else {
-                style.addLayer(layer)
-            }
+            map.setVisibleCoordinateBounds(bounds, animated: true)
         }
 
         // MARK: Data application
