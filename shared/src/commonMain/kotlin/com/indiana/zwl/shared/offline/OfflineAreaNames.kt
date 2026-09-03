@@ -45,7 +45,11 @@ object OfflineAreaNames {
 
     private fun pad2(value: Int): String = if (value < 10) "0$value" else value.toString()
 
-    private fun floorDiv(a: Long, b: Long): Long = Math.floorDiv(a, b)
+    /** Platform-agnostic floor division (java.lang.Math is JVM-only). */
+    private fun floorDiv(a: Long, b: Long): Long {
+        val q = a / b
+        return if ((a % b != 0L) && ((a < 0L) != (b < 0L))) q - 1 else q
+    }
 
     /** Days-since-epoch -> (year, month, day); Howard Hinnant's civil algorithm. */
     private fun civilFromDays(z: Long): Triple<Long, Int, Int> {
