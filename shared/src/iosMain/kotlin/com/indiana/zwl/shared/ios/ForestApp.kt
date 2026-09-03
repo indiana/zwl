@@ -429,5 +429,5 @@ class ForestApp(
     }
 
     private fun timeZoneOffsetMinutes(atMillis: Long): Int =
-        (NSTimeZone.systemTimeZone.secondsFromGMT) / 60
+        (NSTimeZone.systemTimeZone.secondsFromGMT / 60).toInt()
 }
