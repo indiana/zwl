@@ -1,6 +1,7 @@
 package com.indiana.zwl.di
 
 import com.indiana.zwl.domain.repository.ForestBanRepository
+import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
@@ -37,5 +38,11 @@ object RepositoryModule {
     @Singleton
     fun provideSavedPointRepository(): SavedPointRepository {
         return get(SavedPointRepository::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideOfflineAreaRepository(): OfflineAreaRepository {
+        return get(OfflineAreaRepository::class.java)
     }
 }

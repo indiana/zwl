@@ -4,8 +4,6 @@ import shared
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
-    @State private var cacheAlertPresented = false
-    @State private var cacheAlertMessage = ""
     // followsUser lives on the view model (selecting a saved point turns it
     // off so the camera stays on the point; "my location" re-enables it).
     // Dismisses the end-of-download card (bug: it used to stay on screen
@@ -93,10 +91,19 @@ struct MainView: View {
             LayersSettingsView(viewModel: viewModel)
                 .presentationDetents([.large])
         }
-        .alert("Pamięć podręczna", isPresented: $cacheAlertPresented) {
-            Button("OK", role: .cancel) {}
+        .sheet(isPresented: Binding(
+            get: { viewModel.showOfflineAreas },
+            set: { if !$0 { viewModel.closeOfflineAreas() } }
+        )) {
+            OfflineAreasView(viewModel: viewModel)
+        }
+        .alert("Obszar za duży", isPresented: Binding(
+            get: { viewModel.downloadBlockedMessage != nil },
+            set: { if !$0 { viewModel.downloadBlockedMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { viewModel.downloadBlockedMessage = nil }
         } message: {
-            Text(cacheAlertMessage)
+            Text(viewModel.downloadBlockedMessage ?? "")
         }
     }
 
@@ -213,6 +220,10 @@ recenterSignal: viewModel.recenterSignal,
             centerSavedPointLatitude: viewModel.centerSavedPointLatitude,
             centerSavedPointLongitude: viewModel.centerSavedPointLongitude,
             centerSavedPointSignal: viewModel.centerSavedPointSignal,
+            offlineTileSources: viewModel.offlineTileSources,
+            offlineSourcesSignal: viewModel.offlineSourcesSignal,
+            focusAreaRegion: viewModel.focusAreaRegion,
+            focusAreaSignal: viewModel.focusAreaSignal,
             onTapZone: { viewModel.selectZone(named: $0) },
             onTapBan: { viewModel.selectBan(byRemoteId: $0) },
             onTapPoi: { viewModel.selectPoi(named: $0) },
@@ -297,8 +308,11 @@ recenterSignal: viewModel.recenterSignal,
             .disabled(viewModel.isDownloading)
             .font(.system(size: 15))
 
-            Button(action: { clearCache() }) {
-                Label("Wyczyść cache", systemImage: "trash")
+            Button(action: {
+                isSettingsOpen = false
+                viewModel.openOfflineAreas()
+            }) {
+                Label("Pobrane obszary", systemImage: "square.stack.3d.up")
             }
             .font(.system(size: 15))
         }
@@ -310,16 +324,6 @@ recenterSignal: viewModel.recenterSignal,
                 .strokeBorder(Color.black.opacity(0.08))
         )
         .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
-    }
-
-    /// "Wyczyść cache" (Android parity): closes the settings panel and reports
-    /// the outcome with the same wording Android uses in its toast.
-    private func clearCache() {
-        isSettingsOpen = false
-        cacheAlertMessage = viewModel.clearOfflineCache()
-            ? "Pamięć podręczna została wyczyszczona"
-            : "Brak pamięci podręcznej do wyczyszczenia"
-        cacheAlertPresented = true
     }
 
     private var myLocationButton: some View {
