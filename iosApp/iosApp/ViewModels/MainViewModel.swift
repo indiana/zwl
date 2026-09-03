@@ -817,16 +817,16 @@ final class MainViewModel: NSObject, ObservableObject {
         downloadBlockedMessage = nil
         Task { [weak self] in
             guard let self = self else { return }
-            let estimated = (try? await self.app.estimateAreaTiles(
+            // Reject oversized views up front with a modal message (Android
+            // parity) — the packager's error would only flash the status card.
+            // The count comparison + message live in Kotlin (SKIE boxes Ints).
+            if let message = try? await self.app.areaTooBigMessage(
                 latSouth: region.latSouth,
                 latNorth: region.latNorth,
                 lonWest: region.lonWest,
                 lonEast: region.lonEast
-            )) ?? 0
-            let limit = OfflineLimits.shared.MAX_TILES
-            if estimated > limit {
-                self.downloadBlockedMessage =
-                    "Ten widok obejmuje \(estimated) kafelków — limit to \(limit). Przybliż mapę i spróbuj ponownie."
+            ) {
+                self.downloadBlockedMessage = message
                 return
             }
             await self.startDownload(region: region)

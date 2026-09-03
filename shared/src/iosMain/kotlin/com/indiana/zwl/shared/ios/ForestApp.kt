@@ -396,19 +396,27 @@ class ForestApp(
     /** Absolute path of an area file — feeds MapLibre's `mbtiles://` source. */
     fun offlineAreaFilePath(fileName: String): String = offlineAreaFiles.filePath(fileName)
 
-    /** Tile count the view spans — lets Swift reject oversized areas with a
-     *  clear alert before any download starts (Android parity). */
-    suspend fun estimateAreaTiles(
+    /**
+     * Rejects oversized views up front with a ready-to-display message
+     * (null = size OK). The numeric comparison stays in Kotlin so Swift never
+     * has to touch SKIE-boxed integers.
+     */
+    suspend fun areaTooBigMessage(
         latSouth: Double,
         latNorth: Double,
         lonWest: Double,
         lonEast: Double
-    ): Int = withContext(Dispatchers.Default) {
-        TileMath.estimateTileCount(
+    ): String? = withContext(Dispatchers.Default) {
+        val total = TileMath.estimateTileCount(
             Region(latSouth, latNorth, lonWest, lonEast),
             OfflineLimits.MIN_ZOOM,
             OfflineLimits.MAX_ZOOM
         )
+        if (total > OfflineLimits.MAX_TILES) {
+            "Ten widok obejmuje $total kafelków — limit to ${OfflineLimits.MAX_TILES}. Przybliż mapę i spróbuj ponownie."
+        } else {
+            null
+        }
     }
 
     suspend fun downloadArea(
