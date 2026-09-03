@@ -40,7 +40,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import platform.Foundation.NSTimeZoneLocalTimeZone
+import platform.Foundation.NSTimeZone
+import platform.Foundation.secondsFromGMT
+import platform.Foundation.systemTimeZone
 
 /**
  * SKIE-friendly facade for the iOS app (SwiftUI). All heavy/suspending work is
@@ -427,5 +429,5 @@ class ForestApp(
     }
 
     private fun timeZoneOffsetMinutes(atMillis: Long): Int =
-        (NSTimeZoneLocalTimeZone.secondsFromGMT) / 60
+        (NSTimeZone.systemTimeZone.secondsFromGMT) / 60
 }
