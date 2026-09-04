@@ -80,6 +80,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Info
 
 @Composable
 fun MapViewContainer(
@@ -87,7 +88,8 @@ fun MapViewContainer(
     zoneDetailViewModel: ZoneDetailViewModel,
     mapViewModel: MapViewModel,
     zones: List<Zone>,
-    isActive: Boolean
+    isActive: Boolean,
+    onOpenAbout: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -855,6 +857,31 @@ fun MapViewContainer(
                                             text = "Wyczyść cache",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            isSettingsOpen = false
+                                            onOpenAbout()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Info,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "O aplikacji",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
                                         )
                                     }
                                 }

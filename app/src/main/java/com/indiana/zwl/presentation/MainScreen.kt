@@ -231,6 +231,7 @@ fun MainScreen(
             val showSavedPointList by viewModel.showSavedPointList.collectAsStateWithLifecycle()
             val selectedSavedPointInfo by viewModel.selectedSavedPointInfo.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
+            var showAbout by rememberSaveable { mutableStateOf(false) }
 
             val isDebug = BuildConfig.DEBUG
             val debugInvertZone by viewModel.debugInvertZone.collectAsStateWithLifecycle()
@@ -391,7 +392,8 @@ fun MainScreen(
                                     zoneDetailViewModel = zoneDetailViewModel,
                                     mapViewModel = mapViewModel,
                                     zones = viewModel.zones,
-                                    isActive = true
+                                    isActive = true,
+                                    onOpenAbout = { showAbout = true }
                                 )
                             }
                         }
@@ -415,6 +417,10 @@ fun MainScreen(
                                     }
                                 } else null
                             )
+                        }
+
+                        if (showAbout) {
+                            AboutScreen(onClose = { showAbout = false })
                         }
 
                         pendingPoint?.let { point ->
