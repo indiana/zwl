@@ -83,6 +83,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Info
 
 /** Upper bound for cleanup sweeps of generation-stamped offline sources. */
 private const val MAX_OFFLINE_AREA_SOURCES = 64
@@ -93,7 +94,8 @@ fun MapViewContainer(
     zoneDetailViewModel: ZoneDetailViewModel,
     mapViewModel: MapViewModel,
     zones: List<Zone>,
-    isActive: Boolean
+    isActive: Boolean,
+    onOpenAbout: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -862,6 +864,31 @@ fun MapViewContainer(
                                             text = "Pobrane obszary",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            isSettingsOpen = false
+                                            onOpenAbout()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Info,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "O aplikacji",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
                                         )
                                     }
                                 }
