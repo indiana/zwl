@@ -1,6 +1,7 @@
 package com.indiana.zwl.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,8 +34,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.BuildConfig
@@ -162,9 +165,9 @@ fun AboutScreen(
                         lineHeight = 19.sp
                     )
 
-                    WebsiteLinkRow(url = BDL_PORTAL_URL, label = "Bank Danych o Lasach (BDL):")
-                    WebsiteLinkRow(url = IBL_FIRE_URL, label = "Zagrożenie pożarowe (IBL):")
-                    WebsiteLinkRow(url = ZANOCUJ_W_LESIE_URL, label = "Program „Zanocuj w lesie”:")
+                    SourceLinkRow(label = "Bank Danych o Lasach (BDL)", url = BDL_PORTAL_URL)
+                    SourceLinkRow(label = "Zagrożenie pożarowe (IBL)", url = IBL_FIRE_URL)
+                    SourceLinkRow(label = "Program „Zanocuj w lesie”", url = ZANOCUJ_W_LESIE_URL)
 
                     Text(
                         text = "Dane geometryczne stref programu „Zanocuj w lesie” oraz lokalizacje infrastruktury turystycznej pochodzą z serwisu Banku Danych o Lasach. Informacje o stopniu zagrożenia pożarowego opracowywane są przez Instytut Badawczy Leśnictwa.",
@@ -216,5 +219,26 @@ fun AboutScreen(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
+}
+
+@Composable
+private fun SourceLinkRow(label: String, url: String) {
+    val context = LocalContext.current
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = url,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = ForestGreenAccent,
+            textDecoration = TextDecoration.Underline,
+            lineHeight = 18.sp,
+            modifier = Modifier.clickable { openNadlesnictwoWebsite(context, url) }
+        )
     }
 }
