@@ -12,7 +12,7 @@ Aplikacja wymaga dostępu do lokalizacji urządzenia (uprawnienia `ACCESS_FINE_L
 - Weryfikacja na mapie, czy użytkownik znajduje się w wyznaczonej strefie programu „Zanocuj w lesie”.
 - Kalkulacja odległości oraz wskazywanie kierunku (kompas) do najbliższej legalnej strefy biwakowej.
 
-**Ważne:** Dane o lokalizacji są przetwarzane **wyłącznie w czasie rzeczywistym i lokalnie na urządzeniu użytkownika**. Aplikacja nie zbiera danych o lokalizacji w tle, nie rejestruje historii lokalizacji ani nie przesyła współrzędnych geograficznych na serwery zewnętrzne.
+**Ważne:** Aplikacja nie zbiera danych o lokalizacji w tle ani nie rejestruje historii lokalizacji. Współrzędne są przetwarzane lokalnie; jedyny przypadek przesłania współrzędnych na serwer zewnętrzny to anonimowe zapytanie o stopień zagrożenia pożarowego do publicznego API BDL (opisane w sekcji 3).
 
 ## 3. Komunikacja z usługami zewnętrznymi
 Aplikacja łączy się z internetem wyłącznie w celach technicznych i informacyjnych:
