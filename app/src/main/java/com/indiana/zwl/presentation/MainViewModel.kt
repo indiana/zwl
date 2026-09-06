@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
@@ -361,36 +362,53 @@ class MainViewModel @Inject constructor(
             }
 
             try {
-                val count = zoneRepository.getZonesCount()
-                if (count == 0) {
-                    val syncResult = syncZonesUseCase()
-                    if (syncResult.isSuccess) {
-                        val zones = getZonesUseCase()
-                        this@MainViewModel.zones = zones
-                        withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
-                        isEngineInitialized = true
-                        if (hasLocationPermission) startTracking() else _uiState.value = MainUiState.PermissionsRequired
-                    } else {
-                        _uiState.value = MainUiState.EmptyDatabaseRequired
-                        isEngineInitialized = false
+                val outcome = withTimeoutOrNull(INIT_HARD_TIMEOUT_MS) {
+                    withContext(Dispatchers.IO) {
+                        initializeEngineData()
                     }
-                } else {
-                    var zones = getZonesUseCase()
-                    if (zones.any { it.forestDistrict.contains("Nieznane", ignoreCase = true) }) {
-                        val syncResult = syncZonesUseCase()
-                        if (syncResult.isSuccess) {
-                            zones = getZonesUseCase()
-                        }
-                    }
-                    this@MainViewModel.zones = zones
-                    withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
-                    isEngineInitialized = true
-                    if (hasLocationPermission) startTracking() else _uiState.value = MainUiState.PermissionsRequired
+                }
+                if (outcome == null) {
+                    isEngineInitialized = false
+                    _uiState.value = MainUiState.EmptyDatabaseRequired
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                _uiState.value = MainUiState.Error(e.message ?: "Wystąpił nieoczekiwany błąd podczas inicjalizacji danych.")
+                if (e is java.util.concurrent.TimeoutException) {
+                    isEngineInitialized = false
+                    _uiState.value = MainUiState.EmptyDatabaseRequired
+                } else {
+                    _uiState.value = MainUiState.Error(e.message ?: "Wystąpił nieoczekiwany błąd podczas inicjalizacji danych.")
+                }
             }
+        }
+    }
+
+    private suspend fun initializeEngineData() {
+        val count = zoneRepository.getZonesCount()
+        if (count == 0) {
+            val syncResult = syncZonesUseCase()
+            if (syncResult.isSuccess) {
+                val zones = getZonesUseCase()
+                this.zones = zones
+                withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
+                isEngineInitialized = true
+                if (hasLocationPermission) startTracking() else _uiState.value = MainUiState.PermissionsRequired
+            } else {
+                isEngineInitialized = false
+                _uiState.value = MainUiState.EmptyDatabaseRequired
+            }
+        } else {
+            var zones = getZonesUseCase()
+            if (zones.any { it.forestDistrict.contains("Nieznane", ignoreCase = true) }) {
+                val syncResult = syncZonesUseCase()
+                if (syncResult.isSuccess) {
+                    zones = getZonesUseCase()
+                }
+            }
+            this.zones = zones
+            withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
+            isEngineInitialized = true
+            if (hasLocationPermission) startTracking() else _uiState.value = MainUiState.PermissionsRequired
         }
     }
 
@@ -552,6 +570,7 @@ class MainViewModel @Inject constructor(
 
     companion object {
         private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
+        private const val INIT_HARD_TIMEOUT_MS = 20_000L
     }
 }
 
