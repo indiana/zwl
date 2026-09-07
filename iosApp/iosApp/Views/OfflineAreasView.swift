@@ -38,12 +38,8 @@ struct OfflineAreasView: View {
                     .disabled(viewModel.offlineAreaRecords.isEmpty || viewModel.isDownloading)
                 }
             }
-            .confirmationDialog(
-                "Usunąć obszar?",
-                isPresented: Binding(get: { areaToDelete != nil },
-                                     set: { if !$0 { areaToDelete = nil } }),
-                titleVisibility: .visible
-            ) {
+            .alert("Usunąć obszar?", isPresented: Binding(get: { areaToDelete != nil },
+                                                          set: { if !$0 { areaToDelete = nil } })) {
                 Button("Usuń", role: .destructive) {
                     if let area = areaToDelete {
                         viewModel.deleteOfflineArea(area)
@@ -54,7 +50,7 @@ struct OfflineAreasView: View {
             } message: {
                 Text("„\(areaToDelete?.name ?? "")” zostanie usunięty z urządzenia.")
             }
-            .confirmationDialog("Usunąć wszystkie obszary?", isPresented: $confirmDeleteAll, titleVisibility: .visible) {
+            .alert("Usunąć wszystkie obszary?", isPresented: $confirmDeleteAll) {
                 Button("Usuń wszystkie", role: .destructive) {
                     viewModel.deleteAllOfflineAreas()
                 }
