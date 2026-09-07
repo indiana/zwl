@@ -663,7 +663,7 @@ final class MainViewModel: NSObject, ObservableObject {
 
             let cached = self.app.savedPointForestStand(point: point)
             self.selectedSavedPointForestStand = cached
-            let stale = self.app.isSavedPointForestStandStale(point: point, now: now).boolValue
+            let stale = self.app.isSavedPointForestStandStale(point: point, now: now)
             if cached == nil || stale {
                 if let fresh = try? await self.app.getForestStandForPoint(latitude: point.latitude, longitude: point.longitude) {
                     self.selectedSavedPointForestStand = fresh
