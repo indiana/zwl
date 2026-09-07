@@ -125,12 +125,20 @@ struct OfflineAreasView: View {
             } label: {
                 Label("Zmień nazwę", systemImage: "pencil")
             }
+            .disabled(viewModel.isDownloading)
             Button {
                 viewModel.refreshOfflineArea(area)
             } label: {
                 Label("Odśwież", systemImage: "arrow.clockwise")
             }
             .disabled(viewModel.isDownloading || viewModel.isOffline)
+            Divider()
+            Button(role: .destructive) {
+                areaToDelete = area
+            } label: {
+                Label("Usuń", systemImage: "trash")
+            }
+            .disabled(viewModel.isDownloading)
         }
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
@@ -138,6 +146,7 @@ struct OfflineAreasView: View {
             } label: {
                 Label("Usuń", systemImage: "trash")
             }
+            .disabled(viewModel.isDownloading)
             Button {
                 renameInput = area.name
                 areaToRename = area
@@ -145,6 +154,7 @@ struct OfflineAreasView: View {
                 Label("Nazwa", systemImage: "pencil")
             }
             .tint(.blue)
+            .disabled(viewModel.isDownloading)
         }
     }
 
