@@ -4,6 +4,7 @@ import shared
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
+    @State private var showAbout = false
     // followsUser lives on the view model (selecting a saved point turns it
     // off so the camera stays on the point; "my location" re-enables it).
     // Dismisses the end-of-download card (bug: it used to stay on screen
@@ -96,6 +97,9 @@ struct MainView: View {
             set: { if !$0 { viewModel.closeOfflineAreas() } }
         )) {
             OfflineAreasView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showAbout) {
+            AboutView()
         }
         .alert("Obszar za duży", isPresented: Binding(
             get: { viewModel.downloadBlockedMessage != nil },
@@ -313,6 +317,14 @@ recenterSignal: viewModel.recenterSignal,
                 viewModel.openOfflineAreas()
             }) {
                 Label("Pobrane obszary", systemImage: "square.stack.3d.up")
+            }
+            .font(.system(size: 15))
+
+            Button(action: {
+                isSettingsOpen = false
+                showAbout = true
+            }) {
+                Label("O aplikacji", systemImage: "info.circle")
             }
             .font(.system(size: 15))
         }
