@@ -84,6 +84,7 @@ class ForestApp(
 
     companion object {
         private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
+        private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
     }
 
     suspend fun initialize(): Boolean = withContext(Dispatchers.Default) {
