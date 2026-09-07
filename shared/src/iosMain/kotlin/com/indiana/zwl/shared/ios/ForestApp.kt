@@ -8,6 +8,7 @@ import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.SavedPoint
+import com.indiana.zwl.domain.model.SoilCover
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.repository.OfflineAreaRepository
@@ -334,7 +335,7 @@ class ForestApp(
 
     private val forestStandForPointUseCase by lazy {
         GetForestStandForPointUseCase(
-            getForestStandUseCase,
+            forestStandUseCase,
             GetSoilCoverForPointUseCase(BdlStandDescriptionApi(httpClient))
         )
     }
@@ -383,6 +384,30 @@ class ForestApp(
                 null
             }
         }
+
+    /** Fresh SILP soil type + ground cover for the wydzielenie under a point. */
+    suspend fun getSoilCoverForPoint(latitude: Double, longitude: Double): SoilCover? =
+        try {
+            soilCoverForPointUseCase(latitude, longitude)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            println("ForestApp.getSoilCoverForPoint failed: ${e.message}")
+            null
+        }
+
+    /**
+     * SKIE types are immutable — the Swift side cannot `copy` a
+     * [ForestStandSummary]; this merges fresh SILP soil/cover into a cached
+     * summary for display (persisted caches are written in Kotlin only).
+     */
+    fun withSoilCover(summary: ForestStandSummary, soilCover: SoilCover?): ForestStandSummary {
+        if (soilCover == null) return summary
+        return summary.copy(
+            soilType = soilCover.soilType ?: summary.soilType,
+            groundCover = soilCover.groundCover ?: summary.groundCover
+        )
+    }
 
     fun savedPointForestStand(point: SavedPoint): ForestStandSummary? {
         val json = point.forestStandJson ?: return null

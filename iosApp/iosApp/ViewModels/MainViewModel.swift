@@ -682,6 +682,12 @@ final class MainViewModel: NSObject, ObservableObject {
                     )
                     await self.loadSavedPointData()
                 }
+            } else if let cached = cached {
+                // Cached stand is fresh — still fetch fresh SILP soil/cover
+                // and merge display-only (cache TTL untouched).
+                let soil = try? await self.app.getSoilCoverForPoint(latitude: point.latitude, longitude: point.longitude)
+                guard self.selectedSavedPoint?.id == point.id else { return }
+                self.selectedSavedPointForestStand = self.app.withSoilCover(summary: cached, soilCover: soil)
             }
             guard self.selectedSavedPoint?.id == point.id else { return }
             self.isLoadingSavedPointForestStand = false

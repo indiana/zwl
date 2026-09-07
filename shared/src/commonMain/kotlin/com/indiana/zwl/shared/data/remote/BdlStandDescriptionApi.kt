@@ -60,7 +60,8 @@ class BdlStandDescriptionApi(private val client: HttpClient) {
     }
 
     private suspend fun queryLayer(layer: Int, latitude: Double, longitude: Double): EsriQueryResult {
-        return client.get(WMS_BDL_QUERY_URL.format(layer)) {
+        val url = WMS_BDL_QUERY_URL.replace("%d", layer.toString())
+        return client.get(url) {
             bdlHeaders()
             parameter("geometry", "$longitude,$latitude")
             parameter("geometryType", "esriGeometryPoint")
@@ -100,7 +101,7 @@ class BdlStandDescriptionApi(private val client: HttpClient) {
  */
 private fun String.toTranslatedCode(): TranslatedCode? {
     val value = trim()
-    if (value.isEmpty()) return null
+    if (value.isEmpty() || value == "-") return null
     val separator = value.indexOf(':')
     if (separator < 0) return TranslatedCode(code = value, name = value)
     if (separator == 0) return null

@@ -7,6 +7,7 @@ import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
+import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -30,10 +31,11 @@ data class SelectedSavedPointDetails(
     val forestStand: ForestStandSummary? = null,
     val isLoadingForestStand: Boolean = false
 )
-
 @HiltViewModel
-class SavedPointDetailViewModel @Inject constructor(    private val getFireRiskUseCase: GetFireRiskUseCase,
+class SavedPointDetailViewModel @Inject constructor(
+    private val getFireRiskUseCase: GetFireRiskUseCase,
     private val getForestStandForPointUseCase: GetForestStandForPointUseCase,
+    private val getSoilCoverForPointUseCase: GetSoilCoverForPointUseCase,
     private val savedPointRepository: SavedPointRepository
 ) : ViewModel() {
 
@@ -108,6 +110,24 @@ class SavedPointDetailViewModel @Inject constructor(    private val getFireRiskU
                 } else {
                     if (_details.value?.pointId == point.id) {
                         _details.value = _details.value?.copy(isLoadingForestStand = false)
+                    }
+                    // Cached stand is fresh — still fetch fresh SILP soil/cover
+                    // and merge display-only (cache TTL untouched; the refresh
+                    // branch above gets soil already merged in the summary).
+                    val soilCover = try {
+                        getSoilCoverForPointUseCase(point.latitude, point.longitude)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        e.printStackTrace()
+                        null
+                    }
+                    if (soilCover != null && _details.value?.pointId == point.id) {
+                        val merged = _details.value?.forestStand?.copy(
+                            soilType = soilCover.soilType,
+                            groundCover = soilCover.groundCover
+                        )
+                        _details.value = _details.value?.copy(forestStand = merged)
                     }
                 }
             } catch (e: Throwable) {
