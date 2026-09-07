@@ -447,7 +447,17 @@ final class MainViewModel: NSObject, ObservableObject {
         isLoadingZoneForestStand = true
         Task { [weak self] in
             guard let self = self else { return }
-            if let fresh = try? await self.app.getForestStand(zone: zone) {
+            // Fresh summary enriched with the SILP soil type + ground cover
+            // read at the zone's boundary anchor (same anchor as fire risk).
+            var fresh: ForestStandSummary?
+            if let anchor = await Self.firstShellCoordinateAsync(of: zone.forestDistrict, in: self.zonesGeoJson) {
+                fresh = try? await self.app.getForestStandWithSoilCover(
+                    zone: zone, latitude: anchor.0, longitude: anchor.1
+                )
+            } else {
+                fresh = try? await self.app.getForestStand(zone: zone)
+            }
+            if let fresh = fresh {
                 self.selectedZoneForestStand = fresh
                 try? await self.app.cacheForestStand(
                     zone: zone,
