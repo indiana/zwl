@@ -16,11 +16,13 @@ import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
+import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
 import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.domain.util.NadlesnictwoUrls
 import com.indiana.zwl.shared.data.offline.KtorIosTileFetcher
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
+import com.indiana.zwl.shared.data.remote.BdlStandDescriptionApi
 import com.indiana.zwl.shared.data.remote.ForestBanSyncParser
 import com.indiana.zwl.shared.data.remote.PoiSyncParser
 import com.indiana.zwl.shared.data.remote.ZoneSyncParser
@@ -331,7 +333,14 @@ class ForestApp(
     }
 
     private val forestStandForPointUseCase by lazy {
-        GetForestStandForPointUseCase(forestStandUseCase)
+        GetForestStandForPointUseCase(
+            getForestStandUseCase,
+            GetSoilCoverForPointUseCase(BdlStandDescriptionApi(httpClient))
+        )
+    }
+
+    private val soilCoverForPointUseCase by lazy {
+        GetSoilCoverForPointUseCase(BdlStandDescriptionApi(httpClient))
     }
 
     // MARK: Saved-point detail data (zone-detail parity on Android)
@@ -422,6 +431,36 @@ class ForestApp(
     }
 
     fun rotationAgeTooltip(): String = BdlInfo.rotationAgeTooltip
+
+    fun soilTypeTooltip(code: String): String = BdlInfo.soilTypeTooltip(code)
+
+    fun vegCoverTooltip(code: String): String = BdlInfo.groundCoverTooltip(code)
+
+    /**
+     * Forest-stand summary for the zone sheet enriched with the SILP soil
+     * type (typ gleby) and ground cover (pokrywa) read at the anchor point
+     * (map click / first boundary coordinate). [latitude]/[longitude] may be
+     * anything (the zone centroid is a sensible fallback).
+     */
+    suspend fun getForestStandWithSoilCover(
+        zone: Zone,
+        latitude: Double,
+        longitude: Double
+    ): ForestStandSummary? {
+        val stand = getForestStand(zone) ?: return null
+        val soil = try {
+            soilCoverForPointUseCase(latitude, longitude)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        return if (soil != null) {
+            stand.copy(soilType = soil.soilType, groundCover = soil.groundCover)
+        } else {
+            stand
+        }
+    }
 
     fun nadlesnictwoWebsiteUrl(districtName: String?, rdlpName: String?): String? =
         NadlesnictwoUrls.websiteUrl(districtName, rdlpName)

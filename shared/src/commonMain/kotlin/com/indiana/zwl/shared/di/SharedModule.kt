@@ -5,12 +5,15 @@ import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
+import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
+import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
 import com.indiana.zwl.shared.data.local.DatabaseDriverFactory
 import com.indiana.zwl.shared.data.local.SharedDatabase
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
 import com.indiana.zwl.shared.data.remote.BdlOgcApi
+import com.indiana.zwl.shared.data.remote.BdlStandDescriptionApi
 import com.indiana.zwl.shared.data.remote.HttpClientFactory
 import com.indiana.zwl.shared.data.repository.ForestBanRepositoryImpl
 import com.indiana.zwl.shared.data.repository.OfflineAreaRepositoryImpl
@@ -25,7 +28,10 @@ val sharedModule = module {
     single { BdlArcgisApi(get()) }
     single { BdlFireApi(get()) }
     single { BdlOgcApi(get()) }
+    single { BdlStandDescriptionApi(get()) }
     single { GetForestStandUseCase(get()) }
+    single { GetSoilCoverForPointUseCase(get()) }
+    single { GetForestStandForPointUseCase(get(), get()) }
 }
 
 val databaseModule = module {

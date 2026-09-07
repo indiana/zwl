@@ -10,6 +10,7 @@ import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
+import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
 import kotlinx.serialization.json.Json
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -25,6 +26,7 @@ import javax.inject.Inject
 class ZoneDetailViewModel @Inject constructor(
     private val getFireRiskUseCase: GetFireRiskUseCase,
     private val getForestStandUseCase: GetForestStandUseCase,
+    private val getSoilCoverForPointUseCase: GetSoilCoverForPointUseCase,
     private val zoneRepository: ZoneRepository
 ) : ViewModel() {
 
@@ -153,6 +155,35 @@ class ZoneDetailViewModel @Inject constructor(
                             _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(
                                 isLoadingForestStand = false
                             )
+                        }
+                    }
+                }
+
+                // SILP typ gleby + pokrywa for the wydzielenie under the
+                // clicked location — fresh on every open (cheap point query),
+                // merged into the displayed summary and persisted together
+                // with a freshly fetched stand. When only the cache is shown,
+                // the merge stays in memory so the 24h TTL is not reset.
+                val soilCover = try {
+                    getSoilCoverForPointUseCase(clickLat, clickLon)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                    null
+                }
+                if (soilCover != null && _selectedZoneDetails.value?.zone?.id == zone.id) {
+                    val merged = _selectedZoneDetails.value?.forestStand?.copy(
+                        soilType = soilCover.soilType,
+                        groundCover = soilCover.groundCover
+                    )
+                    _selectedZoneDetails.value = _selectedZoneDetails.value?.copy(forestStand = merged)
+                    if (needsForestStandRefresh) {
+                        merged?.let { summary ->
+                            val json = Json.encodeToString(summary)
+                            withContext(Dispatchers.IO) {
+                                zoneRepository.updateForestStand(zone.forestDistrict, json, System.currentTimeMillis())
+                            }
                         }
                     }
                 }

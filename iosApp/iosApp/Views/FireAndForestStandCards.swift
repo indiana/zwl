@@ -170,7 +170,9 @@ struct ForestStandCard: View {
             summary.standStructure == nil &&
             summary.siteType == nil &&
             summary.protectionCategory == nil &&
-            summary.rotationAge == nil
+            summary.rotationAge == nil &&
+            summary.soilType == nil &&
+            summary.groundCover == nil
     }
 
     @ViewBuilder
@@ -265,6 +267,14 @@ struct ForestStandCard: View {
         if let item = summary.siteType {
             items.append(("Typ siedliskowy lasu", item.name,
                           app.siteTypeTooltip(code: item.code)))
+        }
+        if let item = summary.soilType {
+            items.append(("Typ gleby", item.name,
+                          app.soilTypeTooltip(code: item.code)))
+        }
+        if let item = summary.groundCover {
+            items.append(("Pokrywa", item.name,
+                          app.vegCoverTooltip(code: item.code)))
         }
         if let item = summary.protectionCategory {
             items.append(("Kategoria ochrony", item.name,

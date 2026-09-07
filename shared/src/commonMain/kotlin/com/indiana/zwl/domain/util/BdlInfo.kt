@@ -149,6 +149,19 @@ object BdlInfo {
     val rotationAgeTooltip: String =
         "Wiek rębności — wiek, w którym drzewostan osiąga dojrzałość rębną i może być przeznaczony do odnowienia, czyli wycięcia i wymiany pokoleniowej."
 
+    // ---------------------------------------------------------------- soil_subtype_cd / veg_cover_cd (opisy taksacyjne SILP;
+    // wartości są dekodowane przez BDL dla każdego kodu — tooltip opisuje pole i podaje surowy kod)
+
+    fun soilTypeTooltip(code: String): String =
+        "$code — typ gleby wg gleboznawczej klasyfikacji gleb leśnych: określa genezę i właściwości podłoża, " +
+            "np. RDb — gleby rdzawe bielicowe (ubogie, kwaśne, piaszczyste), RDbr — gleby rdzawe brunatne, " +
+            "BR — gleby brunatne (żyźniejsze), OG — opadowo-glejowe (okresowo podmokłe), T — torfowe."
+
+    fun groundCoverTooltip(code: String): String =
+        "$code — pokrywa: roślinność pokrywająca powierzchnię gleby w wydzieleniu — stopień zadarnienia " +
+            "(pokrycia runem trawiasto-krzewinkowym), mszystość lub bujność runa, np. silnie zadarniona, " +
+            "mszysto-czernicowa, zielna."
+
     // ---------------------------------------------------------------- lookups (null = brak danych, UI pokazuje zwykły tekst)
 
     fun wikipediaTitleForSpecies(code: String): String? =

@@ -405,6 +405,12 @@ fun ForestStandCard(
                 summary.siteType?.let {
                     metadataItems.add(MetadataItem("Typ siedliskowy lasu", it.name, BdlInfo.tooltipForSiteType(it.code)))
                 }
+                summary.soilType?.let {
+                    metadataItems.add(MetadataItem("Typ gleby", it.name, BdlInfo.soilTypeTooltip(it.code)))
+                }
+                summary.groundCover?.let {
+                    metadataItems.add(MetadataItem("Pokrywa", it.name, BdlInfo.groundCoverTooltip(it.code)))
+                }
                 summary.protectionCategory?.let {
                     metadataItems.add(MetadataItem("Kategoria ochrony", it.name, BdlInfo.tooltipForProtCateg(it.code)))
                 }
@@ -470,7 +476,9 @@ private fun isForestStandEmpty(summary: ForestStandSummary): Boolean {
             summary.standStructure == null &&
             summary.siteType == null &&
             summary.protectionCategory == null &&
-            summary.rotationAge == null
+            summary.rotationAge == null &&
+            summary.soilType == null &&
+            summary.groundCover == null
 }
 
 internal fun openWikipedia(context: Context, articleTitle: String) {
