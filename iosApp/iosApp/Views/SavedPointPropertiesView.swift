@@ -21,39 +21,54 @@ struct SavedPointPropertiesView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                headerRow
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    headerRow
 
-                coordinatesSubcard
+                    coordinatesSubcard
 
-                Spacer(minLength: 4)
+                    HStack(spacing: 12) {
+                        Button(action: { isRenamePromptPresented = true }) {
+                            Label("Zmień nazwę", systemImage: "pencil")
+                                .font(.system(size: 15, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
 
-                HStack(spacing: 12) {
-                    Button(action: { isRenamePromptPresented = true }) {
-                        Label("Zmień nazwę", systemImage: "pencil")
-                            .font(.system(size: 15, weight: .semibold))
-                            .frame(maxWidth: .infinity)
+                        ShareLink(item: shareText) {
+                            Label("Podziel się", systemImage: "square.and.arrow.up")
+                                .font(.system(size: 15, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button(action: { isDeleteConfirmationPresented = true }) {
+                            Label("Usuń", systemImage: "trash")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
                     }
-                    .buttonStyle(.bordered)
 
-                    ShareLink(item: shareText) {
-                        Label("Podziel się", systemImage: "square.and.arrow.up")
-                            .font(.system(size: 15, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
+                    // Zone-detail style data for the point (fire risk + stove
+                    // rules + BDL forest stand), Android parity.
+                    FireAndStoveCard(
+                        level: viewModel.selectedSavedPointFireRiskLevel,
+                        isLoading: viewModel.isLoadingSavedPointFireRisk
+                    )
 
-                    Button(action: { isDeleteConfirmationPresented = true }) {
-                        Label("Usuń", systemImage: "trash")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    ForestStandCard(
+                        app: viewModel.app,
+                        summary: viewModel.selectedSavedPointForestStand,
+                        isLoading: viewModel.isLoadingSavedPointForestStand
+                    )
+
+                    Spacer(minLength: 8)
                 }
+                .padding(16)
             }
-            .padding(16)
             .background(Color(.systemBackground))
             .navigationTitle("Właściwości punktu")
             .navigationBarTitleDisplayMode(.inline)

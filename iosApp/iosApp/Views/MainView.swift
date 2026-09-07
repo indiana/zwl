@@ -85,7 +85,7 @@ struct MainView: View {
         .sheet(isPresented: isSavedPointPropertiesPresented) {
             if let point = viewModel.selectedSavedPoint {
                 SavedPointPropertiesView(point: point, viewModel: viewModel)
-                    .presentationDetents([.medium])
+                    .presentationDetents([.medium, .large])
             }
         }
         .sheet(isPresented: isLayersSettingsPresented) {

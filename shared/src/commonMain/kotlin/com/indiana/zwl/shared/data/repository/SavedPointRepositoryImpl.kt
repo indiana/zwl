@@ -13,12 +13,16 @@ class SavedPointRepositoryImpl(
 ) : SavedPointRepository {
 
     override fun getAllPoints(): Flow<List<SavedPoint>> {
-        return database.savedPointQueries.selectAll { id, name, latitude, longitude ->
+        return database.savedPointQueries.selectAll { id, name, latitude, longitude, fireRiskLevel, fireRiskTimestamp, forestStandJson, forestStandTimestamp ->
             SavedPoint(
                 id = id,
                 name = name,
                 latitude = latitude,
-                longitude = longitude
+                longitude = longitude,
+                fireRiskLevel = fireRiskLevel?.toInt(),
+                fireRiskTimestamp = fireRiskTimestamp?.toLong(),
+                forestStandJson = forestStandJson,
+                forestStandTimestamp = forestStandTimestamp?.toLong()
             )
         }.asFlow().map { it.executeAsList() }
     }
@@ -30,6 +34,14 @@ class SavedPointRepositoryImpl(
 
     override suspend fun rename(id: Long, name: String) {
         database.savedPointQueries.renameById(name, id)
+    }
+
+    override suspend fun updateFireRisk(id: Long, level: Int, timestamp: Long) {
+        database.savedPointQueries.updateFireRiskById(level.toLong(), timestamp, id)
+    }
+
+    override suspend fun updateForestStand(id: Long, json: String, timestamp: Long) {
+        database.savedPointQueries.updateForestStandById(json, timestamp, id)
     }
 
     override suspend fun delete(id: Long) {

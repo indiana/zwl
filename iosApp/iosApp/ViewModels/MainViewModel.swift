@@ -153,6 +153,13 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var selectedZoneForestStand: ForestStandSummary?
     @Published var isLoadingZoneForestStand = false
 
+    // Saved-point properties detail data (zone-detail parity: fire risk +
+    // stove rules + BDL forest stand).
+    @Published var selectedSavedPointFireRiskLevel: Int?
+    @Published var isLoadingSavedPointFireRisk = false
+    @Published var selectedSavedPointForestStand: ForestStandSummary?
+    @Published var isLoadingSavedPointForestStand = false
+
     // Offline download
     @Published var isDownloading = false
     @Published var downloadProgress: Float = 0
@@ -635,6 +642,40 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func openSavedPointProperties(_ point: SavedPoint) {
         selectedSavedPoint = point
+        selectedSavedPointFireRiskLevel = nil
+        isLoadingSavedPointFireRisk = true
+        selectedSavedPointForestStand = nil
+        isLoadingSavedPointForestStand = true
+        loadSavedPointExtras(for: point)
+    }
+
+    /// Fire risk (fresh point query, 24h offline fallback) + BDL forest stand
+    /// for the saved-point properties sheet — Android
+    /// `SavedPointDetailViewModel` parity.
+    private func loadSavedPointExtras(for point: SavedPoint) {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let now = Self.currentTimeMillis()
+            let level = (try? await self.app.savedPointFireRisk(point: point, now: now).intValue) ?? -2
+            guard self.selectedSavedPoint?.id == point.id else { return }
+            self.selectedSavedPointFireRiskLevel = level
+            self.isLoadingSavedPointFireRisk = false
+
+            let cached = self.app.savedPointForestStand(point: point)
+            self.selectedSavedPointForestStand = cached
+            let stale = self.app.isSavedPointForestStandStale(point: point, now: now).boolValue
+            if cached == nil || stale {
+                if let fresh = try? await self.app.getForestStandForPoint(latitude: point.latitude, longitude: point.longitude) {
+                    self.selectedSavedPointForestStand = fresh
+                    try? await self.app.updateSavedPointForestStand(
+                        id: point.id, summary: fresh, timestamp: Self.currentTimeMillis()
+                    )
+                    await self.loadSavedPointData()
+                }
+            }
+            guard self.selectedSavedPoint?.id == point.id else { return }
+            self.isLoadingSavedPointForestStand = false
+        }
     }
 
     func openSavedPointProperties(id: Int64) {
@@ -644,6 +685,10 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func clearSavedPointProperties() {
         selectedSavedPoint = nil
+        selectedSavedPointFireRiskLevel = nil
+        isLoadingSavedPointFireRisk = false
+        selectedSavedPointForestStand = nil
+        isLoadingSavedPointForestStand = false
     }
 
     func renameSavedPoint(_ point: SavedPoint, to name: String) {

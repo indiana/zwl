@@ -1,5 +1,6 @@
 package com.indiana.zwl.di
 
+import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
@@ -37,5 +38,11 @@ object NetworkModule {
     @Singleton
     fun provideGetForestStandUseCase(ogcApi: BdlOgcApi): GetForestStandUseCase {
         return GetForestStandUseCase(ogcApi)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGetForestStandForPointUseCase(ogcApi: BdlOgcApi): GetForestStandForPointUseCase {
+        return GetForestStandForPointUseCase(GetForestStandUseCase(ogcApi))
     }
 }
