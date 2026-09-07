@@ -442,7 +442,18 @@ final class MainViewModel: NSObject, ObservableObject {
             stale = true
         }
         let needRefresh = cached == nil || stale
-        guard needRefresh else { return }
+        guard needRefresh else {
+            // Cached stand is fresh — still fetch fresh SILP soil/cover at the
+            // zone's boundary anchor and merge display-only (cache TTL
+            // untouched); the refresh path below gets soil already merged.
+            Task { [weak self] in
+                guard let self = self, let cached = cached else { return }
+                guard let anchor = await Self.firstShellCoordinateAsync(of: zone.forestDistrict, in: self.zonesGeoJson) else { return }
+                let soil = try? await self.app.getSoilCoverForPoint(latitude: anchor.0, longitude: anchor.1)
+                self.selectedZoneForestStand = self.app.withSoilCover(summary: cached, soilCover: soil)
+            }
+            return
+        }
 
         isLoadingZoneForestStand = true
         Task { [weak self] in
