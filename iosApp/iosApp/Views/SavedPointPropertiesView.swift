@@ -52,9 +52,10 @@ struct SavedPointPropertiesView: View {
                         .tint(.red)
                     }
 
-                    // Zone-detail style data for the point (fire risk + stove
-                    // rules + BDL forest stand), Android parity.
-                    FireAndStoveCard(
+                    // Zone-detail style data for the point. Fire risk only —
+                    // stove rules are a ZWL-zone concept (outside zones stoves
+                    // are forbidden regardless of fire risk).
+                    FireRiskCard(
                         level: viewModel.selectedSavedPointFireRiskLevel,
                         isLoading: viewModel.isLoadingSavedPointFireRisk
                     )
