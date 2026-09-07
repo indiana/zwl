@@ -21,7 +21,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import com.indiana.zwl.domain.model.SavedPoint
-import com.indiana.zwl.presentation.FireRiskAndStoveCard
+import com.indiana.zwl.presentation.FireRiskCard
 import com.indiana.zwl.presentation.ForestStandCard
 import com.indiana.zwl.presentation.SelectedSavedPointDetails
 
@@ -304,7 +304,7 @@ fun SavedPointPropertiesCard(
 
                 if (details != null) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    FireRiskAndStoveCard(
+                    FireRiskCard(
                         fireRiskLevel = details.fireRiskLevel,
                         isLoadingFireRisk = details.isLoadingFireRisk
                     )

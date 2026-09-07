@@ -21,6 +21,58 @@ struct DetailCard<Content: View>: View {
     }
 }
 
+/// "ZAGROŻENIE POŻAROWE" — risk level only, no stove rules. Used for saved
+/// points: stove usage is a ZWL-zone concept (outside zones the rules forbid
+/// stoves regardless of fire risk).
+struct FireRiskCard: View {
+    let level: Int?
+    let isLoading: Bool
+
+    var body: some View {
+        DetailCard(title: "ZAGROŻENIE POŻAROWE") {
+            FireRiskBadge(level: level, isLoading: isLoading)
+        }
+    }
+}
+
+private struct FireRiskBadge: View {
+    let level: Int?
+    let isLoading: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Stopień zagrożenia pożarowego:")
+                .font(.system(size: 14))
+            if isLoading {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Pobieranie aktualnych danych...")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+            } else if let level = level {
+                riskBadge(text: Formatters.fireRiskStatusText(level),
+                          color: Formatters.fireRiskColor(level))
+            } else {
+                riskBadge(text: Formatters.fireRiskStatusText(-2),
+                          color: Formatters.fireRiskColor(-2))
+            }
+        }
+    }
+
+    private func riskBadge(text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 15, weight: .bold))
+            .foregroundColor(color)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(color.opacity(0.15))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(color, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 /// "ZAGROŻENIE POŻAROWE I ZASADY" — risk badge + gas-stove rules.
 struct FireAndStoveCard: View {
     let level: Int?
@@ -29,25 +81,7 @@ struct FireAndStoveCard: View {
     var body: some View {
         DetailCard(title: "ZAGROŻENIE POŻAROWE I ZASADY") {
             VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Stopień zagrożenia pożarowego:")
-                        .font(.system(size: 14))
-                    if isLoading {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("Pobieranie aktualnych danych...")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                        }
-                    } else if let level = level {
-                        riskBadge(text: Formatters.fireRiskStatusText(level),
-                                  color: Formatters.fireRiskColor(level))
-                    } else {
-                        riskBadge(text: Formatters.fireRiskStatusText(-2),
-                                  color: Formatters.fireRiskColor(-2))
-                    }
-                }
+                FireRiskBadge(level: level, isLoading: isLoading)
 
                 Divider()
 
@@ -97,17 +131,6 @@ struct FireAndStoveCard: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
     }
-
-    private func riskBadge(text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 15, weight: .bold))
-            .foregroundColor(color)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(color.opacity(0.15))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(color, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
 }
 
 /// "STRUKTURA I CHARAKTERYSTYKA DRZEWOSTANU" — BDL summary with species
@@ -129,7 +152,7 @@ struct ForestStandCard: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(.vertical, 4)
-            } else if let summary = summary {
+            } else if let summary = summary, !Self.isEmpty(summary) {
                 forestStandContent(summary)
             } else {
                 Text("Brak szczegółowych danych o drzewostanie dla wybranego obszaru.")
@@ -138,6 +161,16 @@ struct ForestStandCard: View {
                     .padding(.vertical, 4)
             }
         }
+    }
+
+    private static func isEmpty(_ summary: ForestStandSummary) -> Bool {
+        summary.totalAreaHa <= 0 &&
+            summary.speciesBreakdown.isEmpty &&
+            summary.forestFunction == nil &&
+            summary.standStructure == nil &&
+            summary.siteType == nil &&
+            summary.protectionCategory == nil &&
+            summary.rotationAge == nil
     }
 
     @ViewBuilder

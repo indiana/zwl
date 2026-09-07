@@ -34,6 +34,113 @@ import com.indiana.zwl.presentation.theme.*
 import kotlinx.coroutines.launch
 
 /**
+ * "ZAGROŻENIE POŻAROWE" card — risk level only, no stove rules. Used for
+ * saved points: stove usage is a ZWL-zone concept (outside zones the rules
+ * forbid stoves regardless of fire risk).
+ */
+@Composable
+fun FireRiskCard(
+    fireRiskLevel: Int,
+    isLoadingFireRisk: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "ZAGROŻENIE POŻAROWE",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            FireRiskBadge(
+                fireRiskLevel = fireRiskLevel,
+                isLoadingFireRisk = isLoadingFireRisk
+            )
+        }
+    }
+}
+
+@Composable
+private fun FireRiskBadge(
+    fireRiskLevel: Int,
+    isLoadingFireRisk: Boolean
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = "Stopień zagrożenia pożarowego:",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        if (isLoadingFireRisk) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 4.dp)
+            ) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    color = ForestGreenAccent,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Pobieranie aktualnych danych...",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            val riskText = when (fireRiskLevel) {
+                0 -> "STOPIEŃ 0 (Brak)"
+                1 -> "STOPIEŃ 1 (Niskie)"
+                2 -> "STOPIEŃ 2 (Średnie)"
+                3 -> "STOPIEŃ 3 (WYSOKIE)"
+                10 -> "STOPIEŃ 0 (Brak - offline)"
+                11 -> "STOPIEŃ 1 (Niskie - offline)"
+                12 -> "STOPIEŃ 2 (Średnie - offline)"
+                13 -> "STOPIEŃ 3 (WYSOKIE - offline)"
+                -2 -> "Brak danych z serwisu"
+                -1 -> "Brak połączenia"
+                else -> "Nieznany"
+            }
+            val riskColor = when (fireRiskLevel) {
+                0, 10 -> RiskLevelNone
+                1, 11 -> RiskLevelLow
+                2, 12 -> RiskLevelMedium
+                3, 13 -> RiskLevelHigh
+                else -> RiskLevelUnknown
+            }
+            Surface(
+                color = riskColor.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, riskColor)
+            ) {
+                Text(
+                    text = riskText,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = riskColor,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
  * "ZAGROŻENIE POŻAROWE I ZASADY" card shared by the zone detail screen and
  * the saved-point properties card (same badges + stove rules + disclaimer).
  */
@@ -62,69 +169,10 @@ fun FireRiskAndStoveCard(
             )
 
             // Fire Risk Level
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = "Stopień zagrożenia pożarowego:",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                if (isLoadingFireRisk) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            strokeWidth = 2.dp,
-                            color = ForestGreenAccent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Pobieranie aktualnych danych...",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    val riskText = when (fireRiskLevel) {
-                        0 -> "STOPIEŃ 0 (Brak)"
-                        1 -> "STOPIEŃ 1 (Niskie)"
-                        2 -> "STOPIEŃ 2 (Średnie)"
-                        3 -> "STOPIEŃ 3 (WYSOKIE)"
-                        10 -> "STOPIEŃ 0 (Brak - offline)"
-                        11 -> "STOPIEŃ 1 (Niskie - offline)"
-                        12 -> "STOPIEŃ 2 (Średnie - offline)"
-                        13 -> "STOPIEŃ 3 (WYSOKIE - offline)"
-                        -2 -> "Brak danych z serwisu"
-                        -1 -> "Brak połączenia"
-                        else -> "Nieznany"
-                    }
-                    val riskColor = when (fireRiskLevel) {
-                        0, 10 -> RiskLevelNone
-                        1, 11 -> RiskLevelLow
-                        2, 12 -> RiskLevelMedium
-                        3, 13 -> RiskLevelHigh
-                        else -> RiskLevelUnknown
-                    }
-                    Surface(
-                        color = riskColor.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, riskColor)
-                    ) {
-                        Text(
-                            text = riskText,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = riskColor,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
-                }
-            }
+            FireRiskBadge(
+                fireRiskLevel = fireRiskLevel,
+                isLoadingFireRisk = isLoadingFireRisk
+            )
 
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
@@ -267,7 +315,7 @@ fun ForestStandCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            } else if (forestStand == null) {
+            } else if (forestStand == null || isForestStandEmpty(forestStand)) {
                 Text(
                     text = "Brak szczegółowych danych o drzewostanie dla wybranego obszaru.",
                     fontSize = 13.sp,
@@ -414,6 +462,16 @@ internal data class MetadataItem(
     val value: String,
     val tooltip: String?
 )
+
+private fun isForestStandEmpty(summary: ForestStandSummary): Boolean {
+    return summary.totalAreaHa <= 0.0 &&
+            summary.speciesBreakdown.isEmpty() &&
+            summary.forestFunction == null &&
+            summary.standStructure == null &&
+            summary.siteType == null &&
+            summary.protectionCategory == null &&
+            summary.rotationAge == null
+}
 
 internal fun openWikipedia(context: Context, articleTitle: String) {
     val uri = Uri.Builder()
