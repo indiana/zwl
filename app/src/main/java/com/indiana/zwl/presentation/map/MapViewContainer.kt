@@ -190,19 +190,20 @@ fun MapViewContainer(
                 banSource?.setGeoJson(json)
             }
             if (!hasLayers) {
+                val anchor = if (style.getLayer("zones-fill") != null) "zones-fill" else "own-points-layer"
                 style.addLayerBelow(
                     FillLayer("bans-fill", "bans-source").withProperties(
                         PropertyFactory.fillColor("#D32F2F"),
                         PropertyFactory.fillOpacity(0.35f)
                     ),
-                    "poi-layer"
+                    anchor
                 )
                 style.addLayerBelow(
                     LineLayer("bans-line", "bans-source").withProperties(
                         PropertyFactory.lineColor("#FFB71C1C"),
                         PropertyFactory.lineWidth(2f)
                     ),
-                    "poi-layer"
+                    anchor
                 )
             }
         }
@@ -232,14 +233,14 @@ fun MapViewContainer(
             (style.getSource("zones-source") as? GeoJsonSource)?.setGeoJson(json)
         } else {
             style.addSource(GeoJsonSource("zones-source").apply { setGeoJson(json) })
-            style.addLayer(FillLayer("zones-fill", "zones-source").withProperties(
+            style.addLayerBelow(FillLayer("zones-fill", "zones-source").withProperties(
                 PropertyFactory.fillColor("#1B5E20"),
                 PropertyFactory.fillOpacity(0.35f)
-            ))
-            style.addLayer(LineLayer("zones-line", "zones-source").withProperties(
+            ), "own-points-layer")
+            style.addLayerBelow(LineLayer("zones-line", "zones-source").withProperties(
                 PropertyFactory.lineColor("#FF1B5E20"),
                 PropertyFactory.lineWidth(2f)
-            ))
+            ), "own-points-layer")
         }
     }
 
@@ -488,6 +489,31 @@ fun MapViewContainer(
                                         }
                                     }
 
+                                    val screenPoint = map.projection.toScreenLocation(point)
+                                    val hitFeatures = map.queryRenderedFeatures(
+                                        android.graphics.RectF(
+                                            screenPoint.x - 24f, screenPoint.y - 24f,
+                                            screenPoint.x + 24f, screenPoint.y + 24f
+                                        ),
+                                        "poi-layer"
+                                    )
+                                    if (hitFeatures.isNotEmpty()) {
+                                        val props = hitFeatures[0].properties()
+                                        val poiId = props?.get("id")?.asLong
+                                        val poi = pois.firstOrNull { it.id == poiId }
+                                        if (poi != null) {
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                val successState = uiState as? MainUiState.Success
+                                                zoneDetailViewModel.selectPoi(
+                                                    poi,
+                                                    successState?.latitude,
+                                                    successState?.longitude
+                                                )
+                                            }
+                                            return@addOnMapClickListener true
+                                        }
+                                    }
+
                                     val hitZoneId = geometryCache.findZoneIdAt(clickedPoint)
                                     if (hitZoneId != null) {
                                         val zone = zones.firstOrNull { it.id == hitZoneId }
@@ -514,31 +540,6 @@ fun MapViewContainer(
                                             }
                                         }
                                         return@addOnMapClickListener true
-                                    }
-
-                                    val screenPoint = map.projection.toScreenLocation(point)
-                                    val hitFeatures = map.queryRenderedFeatures(
-                                        android.graphics.RectF(
-                                            screenPoint.x - 24f, screenPoint.y - 24f,
-                                            screenPoint.x + 24f, screenPoint.y + 24f
-                                        ),
-                                        "poi-layer"
-                                    )
-                                    if (hitFeatures.isNotEmpty()) {
-                                        val props = hitFeatures[0].properties()
-                                        val poiId = props?.get("id")?.asLong
-                                        val poi = pois.firstOrNull { it.id == poiId }
-                                        if (poi != null) {
-                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                                val successState = uiState as? MainUiState.Success
-                                                zoneDetailViewModel.selectPoi(
-                                                    poi,
-                                                    successState?.latitude,
-                                                    successState?.longitude
-                                                )
-                                            }
-                                            return@addOnMapClickListener true
-                                        }
                                     }
 
                                     false
@@ -599,7 +600,7 @@ fun MapViewContainer(
                                 PropertyFactory.circleStrokeColor("#FFFFFF"),
                                 PropertyFactory.circleOpacity(0.9f)
                             ),
-                            "zones-fill"
+                            "own-points-layer"
                         )
                     }
                 }

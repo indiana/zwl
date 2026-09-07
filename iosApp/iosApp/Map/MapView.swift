@@ -416,12 +416,12 @@ struct MapView: UIViewRepresentable {
             banFill.fillColor = NSExpression(forConstantValue: banFillColor(showBans))
             banFill.fillOutlineColor = NSExpression(forConstantValue: banOutlineColor(showBans))
             banFill.fillAntialiased = NSExpression(forConstantValue: false)
-            style.addLayer(banFill)
+            style.insertLayer(banFill, below: zoneFill)
             let banLine = MLNLineStyleLayer(identifier: banLineId, source: banSource)
             banLine.lineColor = NSExpression(forConstantValue: UIColor(red: 0.7, green: 0.05, blue: 0.05, alpha: 0.9))
             banLine.lineWidth = NSExpression(forConstantValue: 2.0)
             banLine.lineOpacity = NSExpression(forConstantValue: showBans ? 0.9 : 0.0)
-            style.addLayer(banLine)
+            style.insertLayer(banLine, below: zoneFill)
 
             // One URL source per POI category; toggling switches paint opacity
             // only (layers stay layout-visible, so baked tiles stay hot).
