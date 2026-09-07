@@ -14,6 +14,7 @@ import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
+import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.domain.util.NadlesnictwoUrls
@@ -327,6 +328,78 @@ class ForestApp(
         val timestamp = zone.forestStandTimestamp ?: return true
         return now - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
     }
+
+    private val forestStandForPointUseCase by lazy {
+        GetForestStandForPointUseCase(forestStandUseCase)
+    }
+
+    // MARK: Saved-point detail data (zone-detail parity on Android)
+
+    /**
+     * Fire-risk code for a saved point, Android `ZoneDetailViewModel` parity:
+     * fresh point query on success (persisted to the point row), on failure a
+     * 24h-fresh cached level is served as an archived code (+10), otherwise
+     * -2 ("brak danych"). `now` comes from the platform (Swift) since
+     * Kotlin/Native has no System.currentTimeMillis.
+     */
+    suspend fun savedPointFireRisk(point: SavedPoint, now: Long): Int = withContext(Dispatchers.Default) {
+        try {
+            val response = fireApi.getFireHazard(geometry = "${point.longitude},${point.latitude}")
+            val code = response.features?.firstOrNull()?.properties?.kodInt ?: -2
+            if (code in 0..3) {
+                savedPointRepository.updateFireRisk(point.id, code, now)
+            }
+            code
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val fresh = savedPointRepository.getAllPoints().first().firstOrNull { it.id == point.id }
+            val level = fresh?.fireRiskLevel?.toInt()
+            val timestamp = fresh?.fireRiskTimestamp?.toLong()
+            if (level != null && level in 0..3 &&
+                timestamp != null && now - timestamp < FIRE_RISK_CACHE_MAX_AGE_MS
+            ) level + 10 else -2
+        }
+    }
+
+    suspend fun getForestStandForPoint(latitude: Double, longitude: Double): ForestStandSummary? =
+        withContext(Dispatchers.Default) {
+            try {
+                forestStandForPointUseCase(latitude, longitude).getOrNull()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                println("ForestApp.getForestStandForPoint failed: ${e.message}")
+                null
+            }
+        }
+
+    fun savedPointForestStand(point: SavedPoint): ForestStandSummary? {
+        val json = point.forestStandJson ?: return null
+        return try {
+            Json.decodeFromString<ForestStandSummary>(json)
+        } catch (e: Exception) {
+            println("ForestApp.savedPointForestStand decode failed: ${e.message}")
+            null
+        }
+    }
+
+    fun isSavedPointForestStandStale(point: SavedPoint, now: Long): Boolean {
+        val timestamp = point.forestStandTimestamp ?: return true
+        return now - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
+    }
+
+    suspend fun updateSavedPointForestStand(id: Long, summary: ForestStandSummary, timestamp: Long) {
+        try {
+            val json = Json.encodeToString(summary)
+            savedPointRepository.updateForestStand(id, json, timestamp)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            println("ForestApp.updateSavedPointForestStand failed: ${e.message}")
+        }
+    }
+
 
     fun forestStandCacheMaxAgeMs(): Long = FOREST_STAND_CACHE_MAX_AGE_MS
 

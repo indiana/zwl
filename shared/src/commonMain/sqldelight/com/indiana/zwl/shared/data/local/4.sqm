@@ -1,0 +1,4 @@
+ALTER TABLE SavedPoint ADD COLUMN fireRiskLevel INTEGER;
+ALTER TABLE SavedPoint ADD COLUMN fireRiskTimestamp INTEGER;
+ALTER TABLE SavedPoint ADD COLUMN forestStandJson TEXT;
+ALTER TABLE SavedPoint ADD COLUMN forestStandTimestamp INTEGER;

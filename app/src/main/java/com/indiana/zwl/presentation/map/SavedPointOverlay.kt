@@ -2,6 +2,8 @@ package com.indiana.zwl.presentation.map
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,6 +21,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import com.indiana.zwl.domain.model.SavedPoint
+import com.indiana.zwl.presentation.FireRiskAndStoveCard
+import com.indiana.zwl.presentation.ForestStandCard
+import com.indiana.zwl.presentation.SelectedSavedPointDetails
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -197,6 +202,7 @@ private fun parseCoordinates(input: String): Pair<Double, Double>? {
 @Composable
 fun SavedPointPropertiesCard(
     point: SavedPoint,
+    details: SelectedSavedPointDetails?,
     onRename: (String) -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
@@ -252,45 +258,61 @@ fun SavedPointPropertiesCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedButton(
-                onClick = { newName = point.name; renameDialogVisible = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 460.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Zmień nazwę", fontWeight = FontWeight.SemiBold)
-            }
+                OutlinedButton(
+                    onClick = { newName = point.name; renameDialogVisible = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Zmień nazwę", fontWeight = FontWeight.SemiBold)
+                }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onShare,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Podziel się punktem", fontWeight = FontWeight.SemiBold)
+                }
 
-            OutlinedButton(
-                onClick = onShare,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Podziel się punktem", fontWeight = FontWeight.SemiBold)
-            }
+                Button(
+                    onClick = { deleteDialogVisible = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Usuń punkt", fontWeight = FontWeight.Bold, color = Color.White)
+                }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = { deleteDialogVisible = true },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Usuń punkt", fontWeight = FontWeight.Bold, color = Color.White)
+                if (details != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FireRiskAndStoveCard(
+                        fireRiskLevel = details.fireRiskLevel,
+                        isLoadingFireRisk = details.isLoadingFireRisk
+                    )
+                    ForestStandCard(
+                        forestStand = details.forestStand,
+                        isLoadingForestStand = details.isLoadingForestStand
+                    )
+                }
             }
         }
     }

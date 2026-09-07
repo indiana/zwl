@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.alpha
 import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.indiana.zwl.BuildConfig
 import com.indiana.zwl.domain.model.LocationStatus
@@ -230,6 +231,8 @@ fun MainScreen(
             val savedPoints by viewModel.savedPoints.collectAsStateWithLifecycle()
             val showSavedPointList by viewModel.showSavedPointList.collectAsStateWithLifecycle()
             val selectedSavedPointInfo by viewModel.selectedSavedPointInfo.collectAsStateWithLifecycle()
+            val savedPointDetailViewModel: SavedPointDetailViewModel = hiltViewModel()
+            val selectedSavedPointDetails by savedPointDetailViewModel.details.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
             var showAbout by rememberSaveable { mutableStateOf(false) }
 
@@ -258,6 +261,14 @@ fun MainScreen(
                     val lon = state.longitude
                     if (lat != null && lon != null) {
                         zoneDetailViewModel.updateDistanceFromUser(lat, lon)
+                    }
+                }
+                LaunchedEffect(selectedSavedPointInfo) {
+                    val point = selectedSavedPointInfo
+                    if (point != null) {
+                        savedPointDetailViewModel.select(point)
+                    } else {
+                        savedPointDetailViewModel.clear()
                     }
                 }
                 Scaffold(
@@ -455,6 +466,7 @@ fun MainScreen(
                         selectedSavedPointInfo?.let { point ->
                             SavedPointPropertiesCard(
                                 point = point,
+                                details = selectedSavedPointDetails?.takeIf { it.pointId == point.id },
                                 onRename = { name -> viewModel.renameSavedPoint(point.id, name) },
                                 onShare = { shareSavedPoint(context, point) },
                                 onDelete = {
