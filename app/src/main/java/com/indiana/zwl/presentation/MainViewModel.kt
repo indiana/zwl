@@ -89,8 +89,23 @@ class MainViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
+    private val _uiState = MutableStateFlow<MainUiState>(
+        MainUiState.Success(
+            locationStatus = LocationStatus.EmptyData,
+            fireRiskLevel = -1,
+            latitude = null,
+            longitude = null,
+            isLoadingZones = true
+        )
+    )
     val uiState: StateFlow<MainUiState> = _uiState
+
+    private fun setZonesLoading(loading: Boolean) {
+        val state = _uiState.value
+        if (state is MainUiState.Success) {
+            _uiState.value = state.copy(isLoadingZones = loading)
+        }
+    }
 
     private val _azimuth = MutableStateFlow(0f)
     val azimuth: StateFlow<Float> = _azimuth.asStateFlow()
@@ -322,16 +337,23 @@ class MainViewModel @Inject constructor(
             _uiState.value = MainUiState.PermissionsRequired
             stopTracking()
         } else {
-            _uiState.value = MainUiState.Loading
             if (isEngineInitialized) {
                 startTracking()
+            } else {
+                _uiState.value = MainUiState.Success(
+                    locationStatus = LocationStatus.EmptyData,
+                    fireRiskLevel = -1,
+                    latitude = null,
+                    longitude = null,
+                    isLoadingZones = true
+                )
             }
         }
     }
 
     private fun loadZonesAndInitializeEngine() {
         viewModelScope.launch {
-            _uiState.value = MainUiState.Loading
+            setZonesLoading(true)
 
             viewModelScope.launch(Dispatchers.IO) {
                 try {
@@ -362,17 +384,20 @@ class MainViewModel @Inject constructor(
             }
 
             try {
+                android.util.Log.d("ZWL_INIT", "init START (timeout=${INIT_HARD_TIMEOUT_MS} ms)")
                 val outcome = withTimeoutOrNull(INIT_HARD_TIMEOUT_MS) {
                     withContext(Dispatchers.IO) {
                         initializeEngineData()
                     }
                 }
+                android.util.Log.d("ZWL_INIT", "init outcome=$outcome")
                 if (outcome == null) {
                     isEngineInitialized = false
                     _uiState.value = MainUiState.EmptyDatabaseRequired
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                android.util.Log.e("ZWL_INIT", "init exception", e)
                 if (e is java.util.concurrent.TimeoutException) {
                     isEngineInitialized = false
                     _uiState.value = MainUiState.EmptyDatabaseRequired
@@ -385,15 +410,23 @@ class MainViewModel @Inject constructor(
 
     private suspend fun initializeEngineData() {
         val count = zoneRepository.getZonesCount()
+        android.util.Log.d("ZWL_INIT", "zones count in DB = $count")
         if (count == 0) {
             val syncResult = syncZonesUseCase()
+            android.util.Log.d("ZWL_INIT", "zones sync success=${syncResult.isSuccess}")
             if (syncResult.isSuccess) {
                 val zones = getZonesUseCase()
+                android.util.Log.d("ZWL_INIT", "zones fetched size=${zones.size}")
                 this.zones = zones
+                val t0 = android.os.SystemClock.elapsedRealtime()
+                android.util.Log.d("ZWL_INIT", "engine init START zones=${zones.size}")
                 withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
+                android.util.Log.d("ZWL_INIT", "engine init ${android.os.SystemClock.elapsedRealtime() - t0} ms")
                 isEngineInitialized = true
+                android.util.Log.d("ZWL_INIT", "hasLocationPermission=$hasLocationPermission; startTracking=${hasLocationPermission}")
                 if (hasLocationPermission) startTracking() else _uiState.value = MainUiState.PermissionsRequired
             } else {
+                android.util.Log.d("ZWL_INIT", "zones sync FAILED -> EmptyDatabaseRequired")
                 isEngineInitialized = false
                 _uiState.value = MainUiState.EmptyDatabaseRequired
             }
@@ -406,8 +439,12 @@ class MainViewModel @Inject constructor(
                 }
             }
             this.zones = zones
+            val t0 = android.os.SystemClock.elapsedRealtime()
+            android.util.Log.d("ZWL_INIT", "engine init START zones=${zones.size}")
             withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
+            android.util.Log.d("ZWL_INIT", "engine init ${android.os.SystemClock.elapsedRealtime() - t0} ms")
             isEngineInitialized = true
+            android.util.Log.d("ZWL_INIT", "hasLocationPermission=$hasLocationPermission; startTracking=${hasLocationPermission}")
             if (hasLocationPermission) startTracking() else _uiState.value = MainUiState.PermissionsRequired
         }
     }
