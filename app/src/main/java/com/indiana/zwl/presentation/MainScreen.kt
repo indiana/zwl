@@ -383,13 +383,23 @@ fun MainScreen(
                                                 textAlign = TextAlign.Center
                                             )
                                             Spacer(modifier = Modifier.height(8.dp))
-                                            Text(
-                                                text = "Aplikacja oczekuje na pierwsze współrzędne z Twojego urządzenia. Upewnij się, że funkcja lokalizacji (GPS) jest włączona.",
-                                                fontSize = 13.sp,
-                                                color = ForestGreenText,
-                                                textAlign = TextAlign.Center,
-                                                lineHeight = 18.sp
-                                            )
+                                            if (state.isLoadingZones) {
+                                                Text(
+                                                    text = "Trwa pobieranie stref z Banku Danych o Lasach...",
+                                                    fontSize = 13.sp,
+                                                    color = ForestGreenText,
+                                                    textAlign = TextAlign.Center,
+                                                    lineHeight = 18.sp
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = "Aplikacja oczekuje na pierwsze współrzędne z Twojego urządzenia. Upewnij się, że funkcja lokalizacji (GPS) jest włączona.",
+                                                    fontSize = 13.sp,
+                                                    color = ForestGreenText,
+                                                    textAlign = TextAlign.Center,
+                                                    lineHeight = 18.sp
+                                                )
+                                            }
                                         }
                                     }
                                 }

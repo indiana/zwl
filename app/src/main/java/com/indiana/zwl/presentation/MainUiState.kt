@@ -20,6 +20,7 @@ sealed class MainUiState {
         val fireRiskLevel: Int,
         val latitude: Double?,
         val longitude: Double?,
-        val currentForestBan: ForestBan? = null
+        val currentForestBan: ForestBan? = null,
+        val isLoadingZones: Boolean = false
     ) : MainUiState()
 }
