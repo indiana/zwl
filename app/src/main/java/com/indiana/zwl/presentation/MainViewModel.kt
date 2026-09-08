@@ -339,15 +339,19 @@ class MainViewModel @Inject constructor(
         } else {
             if (isEngineInitialized) {
                 startTracking()
-            } else {
-                _uiState.value = MainUiState.Success(
-                    locationStatus = LocationStatus.EmptyData,
-                    fireRiskLevel = -1,
-                    latitude = null,
-                    longitude = null,
-                    isLoadingZones = true
-                )
+                return
             }
+            when (_uiState.value) {
+                is MainUiState.EmptyDatabaseRequired, is MainUiState.Error -> return
+                else -> {}
+            }
+            _uiState.value = MainUiState.Success(
+                locationStatus = LocationStatus.EmptyData,
+                fireRiskLevel = -1,
+                latitude = null,
+                longitude = null,
+                isLoadingZones = true
+            )
         }
     }
 
