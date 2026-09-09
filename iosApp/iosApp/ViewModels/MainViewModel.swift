@@ -153,6 +153,13 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var selectedZoneForestStand: ForestStandSummary?
     @Published var isLoadingZoneForestStand = false
 
+    // Saved-point properties detail data (zone-detail parity: fire risk +
+    // stove rules + BDL forest stand).
+    @Published var selectedSavedPointFireRiskLevel: Int?
+    @Published var isLoadingSavedPointFireRisk = false
+    @Published var selectedSavedPointForestStand: ForestStandSummary?
+    @Published var isLoadingSavedPointForestStand = false
+
     // Offline download
     @Published var isDownloading = false
     @Published var downloadProgress: Float = 0
@@ -163,6 +170,21 @@ final class MainViewModel: NSObject, ObservableObject {
     private var lastDownloadProgressShown: Float = -1
     private var lastDownloadTextShown = ""
     private var lastDownloadTextAt = Date.distantPast
+
+    // Downloaded offline areas (Android "Pobrane obszary" overlay parity).
+    // Records feed the management list; tile sources feed MapLibre (one
+    // `mbtiles://` source per area). `offlineSourcesSignal` bumps whenever
+    // the sources change so the map re-applies them.
+    @Published var offlineAreaRecords: [DownloadedArea] = []
+    @Published var offlineTileSources: [OfflineTileArea] = []
+    @Published var offlineSourcesSignal = 0
+    @Published var showOfflineAreas = false
+    // Non-nil -> MainView shows a modal explanation why the download cannot
+    // start (oversized view). The status card is too easy to miss.
+    @Published var downloadBlockedMessage: String? = nil
+    // Increment to fly the map camera to a downloaded area's bounding box.
+    @Published var focusAreaSignal = 0
+    private(set) var focusAreaRegion: MapRegion?
 
     let app: ForestApp
     private let locationManager = CLLocationManager()
@@ -216,6 +238,9 @@ final class MainViewModel: NSObject, ObservableObject {
             guard let self = self else { return }
             do {
                 let ok = try await self.app.initialize().boolValue
+                // Janitor inside initialize() may have removed legacy/orphan
+                // files — load the management list only after it settles.
+                await self.reloadOfflineAreas()
                 await self.refreshMapData()
                 if !ok && self.app.cachedZones().isEmpty {
                     self.phase = .error("Błąd synchronizacji danych. Sprawdź połączenie internetowe.")
@@ -417,12 +442,33 @@ final class MainViewModel: NSObject, ObservableObject {
             stale = true
         }
         let needRefresh = cached == nil || stale
-        guard needRefresh else { return }
+        guard needRefresh else {
+            // Cached stand is fresh — still fetch fresh SILP soil/cover at the
+            // zone's boundary anchor and merge display-only (cache TTL
+            // untouched); the refresh path below gets soil already merged.
+            Task { [weak self] in
+                guard let self = self, let cached = cached else { return }
+                guard let anchor = await Self.firstShellCoordinateAsync(of: zone.forestDistrict, in: self.zonesGeoJson) else { return }
+                let soil = try? await self.app.getSoilCoverForPoint(latitude: anchor.0, longitude: anchor.1)
+                self.selectedZoneForestStand = self.app.withSoilCover(summary: cached, soilCover: soil)
+            }
+            return
+        }
 
         isLoadingZoneForestStand = true
         Task { [weak self] in
             guard let self = self else { return }
-            if let fresh = try? await self.app.getForestStand(zone: zone) {
+            // Fresh summary enriched with the SILP soil type + ground cover
+            // read at the zone's boundary anchor (same anchor as fire risk).
+            var fresh: ForestStandSummary?
+            if let anchor = await Self.firstShellCoordinateAsync(of: zone.forestDistrict, in: self.zonesGeoJson) {
+                fresh = try? await self.app.getForestStandWithSoilCover(
+                    zone: zone, latitude: anchor.0, longitude: anchor.1
+                )
+            } else {
+                fresh = try? await self.app.getForestStand(zone: zone)
+            }
+            if let fresh = fresh {
                 self.selectedZoneForestStand = fresh
                 try? await self.app.cacheForestStand(
                     zone: zone,
@@ -617,6 +663,46 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func openSavedPointProperties(_ point: SavedPoint) {
         selectedSavedPoint = point
+        selectedSavedPointFireRiskLevel = nil
+        isLoadingSavedPointFireRisk = true
+        selectedSavedPointForestStand = nil
+        isLoadingSavedPointForestStand = true
+        loadSavedPointExtras(for: point)
+    }
+
+    /// Fire risk (fresh point query, 24h offline fallback) + BDL forest stand
+    /// for the saved-point properties sheet — Android
+    /// `SavedPointDetailViewModel` parity.
+    private func loadSavedPointExtras(for point: SavedPoint) {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let now = Self.currentTimeMillis()
+            let level = (try? await self.app.savedPointFireRisk(point: point, now: now).intValue) ?? -2
+            guard self.selectedSavedPoint?.id == point.id else { return }
+            self.selectedSavedPointFireRiskLevel = level
+            self.isLoadingSavedPointFireRisk = false
+
+            let cached = self.app.savedPointForestStand(point: point)
+            self.selectedSavedPointForestStand = cached
+            let stale = self.app.isSavedPointForestStandStale(point: point, now: now)
+            if cached == nil || stale {
+                if let fresh = try? await self.app.getForestStandForPoint(latitude: point.latitude, longitude: point.longitude) {
+                    self.selectedSavedPointForestStand = fresh
+                    try? await self.app.updateSavedPointForestStand(
+                        id: point.id, summary: fresh, timestamp: Self.currentTimeMillis()
+                    )
+                    await self.loadSavedPointData()
+                }
+            } else if let cached = cached {
+                // Cached stand is fresh — still fetch fresh SILP soil/cover
+                // and merge display-only (cache TTL untouched).
+                let soil = try? await self.app.getSoilCoverForPoint(latitude: point.latitude, longitude: point.longitude)
+                guard self.selectedSavedPoint?.id == point.id else { return }
+                self.selectedSavedPointForestStand = self.app.withSoilCover(summary: cached, soilCover: soil)
+            }
+            guard self.selectedSavedPoint?.id == point.id else { return }
+            self.isLoadingSavedPointForestStand = false
+        }
     }
 
     func openSavedPointProperties(id: Int64) {
@@ -626,6 +712,10 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func clearSavedPointProperties() {
         selectedSavedPoint = nil
+        selectedSavedPointFireRiskLevel = nil
+        isLoadingSavedPointFireRisk = false
+        selectedSavedPointForestStand = nil
+        isLoadingSavedPointForestStand = false
     }
 
     func renameSavedPoint(_ point: SavedPoint, to name: String) {
@@ -667,26 +757,100 @@ final class MainViewModel: NSObject, ObservableObject {
         recenterSignal += 1
     }
 
-    /// Deletes the packed offline tile database (SQLiter keeps it under
-    /// Application Support/databases/map.mbtiles on iOS). Returns whether a
-    /// cache file actually existed (Android "Wyczyść cache" parity).
-    func clearOfflineCache() -> Bool {
-        let fm = FileManager.default
-        guard let appSupport = fm.urls(for: .applicationSupportDirectory,
-                                       in: .userDomainMask).first else { return false }
-        let databaseURL = appSupport
-            .appendingPathComponent("databases", isDirectory: true)
-            .appendingPathComponent("map.mbtiles")
+    // MARK: - Offline areas management
 
-        var existed = false
-        let candidates = [databaseURL,
-                          URL(fileURLWithPath: databaseURL.path + "-wal"),
-                          URL(fileURLWithPath: databaseURL.path + "-shm")]
-        for url in candidates where fm.fileExists(atPath: url.path) {
-            existed = true
-            try? fm.removeItem(at: url)
+    /// Reloads the downloaded-areas list + MapLibre tile sources from the
+    /// shared repository. Called on startup, after each download and after
+    /// every mutation (delete/rename/refresh).
+    func reloadOfflineAreas() async {
+        let records = (try? await app.offlineAreas()) ?? []
+        let sources = records.map {
+            OfflineTileArea(id: $0.id, path: app.offlineAreaFilePath(fileName: $0.fileName))
         }
-        return existed
+        offlineAreaRecords = records
+        offlineTileSources = sources
+        offlineSourcesSignal += 1
+    }
+
+    func openOfflineAreas() { showOfflineAreas = true }
+
+    func closeOfflineAreas() { showOfflineAreas = false }
+
+    func deleteOfflineArea(_ area: DownloadedArea) {
+        Task { [weak self] in
+            try? await self?.app.deleteOfflineArea(id: area.id)
+            await self?.reloadOfflineAreas()
+        }
+    }
+
+    func deleteAllOfflineAreas() {
+        Task { [weak self] in
+            try? await self?.app.deleteAllOfflineAreas()
+            await self?.reloadOfflineAreas()
+        }
+    }
+
+    func renameOfflineArea(_ area: DownloadedArea, name: String) {
+        Task { [weak self] in
+            try? await self?.app.renameOfflineArea(id: area.id, name: name)
+            await self?.reloadOfflineAreas()
+        }
+    }
+
+    /// Re-downloads the area's bbox; progress reuses the download card.
+    func refreshOfflineArea(_ area: DownloadedArea) {
+        guard !isDownloading else { return }
+        isDownloading = true
+        downloadProgress = 0
+        downloadStatusText = "Rozpoczynanie odświeżania..."
+        downloadFinished = false
+        downloadErrorText = nil
+        lastDownloadProgressShown = -1
+        lastDownloadTextShown = ""
+        lastDownloadTextAt = Date.distantPast
+
+        Task { [weak self] in
+            guard let self = self else { return }
+            do {
+                try await self.app.refreshOfflineArea(
+                    id: area.id,
+                    onProgress: { [weak self] progress, text in
+                        Task { @MainActor [weak self] in
+                            self?.applyDownloadProgress(progress.floatValue, text: text)
+                        }
+                    },
+                    onSuccess: { [weak self] count in
+                        Task { @MainActor [weak self] in
+                            self?.downloadStatusText = "Obszar odświeżony (\(count) kafelków)"
+                            self?.downloadFinished = true
+                        }
+                    },
+                    onError: { [weak self] message in
+                        Task { @MainActor [weak self] in
+                            self?.downloadStatusText = message
+                            self?.downloadErrorText = message
+                            self?.downloadFinished = true
+                        }
+                    }
+                )
+            } catch {
+                self.downloadStatusText = "Błąd odświeżania: \(error.localizedDescription)"
+                self.downloadErrorText = self.downloadStatusText
+                self.downloadFinished = true
+            }
+            self.isDownloading = false
+            await self.reloadOfflineAreas()
+        }
+    }
+
+    /// Tap on a managed area: dismiss the list and fly the camera to its bbox.
+    func focusOfflineArea(_ area: DownloadedArea) {
+        focusAreaRegion = MapRegion(latSouth: area.latSouth,
+                                    latNorth: area.latNorth,
+                                    lonWest: area.lonWest,
+                                    lonEast: area.lonEast)
+        focusAreaSignal += 1
+        closeOfflineAreas()
     }
 
     func downloadVisibleArea() {
@@ -720,6 +884,28 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func downloadArea(region: MapRegion) {
         guard !isDownloading else { return }
+        // Reject oversized views up front with a modal message (Android
+        // parity) — the packager's error would only flash the status card.
+        downloadBlockedMessage = nil
+        Task { [weak self] in
+            guard let self = self else { return }
+            // Reject oversized views up front with a modal message (Android
+            // parity) — the packager's error would only flash the status card.
+            // The count comparison + message live in Kotlin (SKIE boxes Ints).
+            if let message = try? await self.app.areaTooBigMessage(
+                latSouth: region.latSouth,
+                latNorth: region.latNorth,
+                lonWest: region.lonWest,
+                lonEast: region.lonEast
+            ) {
+                self.downloadBlockedMessage = message
+                return
+            }
+            await self.startDownload(region: region)
+        }
+    }
+
+    private func startDownload(region: MapRegion) async {
         isDownloading = true
         downloadProgress = 0
         downloadStatusText = "Rozpoczynanie..."
@@ -729,17 +915,12 @@ final class MainViewModel: NSObject, ObservableObject {
         lastDownloadTextShown = ""
         lastDownloadTextAt = Date.distantPast
 
-        Task { [weak self] in
-            guard let self = self else { return }
-            do {
-                try await self.app.downloadArea(
+        do {
+            try await app.downloadArea(
                     latSouth: region.latSouth,
                     latNorth: region.latNorth,
                     lonWest: region.lonWest,
                     lonEast: region.lonEast,
-                    minZoom: 10,
-                    maxZoom: 16,
-                    maxTiles: 500,
                     onProgress: { [weak self] progress, text in
                         // Kotlin invokes these from Dispatchers.Default; hop to
                         // the main actor before touching @Published state.
@@ -764,13 +945,13 @@ final class MainViewModel: NSObject, ObservableObject {
                         }
                     }
                 )
-            } catch {
-                self.downloadStatusText = "Błąd pobierania: \(error.localizedDescription)"
-                self.downloadErrorText = "Błąd pobierania: \(error.localizedDescription)"
-                self.downloadFinished = true
-            }
-            self.isDownloading = false
+        } catch {
+            downloadStatusText = "Błąd pobierania: \(error.localizedDescription)"
+            downloadErrorText = "Błąd pobierania: \(error.localizedDescription)"
+            downloadFinished = true
         }
+        isDownloading = false
+        await reloadOfflineAreas()
     }
 
     // MARK: - Helpers

@@ -1,0 +1,35 @@
+CREATE TABLE IF NOT EXISTS DownloadedArea (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    fileName TEXT NOT NULL UNIQUE,
+    latSouth REAL NOT NULL,
+    latNorth REAL NOT NULL,
+    lonWest REAL NOT NULL,
+    lonEast REAL NOT NULL,
+    minZoom INTEGER NOT NULL,
+    maxZoom INTEGER NOT NULL,
+    tileCount INTEGER NOT NULL,
+    fileSizeBytes INTEGER NOT NULL,
+    downloadedAt INTEGER NOT NULL
+);
+
+selectAll:
+SELECT * FROM DownloadedArea ORDER BY downloadedAt DESC;
+insert:
+INSERT INTO DownloadedArea(name, fileName, latSouth, latNorth, lonWest, lonEast, minZoom, maxZoom, tileCount, fileSizeBytes, downloadedAt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+lastInsertRowId:
+SELECT last_insert_rowid();
+
+markRefreshedById:
+UPDATE DownloadedArea SET fileName = ?, tileCount = ?, fileSizeBytes = ?, downloadedAt = ? WHERE id = ?;
+
+renameById:
+UPDATE DownloadedArea SET name = ? WHERE id = ?;
+
+deleteById:
+DELETE FROM DownloadedArea WHERE id = ?;
+
+deleteAll:
+DELETE FROM DownloadedArea;

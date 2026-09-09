@@ -1,31 +1,42 @@
 package com.indiana.zwl.shared.ios
 
 import com.indiana.zwl.domain.SpatialEngine
+import com.indiana.zwl.domain.model.DownloadedArea
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.ForestStandSummary
 import com.indiana.zwl.domain.model.LocationStatus
 import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.SavedPoint
+import com.indiana.zwl.domain.model.SoilCover
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ForestBanRepository
+import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
+import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
+import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
 import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.domain.util.NadlesnictwoUrls
+import com.indiana.zwl.shared.data.offline.KtorIosTileFetcher
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
+import com.indiana.zwl.shared.data.remote.BdlStandDescriptionApi
 import com.indiana.zwl.shared.data.remote.ForestBanSyncParser
 import com.indiana.zwl.shared.data.remote.PoiSyncParser
 import com.indiana.zwl.shared.data.remote.ZoneSyncParser
 import com.indiana.zwl.shared.data.remote.model.GeoJsonCollection
 import com.indiana.zwl.shared.map.MapGeoJson
-import com.indiana.zwl.shared.offline.MbtilesStore
-import com.indiana.zwl.shared.offline.MbtilesTilePackager
+import com.indiana.zwl.shared.offline.MbtilesStoreFactory
+import com.indiana.zwl.shared.offline.OfflineAreaDownloadCoordinator
+import com.indiana.zwl.shared.offline.OfflineAreaFiles
+import com.indiana.zwl.shared.offline.OfflineAreaJanitor
+import com.indiana.zwl.shared.offline.OfflineAreaNames
+import com.indiana.zwl.shared.offline.OfflineLimits
 import com.indiana.zwl.shared.offline.Region
-import com.indiana.zwl.shared.data.offline.KtorIosTileFetcher
+import com.indiana.zwl.shared.offline.TileMath
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +44,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import platform.Foundation.NSTimeZone
+import platform.Foundation.secondsFromGMT
+import platform.Foundation.systemTimeZone
 
 /**
  * SKIE-friendly facade for the iOS app (SwiftUI). All heavy/suspending work is
@@ -43,15 +57,27 @@ class ForestApp(
     private val poiRepository: PoiRepository,
     private val forestBanRepository: ForestBanRepository,
     private val savedPointRepository: SavedPointRepository,
+    private val offlineAreaRepository: OfflineAreaRepository,
+    private val offlineStoreFactory: MbtilesStoreFactory,
+    private val offlineAreaFiles: OfflineAreaFiles,
     private val arcgisApi: BdlArcgisApi,
     private val fireApi: BdlFireApi,
-    private val offlineStore: MbtilesStore,
     private val httpClient: HttpClient,
     private val forestStandUseCase: GetForestStandUseCase
 ) {
 
     private val zoneEngine = SpatialEngine()
     private val banEngine = SpatialEngine()
+
+    private val offlineCoordinator = OfflineAreaDownloadCoordinator(
+        repository = offlineAreaRepository,
+        storeFactory = offlineStoreFactory,
+        fetcherProvider = { KtorIosTileFetcher(httpClient) },
+        files = offlineAreaFiles,
+        nameFormatter = { now ->
+            OfflineAreaNames.autoName(now, timeZoneOffsetMinutes(now))
+        }
+    )
 
     private var cachedZones: List<Zone> = emptyList()
 
@@ -61,9 +87,20 @@ class ForestApp(
 
     companion object {
         private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
+        private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
     }
 
     suspend fun initialize(): Boolean = withContext(Dispatchers.Default) {
+        // One-shot housekeeping: drop the legacy map.mbtiles + orphaned
+        // area files from killed downloads. Best-effort, must not block init.
+        try {
+            OfflineAreaJanitor(offlineAreaRepository, offlineAreaFiles).run()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            println("ForestApp: offline area janitor failed: ${e.message}")
+        }
+
         var ok = true
         try {
             if (zoneRepository.getZonesCount() == 0) {
@@ -296,6 +333,109 @@ class ForestApp(
         return now - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
     }
 
+    private val forestStandForPointUseCase by lazy {
+        GetForestStandForPointUseCase(
+            forestStandUseCase,
+            GetSoilCoverForPointUseCase(BdlStandDescriptionApi(httpClient))
+        )
+    }
+
+    private val soilCoverForPointUseCase by lazy {
+        GetSoilCoverForPointUseCase(BdlStandDescriptionApi(httpClient))
+    }
+
+    // MARK: Saved-point detail data (zone-detail parity on Android)
+
+    /**
+     * Fire-risk code for a saved point, Android `ZoneDetailViewModel` parity:
+     * fresh point query on success (persisted to the point row), on failure a
+     * 24h-fresh cached level is served as an archived code (+10), otherwise
+     * -2 ("brak danych"). `now` comes from the platform (Swift) since
+     * Kotlin/Native has no System.currentTimeMillis.
+     */
+    suspend fun savedPointFireRisk(point: SavedPoint, now: Long): Int = withContext(Dispatchers.Default) {
+        try {
+            val response = fireApi.getFireHazard(geometry = "${point.longitude},${point.latitude}")
+            val code = response.features?.firstOrNull()?.properties?.kodInt ?: -2
+            if (code in 0..3) {
+                savedPointRepository.updateFireRisk(point.id, code, now)
+            }
+            code
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val fresh = savedPointRepository.getAllPoints().first().firstOrNull { it.id == point.id }
+            val level = fresh?.fireRiskLevel?.toInt()
+            val timestamp = fresh?.fireRiskTimestamp?.toLong()
+            if (level != null && level in 0..3 &&
+                timestamp != null && now - timestamp < FIRE_RISK_CACHE_MAX_AGE_MS
+            ) level + 10 else -2
+        }
+    }
+
+    suspend fun getForestStandForPoint(latitude: Double, longitude: Double): ForestStandSummary? =
+        withContext(Dispatchers.Default) {
+            try {
+                forestStandForPointUseCase(latitude, longitude).getOrNull()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                println("ForestApp.getForestStandForPoint failed: ${e.message}")
+                null
+            }
+        }
+
+    /** Fresh SILP soil type + ground cover for the wydzielenie under a point. */
+    suspend fun getSoilCoverForPoint(latitude: Double, longitude: Double): SoilCover? =
+        try {
+            soilCoverForPointUseCase(latitude, longitude)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            println("ForestApp.getSoilCoverForPoint failed: ${e.message}")
+            null
+        }
+
+    /**
+     * SKIE types are immutable — the Swift side cannot `copy` a
+     * [ForestStandSummary]; this merges fresh SILP soil/cover into a cached
+     * summary for display (persisted caches are written in Kotlin only).
+     */
+    fun withSoilCover(summary: ForestStandSummary, soilCover: SoilCover?): ForestStandSummary {
+        if (soilCover == null) return summary
+        return summary.copy(
+            soilType = soilCover.soilType ?: summary.soilType,
+            groundCover = soilCover.groundCover ?: summary.groundCover
+        )
+    }
+
+    fun savedPointForestStand(point: SavedPoint): ForestStandSummary? {
+        val json = point.forestStandJson ?: return null
+        return try {
+            Json.decodeFromString<ForestStandSummary>(json)
+        } catch (e: Exception) {
+            println("ForestApp.savedPointForestStand decode failed: ${e.message}")
+            null
+        }
+    }
+
+    fun isSavedPointForestStandStale(point: SavedPoint, now: Long): Boolean {
+        val timestamp = point.forestStandTimestamp ?: return true
+        return now - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
+    }
+
+    suspend fun updateSavedPointForestStand(id: Long, summary: ForestStandSummary, timestamp: Long) {
+        try {
+            val json = Json.encodeToString(summary)
+            savedPointRepository.updateForestStand(id, json, timestamp)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            println("ForestApp.updateSavedPointForestStand failed: ${e.message}")
+        }
+    }
+
+
     fun forestStandCacheMaxAgeMs(): Long = FOREST_STAND_CACHE_MAX_AGE_MS
 
     fun speciesWikipediaTitle(code: String): String? = BdlInfo.wikipediaTitleForSpecies(code)
@@ -317,35 +457,123 @@ class ForestApp(
 
     fun rotationAgeTooltip(): String = BdlInfo.rotationAgeTooltip
 
+    fun soilTypeTooltip(code: String): String = BdlInfo.soilTypeTooltip(code)
+
+    fun vegCoverTooltip(code: String): String = BdlInfo.groundCoverTooltip(code)
+
+    /**
+     * Forest-stand summary for the zone sheet enriched with the SILP soil
+     * type (typ gleby) and ground cover (pokrywa) read at the anchor point
+     * (map click / first boundary coordinate). [latitude]/[longitude] may be
+     * anything (the zone centroid is a sensible fallback).
+     */
+    suspend fun getForestStandWithSoilCover(
+        zone: Zone,
+        latitude: Double,
+        longitude: Double
+    ): ForestStandSummary? {
+        val stand = getForestStand(zone) ?: return null
+        val soil = try {
+            soilCoverForPointUseCase(latitude, longitude)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        return if (soil != null) {
+            stand.copy(soilType = soil.soilType, groundCover = soil.groundCover)
+        } else {
+            stand
+        }
+    }
+
     fun nadlesnictwoWebsiteUrl(districtName: String?, rdlpName: String?): String? =
         NadlesnictwoUrls.websiteUrl(districtName, rdlpName)
 
     fun nadlesnictwoWebsiteHost(url: String?): String? = NadlesnictwoUrls.displayHost(url)
+
+    suspend fun offlineAreas(): List<DownloadedArea> = withContext(Dispatchers.Default) {
+        offlineAreaRepository.getAll()
+    }
+
+    suspend fun deleteOfflineArea(id: Long) = withContext(Dispatchers.Default) {
+        val area = offlineAreaRepository.getAll().find { it.id == id } ?: return@withContext
+        offlineAreaRepository.delete(id)
+        offlineAreaFiles.deleteFile(area.fileName)
+    }
+
+    suspend fun renameOfflineArea(id: Long, name: String) = withContext(Dispatchers.Default) {
+        offlineAreaRepository.rename(id, name)
+    }
+
+    suspend fun deleteAllOfflineAreas() = withContext(Dispatchers.Default) {
+        val areas = offlineAreaRepository.getAll()
+        offlineAreaRepository.deleteAll()
+        areas.forEach { offlineAreaFiles.deleteFile(it.fileName) }
+    }
+
+    suspend fun refreshOfflineArea(
+        id: Long,
+        onProgress: (Float, String) -> Unit,
+        onSuccess: (Int) -> Unit,
+        onError: (String) -> Unit
+    ) = withContext(Dispatchers.Default) {
+        val area = offlineAreaRepository.getAll().find { it.id == id }
+        if (area == null) {
+            onError("Nie znaleziono obszaru do odświeżenia.")
+            return@withContext
+        }
+        offlineCoordinator.refresh(
+            area = area,
+            onProgress = onProgress,
+            onSuccess = onSuccess,
+            onError = onError
+        )
+    }
+
+    /** Absolute path of an area file — feeds MapLibre's `mbtiles://` source. */
+    fun offlineAreaFilePath(fileName: String): String = offlineAreaFiles.filePath(fileName)
+
+    /**
+     * Rejects oversized views up front with a ready-to-display message
+     * (null = size OK). The numeric comparison stays in Kotlin so Swift never
+     * has to touch SKIE-boxed integers.
+     */
+    suspend fun areaTooBigMessage(
+        latSouth: Double,
+        latNorth: Double,
+        lonWest: Double,
+        lonEast: Double
+    ): String? = withContext(Dispatchers.Default) {
+        val total = TileMath.estimateTileCount(
+            Region(latSouth, latNorth, lonWest, lonEast),
+            OfflineLimits.MIN_ZOOM,
+            OfflineLimits.MAX_ZOOM
+        )
+        if (total > OfflineLimits.MAX_TILES) {
+            "Ten widok obejmuje $total kafelków — limit to ${OfflineLimits.MAX_TILES}. Przybliż mapę i spróbuj ponownie."
+        } else {
+            null
+        }
+    }
 
     suspend fun downloadArea(
         latSouth: Double,
         latNorth: Double,
         lonWest: Double,
         lonEast: Double,
-        minZoom: Int,
-        maxZoom: Int,
-        maxTiles: Int,
         onProgress: (Float, String) -> Unit,
         onSuccess: (Int) -> Unit,
         onError: (String) -> Unit
     ) {
-        val packager = MbtilesTilePackager(
-            fetcher = KtorIosTileFetcher(httpClient),
-            store = offlineStore
-        )
-        packager.download(
+        offlineCoordinator.download(
             region = Region(latSouth, latNorth, lonWest, lonEast),
-            minZoom = minZoom,
-            maxZoom = maxZoom,
-            maxTiles = maxTiles,
             onProgress = onProgress,
             onSuccess = onSuccess,
             onError = onError
         )
     }
+
+    private fun timeZoneOffsetMinutes(atMillis: Long): Int =
+        (NSTimeZone.systemTimeZone.secondsFromGMT / 60).toInt()
 }

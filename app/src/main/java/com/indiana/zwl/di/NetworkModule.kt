@@ -1,9 +1,12 @@
 package com.indiana.zwl.di
 
+import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
+import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
 import com.indiana.zwl.shared.data.remote.BdlOgcApi
+import com.indiana.zwl.shared.data.remote.BdlStandDescriptionApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -37,5 +40,26 @@ object NetworkModule {
     @Singleton
     fun provideGetForestStandUseCase(ogcApi: BdlOgcApi): GetForestStandUseCase {
         return GetForestStandUseCase(ogcApi)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBdlStandDescriptionApi(): BdlStandDescriptionApi {
+        return get(BdlStandDescriptionApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGetSoilCoverForPointUseCase(api: BdlStandDescriptionApi): GetSoilCoverForPointUseCase {
+        return GetSoilCoverForPointUseCase(api)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGetForestStandForPointUseCase(
+        ogcApi: BdlOgcApi,
+        soilCoverUseCase: GetSoilCoverForPointUseCase
+    ): GetForestStandForPointUseCase {
+        return GetForestStandForPointUseCase(GetForestStandUseCase(ogcApi), soilCoverUseCase)
     }
 }

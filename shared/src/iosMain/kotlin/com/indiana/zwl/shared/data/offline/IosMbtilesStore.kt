@@ -18,11 +18,14 @@ import platform.Foundation.NSUserDomainMask
  * iOS adapter for [MbtilesStore] backed by SQLDelight's `NativeSqliteDriver`
  * (reuses the already-working iOS sqlite integration; no cinterop needed).
  *
- * Creates a dedicated `map.mbtiles` database whose schema is empty (the MBTiles
- * tables are created explicitly here). The set of already-packed tiles is kept
- * in memory for the lifetime of the store, matching the packer contract.
+ * Creates a dedicated per-area database file (e.g. `area_1735...mbtiles`)
+ * whose schema is empty (the MBTiles tables are created explicitly here).
+ * The set of already-packed tiles is kept in memory for the lifetime of the
+ * store, matching the packer contract.
  */
-class IosMbtilesStore : MbtilesStore {
+class IosMbtilesStore(
+    private val fileName: String = LEGACY_FILE_NAME
+) : MbtilesStore {
 
     private var driver: SqlDriver? = null
     private val cachedTiles = mutableSetOf<TileRef>()
@@ -46,7 +49,7 @@ class IosMbtilesStore : MbtilesStore {
     }
 
     private fun doOpen(bounds: String, minZoom: Int, maxZoom: Int) {
-        val db = NativeSqliteDriver(MbtilesSchema, "map.mbtiles")
+        val db = NativeSqliteDriver(MbtilesSchema, fileName)
         try {
             db.execute(null, "CREATE TABLE IF NOT EXISTS metadata (name TEXT, value TEXT);", 0)
             db.execute(
@@ -87,12 +90,12 @@ class IosMbtilesStore : MbtilesStore {
         return appSupport.path?.let { "$it/databases" }
     }
 
-    /** Removes map.mbtiles and any SQLite side files (SQLiter path). */
+    /** Removes the database file plus any SQLite side files (SQLiter path). */
     private fun deleteDatabaseFile() {
         val dir = databaseDir() ?: return
         val fm = NSFileManager.defaultManager
         for (suffix in listOf("", "-wal", "-shm", "-journal")) {
-            val path = "$dir/map.mbtiles$suffix"
+            val path = "$dir/$fileName$suffix"
             if (fm.fileExistsAtPath(path)) {
                 if (!fm.removeItemAtPath(path, null)) {
                     println("IosMbtilesStore: failed to remove $path")
@@ -136,6 +139,11 @@ class IosMbtilesStore : MbtilesStore {
             bindString(0, name)
             bindString(1, value)
         }
+    }
+
+    companion object {
+        /** Pre multi-area scheme file name; cleaned up by the janitor. */
+        const val LEGACY_FILE_NAME = "map.mbtiles"
     }
 }
 

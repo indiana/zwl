@@ -2,7 +2,11 @@ CREATE TABLE IF NOT EXISTS SavedPoint (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     latitude REAL NOT NULL,
-    longitude REAL NOT NULL
+    longitude REAL NOT NULL,
+    fireRiskLevel INTEGER,
+    fireRiskTimestamp INTEGER,
+    forestStandJson TEXT,
+    forestStandTimestamp INTEGER
 );
 
 selectAll:
@@ -17,6 +21,12 @@ SELECT last_insert_rowid();
 
 renameById:
 UPDATE SavedPoint SET name = :name WHERE id = :id;
+
+updateFireRiskById:
+UPDATE SavedPoint SET fireRiskLevel = :level, fireRiskTimestamp = :timestamp WHERE id = :id;
+
+updateForestStandById:
+UPDATE SavedPoint SET forestStandJson = :json, forestStandTimestamp = :timestamp WHERE id = :id;
 
 deleteById:
 DELETE FROM SavedPoint WHERE id = :id;

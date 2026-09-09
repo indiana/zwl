@@ -1,0 +1,14 @@
+CREATE TABLE DownloadedArea (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    fileName TEXT NOT NULL UNIQUE,
+    latSouth REAL NOT NULL,
+    latNorth REAL NOT NULL,
+    lonWest REAL NOT NULL,
+    lonEast REAL NOT NULL,
+    minZoom INTEGER NOT NULL,
+    maxZoom INTEGER NOT NULL,
+    tileCount INTEGER NOT NULL,
+    fileSizeBytes INTEGER NOT NULL,
+    downloadedAt INTEGER NOT NULL
+);

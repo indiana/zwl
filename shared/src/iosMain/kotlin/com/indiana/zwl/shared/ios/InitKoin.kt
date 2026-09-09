@@ -1,6 +1,7 @@
 package com.indiana.zwl.shared.ios
 
 import com.indiana.zwl.domain.repository.ForestBanRepository
+import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
@@ -11,7 +12,8 @@ import com.indiana.zwl.shared.di.databaseModule
 import com.indiana.zwl.shared.di.iosModule
 import com.indiana.zwl.shared.di.repositoryModule
 import com.indiana.zwl.shared.di.sharedModule
-import com.indiana.zwl.shared.offline.MbtilesStore
+import com.indiana.zwl.shared.offline.MbtilesStoreFactory
+import com.indiana.zwl.shared.offline.OfflineAreaFiles
 import io.ktor.client.HttpClient
 import org.koin.core.Koin
 import org.koin.core.context.startKoin
@@ -33,9 +35,11 @@ object IosAppBootstrap {
             poiRepository = koin.get<PoiRepository>(),
             forestBanRepository = koin.get<ForestBanRepository>(),
             savedPointRepository = koin.get<SavedPointRepository>(),
+            offlineAreaRepository = koin.get<OfflineAreaRepository>(),
+            offlineStoreFactory = koin.get<MbtilesStoreFactory>(),
+            offlineAreaFiles = koin.get<OfflineAreaFiles>(),
             arcgisApi = koin.get<BdlArcgisApi>(),
             fireApi = koin.get<BdlFireApi>(),
-            offlineStore = koin.get<MbtilesStore>(),
             httpClient = koin.get<HttpClient>(),
             forestStandUseCase = koin.get<GetForestStandUseCase>()
         )

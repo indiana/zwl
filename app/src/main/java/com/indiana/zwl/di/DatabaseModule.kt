@@ -1,6 +1,7 @@
 package com.indiana.zwl.di
 
 import com.indiana.zwl.shared.data.local.SharedDatabase
+import com.indiana.zwl.shared.offline.OfflineAreaFiles
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -16,5 +17,11 @@ object DatabaseModule {
     @Singleton
     fun provideSharedDatabase(): SharedDatabase {
         return get(SharedDatabase::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideOfflineAreaFiles(): OfflineAreaFiles {
+        return get(OfflineAreaFiles::class.java)
     }
 }

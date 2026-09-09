@@ -56,13 +56,15 @@ class MbtilesTilePackager(
 
     suspend fun download(
         region: Region,
-        minZoom: Int = 10,
-        maxZoom: Int = 16,
-        maxTiles: Int = 500,
+        minZoom: Int = OfflineLimits.MIN_ZOOM,
+        maxZoom: Int = OfflineLimits.MAX_ZOOM,
+        maxTiles: Int = OfflineLimits.MAX_TILES,
         concurrency: Int = 4,
         onProgress: (Float, String) -> Unit,
-        onSuccess: (Int) -> Unit,
-        onError: (String) -> Unit
+        // Suspend so callers can run post-download work (e.g. registering the
+        // area in a repository) before being told "done".
+        onSuccess: suspend (Int) -> Unit,
+        onError: suspend (String) -> Unit
     ) = withContext(dispatcher) {
         val tiles = enumerateTiles(region, minZoom, maxZoom)
         val total = tiles.size

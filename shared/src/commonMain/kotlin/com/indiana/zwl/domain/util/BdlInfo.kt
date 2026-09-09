@@ -149,6 +149,117 @@ object BdlInfo {
     val rotationAgeTooltip: String =
         "Wiek rębności — wiek, w którym drzewostan osiąga dojrzałość rębną i może być przeznaczony do odnowienia, czyli wycięcia i wymiany pokoleniowej."
 
+    // ---------------------------------------------------------------- soil_subtype_cd / veg_cover_cd (opisy taksacyjne SILP;
+    // wartości są dekodowane przez BDL dla każdego kodu — tooltip wyjaśnia dany typ gleby / rodzaj pokrywy)
+
+    private val soilTypeTooltips: Map<String, String> = mapOf(
+        "RDB" to "Gleby rdzawe bielicowe — ubogie, kwaśne gleby wytworzone z piasków. Rdzawa barwa pochodzi z procesu " +
+            "rdzawienia (wytrącanie i impregnacja tlenków żelaza), a dodatkowo w profilu zachodzi bielicowanie — " +
+            "wymywanie związków żelaza i próchnicy w głąb. Typowe dla borów sosnowych.",
+        "RDBR" to "Gleby rdzawe brunatne — specyficzny podtyp gleb rdzawych, które powstają na cięższych piaskach. " +
+            "W ich profilu zachodzą jednocześnie dwa procesy: rdzawienia (tworzenie rdzawej barwy) oraz brunatnienia " +
+            "(uwolnienie tlenków żelaza i zmiana odcienia na brązowy). Zwykle żyźniejsze od gleb rdzawych bielicowych.",
+        "RDW" to "Gleby rdzawe właściwe — klasyczne gleby rdzawe bez wyraźnych cech bielicowania czy brunatnienia: " +
+            "ubogie, kwaśne, luźne, piaskowe. Typowe dla borów sosnowych.",
+        "BW" to "Gleby bielicowe właściwe — wytworzone z piasków pod wpływem intensywnego bielicowania: wymywanie " +
+            "żelaza i próchnicy tworzy jasną warstwę wierzchnią i ciemniejszą warstwę wzbogacenia. Ubogie, kwaśne — " +
+            "siedliska borowe.",
+        "BGW" to "Gleby glejo-bielicowe właściwe — gleby bielicowe z procesem oglejenia (rdzawe i szare plamy w profilu) " +
+            "wskazującym okresową podmokłość; zwykle w zagłębieniach terenu.",
+        "BRK" to "Gleby brunatne kwaśne — wytworzone z piasków gliniastych lub glin bez węglanów; kwaśne, " +
+            "umiarkowanie żyzne; brunatnienie nadaje profilowi brązowe odcienie. Typowe dla lasów mieszanych.",
+        "BRWY" to "Gleby brunatne wyługowane — gleby brunatne z wypłukanymi węglanami (woda wypłukuje wapń z " +
+            "powierzchniowych warstw); umiarkowanie żyzne, typowe dla lasów mieszanych świeżych.",
+        "OGW" to "Gleby opadowo-glejowe właściwe — powstają tam, gdzie woda opadowa zalega na nieprzepuszczalnym " +
+            "podłożu: naprzemienne uwilgotnienie i przesychanie daje plamy oglejenia. Lasy mieszane, często wilgotne.",
+        "ARB" to "Arenosole bielicowane — młode, słabo ukształtowane gleby piaszczyste (wydmy, piaski nawiane) " +
+            "z początkowym bielicowaniem; ubogie i kwaśne — siedliska borowe.",
+        "RW" to "Rędziny właściwe — płytkie gleby wytworzone ze skał węglanowych (wapienie, margle, dolomity); " +
+            "żyzne, zasobne w wapń, o obojętnym odczynie. Często pod lasami bukowymi i dębowymi."
+    )
+
+    private val soilFamilyTooltips: List<Pair<String, String>> = listOf(
+        "RD" to "Gleby rdzawe — ubogie, kwaśne gleby piaskowe i słabogliniaste; rdzawa barwa poziomu wzbogacenia " +
+            "pochodzi z oddziaływania rdzawienia (wytrącanie tlenków żelaza). Typowe dla borów.",
+        "RN" to "Rędziny (wariant) — gleby wytworzone ze skał węglanowych: płytkie, żyzne, zasobne w wapń.",
+        "R" to "Rędziny — płytkie gleby wytworzone ze skał węglanowych (wapienie, margle); żyzne, zasobne " +
+            "w wapń, o obojętnym odczynie.",
+        "BR" to "Gleby brunatne — wytworzone z glin lub piasków gliniastych pod wpływem brunatnienia (uwolnienie " +
+            "tlenków żelaza, brązowe odcienie); umiarkowanie żyzne — lasy mieszane.",
+        "BL" to "Gleby bielicowe — kwaśne, ubogie gleby piaskowe, w których bielicowanie (wymywanie żelaza i " +
+            "próchnicy w głąb profilu) tworzy jasną warstwę wierzchnią; siedliska borowe.",
+        "BG" to "Gleby glejo-bielicowe — gleby bielicowe z cechami oglejenia wskazującymi okresową podmokłość; " +
+            "siedliska borowe i lasów mieszanych, zwykle wilgotniejsze.",
+        "BW" to "Gleby bielicowe właściwe — kwaśne, ubogie gleby piaskowe ukształtowane przez bielicowanie; " +
+            "siedliska borowe.",
+        "B" to "Gleby bielicowe — kwaśne, ubogie gleby piaskowe, w których bielicowanie (wymywanie żelaza i " +
+            "próchnicy w głąb profilu) tworzy jasną warstwę wierzchnią; siedliska borowe.",
+        "OG" to "Gleby opadowo-glejowe — podmokłe od zalegającej wody opadowej na nieprzepuszczalnym podłożu; " +
+            "naprzemienne wilgotnienie i przesychanie tworzy plamy oglejenia; lasy mieszane wilgotne.",
+        "G" to "Gleby gruntowo-glejowe — ukształtowane pod wpływem wody gruntowej; okresowo lub stale podmokłe; " +
+            "olsy, łęgi i lasy wilgotne.",
+        "CZ" to "Czarnoziemy — najżyźniejsze gleby, bogate w próchnicę, wytworzone z utworów węglanowych; " +
+            "bardzo żyzne siedliska.",
+        "C" to "Czarne ziemie — żyzne gleby bogate w próchnicę, wytworzone z utworów węglanowych; siedliska " +
+            "lasów mieszanych i liściastych.",
+        "D" to "Gleby deluwialne — wytworzone z materiału przemieszczonego po stoku przez spłukiwanie i grawitację; " +
+            "właściwości zależą od materiału macierzystego.",
+        "MD" to "Mady — młode gleby z naniesionego przez wodę materiału aluwialnego; żyzność zróżnicowana, " +
+            "zależna od granulacji naniesionego materiału.",
+        "ML" to "Mady łąkowe — młode gleby aluwialne terenów zalewowych; żyzność zależna od materiału.",
+        "MR" to "Mady rzeczne — młode gleby z osadów rzecznych; właściwości zależą od granulacji materiału.",
+        "MN" to "Mady — młode gleby z naniesionego przez wodę materiału aluwialnego; żyzność zależna od materiału.",
+        "M" to "Mady — młode gleby z naniesionego przez wodę materiału aluwialnego; żyzność zależna od materiału.",
+        "MT" to "Gleby murszowate — gleby organiczne poddane murszeniu: wysychanie i mineralizacja tworzy " +
+            "strukturę murszu; podmokłe, zwykle silnie kwaśne.",
+        "T" to "Gleby torfowe — wytworzone z torfu na zabagnionych terenach; podmokłe; torfowiska wysokie są " +
+            "silnie kwaśne i ubogie, niskie — żyzniejsze.",
+        "AK" to "Gleby węglanowe (akumulacyjne) — wytworzone z materiału bogatego w węglan wapnia; płytkie, " +
+            "żyzne, o obojętnym lub zasadowym odczynie.",
+        "AR" to "Arenosole — młode, słabo ukształtowane gleby piaszczyste (piaski nawiane i wydmy); ubogie, " +
+            "kwaśne — siedliska borowe.",
+        "AU" to "Gleby urbic (antropogeniczne) — zmienione przez działalność człowieka (nasypy, hałdy, tereny " +
+            "miejskie); właściwości mocno zróżnicowane.",
+        "IR" to "Gleby inicjalne rdzawe — początkowe, słabo ukształtowane stadium rozwoju gleb rdzawych na piaskach.",
+        "IS" to "Gleby inicjalne skaliste — początkowe stadium rozwoju gleby na litej skale lub kamieńcu."
+    )
+
+    private val groundCoverTooltips: Map<String, String> = mapOf(
+        "NAGA" to "Pokrywa naga — powierzchnia gleby pozbawiona roślinności przyziemnej; typowa dla świeżo " +
+            "przygotowanej gleby, wydeptywanych powierzchni lub zwartych drzewostanów.",
+        "ZIEL" to "Pokrywa zielna — glebę pokrywa bujne runo traw i ziół; wskazuje siedlisko żyźniejsze i " +
+            "umiarkowanie wilgotne.",
+        "ZAD" to "Pokrywa zadarniona — glebę pokrywa zwarta darń traw; zadarnienie utrudnia odnowienie " +
+            "naturalne drzew.",
+        "SZAD" to "Pokrywa silnie zadarniona — zwarta, gęsta darń traw pokrywająca większość powierzchni " +
+            "gleby; silna konkurencja dla odnowień, zwykle siedlisko żyzniejsze.",
+        "MSZ" to "Pokrywa mszysta-kobiercowa — glebę pokrywają kobierce mchów; wskazuje siedlisko ubogie, " +
+            "kwaśne i często wilgotne (bory).",
+        "MSZC" to "Pokrywa mszysto-czernicowa — mchy wraz z borówką czernicą; typowe dla borów i lasów " +
+            "mieszanych na siedliskach kwaśnych i ubogich."
+    )
+
+    private val SOIL_TYPE_GENERIC_TOOLTIP =
+        "Typ gleby wg gleboznawczej klasyfikacji gleb leśnych — określa genezę i właściwości podłoża: " +
+            "żyzność, granulację i uwilgotnienie."
+
+    private val GROUND_COVER_GENERIC_TOOLTIP =
+        "Pokrywa — roślinność przykrywająca powierzchnię gleby: zadarnienie, mchy, runo; wpływa na " +
+            "odnowienie lasu i charakter siedliska."
+
+    fun soilTypeTooltip(code: String): String {
+        val normalized = RdlpMapper.normalize(code)
+        soilTypeTooltips[normalized]?.let { return it }
+        soilFamilyTooltips.firstOrNull { normalized.startsWith(it.first) }?.let { return it.second }
+        return SOIL_TYPE_GENERIC_TOOLTIP
+    }
+
+    fun groundCoverTooltip(code: String): String {
+        val normalized = RdlpMapper.normalize(code)
+        groundCoverTooltips[normalized]?.let { return it }
+        return GROUND_COVER_GENERIC_TOOLTIP
+    }
+
     // ---------------------------------------------------------------- lookups (null = brak danych, UI pokazuje zwykły tekst)
 
     fun wikipediaTitleForSpecies(code: String): String? =

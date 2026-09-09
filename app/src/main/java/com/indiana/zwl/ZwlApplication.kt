@@ -15,6 +15,11 @@ import com.indiana.zwl.shared.di.androidModule
 import com.indiana.zwl.shared.di.databaseModule
 import com.indiana.zwl.shared.di.repositoryModule
 import com.indiana.zwl.shared.di.sharedModule
+import com.indiana.zwl.shared.offline.OfflineAreaJanitor
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
@@ -77,6 +82,15 @@ class ZwlApplication : Application(), androidx.work.Configuration.Provider {
             androidLogger()
             androidContext(this@ZwlApplication)
             modules(sharedModule, databaseModule, androidModule, repositoryModule)
+        }
+
+        // One-shot offline store housekeeping (legacy map.mbtiles + orphans);
+        // fire-and-forget so it never slows down app startup.
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                org.koin.java.KoinJavaComponent.getKoin().get<OfflineAreaJanitor>().run()
+            } catch (_: Exception) {
+            }
         }
 
         val prev = Thread.getDefaultUncaughtExceptionHandler()
