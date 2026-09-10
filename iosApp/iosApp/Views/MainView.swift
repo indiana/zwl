@@ -4,7 +4,7 @@ import shared
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
-    @Environment(\.horizontalSizeClass) private var hSizeClass
+    @State private var isLandscape = false
     @State private var showAbout = false
     // followsUser lives on the view model (selecting a saved point turns it
     // off so the camera stays on the point; "my location" re-enables it).
@@ -44,6 +44,15 @@ struct MainView: View {
                 .tabItem { Label("Mapa", systemImage: "map") }
         }
         .tint(viewModel.displayInZone != nil ? ZWL.forestGreenAccent : ZWL.yellowPrimary)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { isLandscape = geo.size.width > geo.size.height }
+                    .onChange(of: geo.size) { newSize in
+                        isLandscape = newSize.width > newSize.height
+                    }
+            }
+        )
         .sheet(isPresented: isZoneSheetPresented) {
             if let zone = viewModel.selectedZone {
                 ZoneDetailView(zone: zone,
@@ -118,7 +127,8 @@ struct MainView: View {
                 fireRisk: viewModel.fireRiskLevel,
                 ban: viewModel.activeForestBan,
                 onBanTap: { viewModel.openActiveBan() },
-                onDistrictTap: { viewModel.selectZone(named: inZone.forestDistrict) }
+                onDistrictTap: { viewModel.selectZone(named: inZone.forestDistrict) },
+                wide: isLandscape
             )
         } else if let outside = viewModel.displayOutsideZone {
             OutsideZoneView(
@@ -128,7 +138,8 @@ struct MainView: View {
                 azimuth: viewModel.azimuth,
                 ban: viewModel.activeForestBan,
                 onBanTap: { viewModel.openActiveBan() },
-                onDistrictTap: { viewModel.selectZone(named: outside.nearestDistrict) }
+                onDistrictTap: { viewModel.selectZone(named: outside.nearestDistrict) },
+                wide: isLandscape
             )
         } else {
             GpsLocatingView()
@@ -181,7 +192,7 @@ struct MainView: View {
                 .padding(.top, 8)
 
                 if isSettingsOpen {
-                    if hSizeClass == .regular {
+                    if isLandscape {
                         settingsPanelWide
                     } else {
                         settingsPanel

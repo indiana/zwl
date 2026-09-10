@@ -8,12 +8,8 @@ struct InZoneView: View {
     let ban: ForestBan?
     let onBanTap: () -> Void
     let onDistrictTap: () -> Void
-
-    @Environment(\.horizontalSizeClass) private var hSizeClass
-    @Environment(\.verticalSizeClass) private var vSizeClass
-
-    /// Two-column layout for phone landscape (compact height) and iPad (regular width).
-    private var wide: Bool { vSizeClass == .compact || hSizeClass == .regular }
+    /// Two-column layout in landscape only (passed from the host).
+    let wide: Bool
 
     var body: some View {
         ScrollView {
