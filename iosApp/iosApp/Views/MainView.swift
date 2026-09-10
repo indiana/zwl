@@ -192,14 +192,10 @@ struct MainView: View {
                 .padding(.top, 8)
 
                 if isSettingsOpen {
-                    if isLandscape {
-                        settingsPanelWide
-                    } else {
-                        settingsPanel
-                            .padding(.trailing, 16)
-                            .padding(.top, 12)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
+                    settingsPanel
+                        .padding(.trailing, 16)
+                        .padding(.top, 12)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 Spacer()
             }
@@ -317,25 +313,6 @@ recenterSignal: viewModel.recenterSignal,
                     .strokeBorder(Color.black.opacity(0.08))
             )
             .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
-    }
-
-    /// Full-height trailing inspector for iPad (regular width) — matches the
-    /// Android side panel instead of a floating popover.
-    private var settingsPanelWide: some View {
-        ScrollView {
-            settingsPanelItems
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(width: 340)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(.regularMaterial)
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .frame(width: 1)
-                .foregroundColor(Color.black.opacity(0.08))
-        }
     }
 
     private var settingsPanelItems: some View {
