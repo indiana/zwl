@@ -21,6 +21,8 @@ import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import com.indiana.zwl.domain.util.PoiUiGroup
 import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.domain.util.uiGroup
+import com.indiana.zwl.presentation.map.MapOrientationMode
+import com.indiana.zwl.presentation.map.MapSettingsPrefsKeys
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
@@ -160,6 +162,22 @@ class MainViewModel @Inject constructor(
     }
 
     private val sharedPrefs = context.getSharedPreferences("zwl_map_settings", Context.MODE_PRIVATE)
+
+    private val _orientationMode = MutableStateFlow(
+        MapOrientationMode.entries.getOrElse(
+            sharedPrefs.getInt(MapSettingsPrefsKeys.ORIENTATION_MODE, MapOrientationMode.NORTH_UP.ordinal)
+        ) { MapOrientationMode.NORTH_UP }
+    )
+    val orientationMode: StateFlow<MapOrientationMode> = _orientationMode.asStateFlow()
+
+    fun toggleOrientationMode() {
+        val next = when (_orientationMode.value) {
+            MapOrientationMode.NORTH_UP -> MapOrientationMode.HEADING_UP
+            MapOrientationMode.HEADING_UP -> MapOrientationMode.NORTH_UP
+        }
+        _orientationMode.value = next
+        sharedPrefs.edit().putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, next.ordinal).apply()
+    }
 
     private val _showForestBans = MutableStateFlow(sharedPrefs.getBoolean("show_forest_bans", true))
     val showForestBans: StateFlow<Boolean> = _showForestBans

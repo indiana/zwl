@@ -95,6 +95,18 @@ final class MainViewModel: NSObject, ObservableObject {
         didSet { UserDefaults.standard.set(followsUser, forKey: Self.keyFollowsUser) }
     }
 
+    /// Map orientation mode: false = north always up (default, Android parity
+    /// NORTH_UP), true = the marching direction (heading) stays at the top
+    /// (HEADING_UP). Maps to `MLNUserTrackingMode.followWithHeading` on the
+    /// map side; persisted like the other map toggles.
+    @Published var headingUp: Bool = false {
+        didSet { UserDefaults.standard.set(headingUp, forKey: Self.keyHeadingUp) }
+    }
+
+    func toggleOrientationMode() {
+        headingUp.toggle()
+    }
+
     // Selections
     @Published var selectedZone: Zone?
     @Published var selectedBan: ForestBan?
@@ -199,6 +211,7 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyShowParking = "mapSettings.showParking"
     private static let keyShowEducation = "mapSettings.showEducation"
     private static let keyFollowsUser = "settings.followsUser"
+    private static let keyHeadingUp = "mapSettings.headingUp"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
     // re-renders the map on the main thread (the iPad-class bottleneck), so
@@ -221,6 +234,7 @@ final class MainViewModel: NSObject, ObservableObject {
         showParking = defaults.object(forKey: Self.keyShowParking) as? Bool ?? true
         showEducation = defaults.object(forKey: Self.keyShowEducation) as? Bool ?? true
         followsUser = defaults.object(forKey: Self.keyFollowsUser) as? Bool ?? true
+        headingUp = defaults.object(forKey: Self.keyHeadingUp) as? Bool ?? false
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor [weak self] in

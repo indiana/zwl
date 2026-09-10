@@ -3,6 +3,7 @@ package com.indiana.zwl.presentation.map
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,6 +73,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -84,6 +86,8 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Info
+import com.indiana.zwl.presentation.map.MapOrientationMode
+import com.indiana.zwl.presentation.map.util.OrientationMath
 
 /** Upper bound for cleanup sweeps of generation-stamped offline sources. */
 private const val MAX_OFFLINE_AREA_SOURCES = 64
@@ -120,6 +124,8 @@ fun MapViewContainer(
     val pendingPoint by viewModel.pendingPoint.collectAsState()
     val showLayersOverlay by viewModel.showLayersOverlay.collectAsState()
     val focusSavedPoint by viewModel.focusSavedPoint.collectAsState()
+    val orientationMode by viewModel.orientationMode.collectAsState()
+    val headingUp = orientationMode == MapOrientationMode.HEADING_UP
 
     val rememberedMapView = remember {
         try {
@@ -295,6 +301,38 @@ fun MapViewContainer(
             }
         }
     }
+    // Heading-up mode: rotate the camera bearing with each compass azimuth so
+    // the marching direction stays at the top of the screen. Only direct
+    // bearing writes (no @Published-style recomposition), deltas under 0.25
+    // are ignored to keep the render pipeline calm.
+    LaunchedEffect(mapboxMapInstance, headingUp, viewModel) {
+        if (!headingUp) return@LaunchedEffect
+        val map = mapboxMapInstance ?: return@LaunchedEffect
+        viewModel.azimuth.collect { az ->
+            val current = map.cameraPosition?.bearing ?: 0.0
+            if (OrientationMath.bearingDifference(current, az.toDouble()) >= 0.25) {
+                map.cameraPosition = CameraPosition.Builder(map.cameraPosition)
+                    .bearing(az.toDouble())
+                    .build()
+            }
+        }
+    }
+
+    // Back to north-up: ease the bearing to 0 (only when it was actually rotated).
+    LaunchedEffect(mapboxMapInstance, headingUp) {
+        if (headingUp) return@LaunchedEffect
+        val map = mapboxMapInstance ?: return@LaunchedEffect
+        val bearing = ((map.cameraPosition?.bearing ?: 0.0) % 360.0 + 360.0) % 360.0
+        if (bearing > 0.5 && bearing < 359.5) {
+            map.easeCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder(map.cameraPosition).bearing(0.0).build()
+                ),
+                250
+            )
+        }
+    }
+
     val userLat = (uiState as? MainUiState.Success)?.latitude
     val userLon = (uiState as? MainUiState.Success)?.longitude
 
@@ -381,6 +419,9 @@ fun MapViewContainer(
 
                             map.uiSettings.isRotateGesturesEnabled = false
                             map.uiSettings.isTiltGesturesEnabled = false
+                            // Custom compass overlay button instead: it toggles the
+                            // orientation mode and also tracks north while rotated.
+                            map.uiSettings.isCompassEnabled = false
 
                             map.addOnCameraIdleListener {
                                 map.cameraPosition?.zoom?.let { currentZoom = it.toFloat() }
@@ -631,6 +672,7 @@ fun MapViewContainer(
                 map.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(focus.latitude, focus.longitude))
                     .zoom(15.0)
+                    .bearing(if (headingUp) map.cameraPosition?.bearing ?: 0.0 else 0.0)
                     .build()
             }
 
@@ -644,6 +686,11 @@ fun MapViewContainer(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    CompassButton(
+                        headingUp = headingUp,
+                        azimuth = lastAzimuth,
+                        onClick = { viewModel.toggleOrientationMode() }
+                    )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -685,6 +732,7 @@ fun MapViewContainer(
                                         mapboxMapInstance?.cameraPosition = CameraPosition.Builder()
                                             .target(LatLng(lat, lon))
                                             .zoom(15.0)
+                                            .bearing(if (headingUp) mapboxMapInstance?.cameraPosition?.bearing ?: 0.0 else 0.0)
                                             .build()
                                     } else {
                                         Toast.makeText(context, "Oczekiwanie na sygnał GPS...", Toast.LENGTH_SHORT).show()
@@ -1012,6 +1060,67 @@ fun MapViewContainer(
 
 private fun buildPendingMarkerGeoJson(lat: Double, lng: Double): String {
     return """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[$lng,$lat]}}]}"""
+}
+
+@Composable
+private fun CompassButton(
+    headingUp: Boolean,
+    azimuth: Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .size(48.dp)
+            .clickable(onClick = onClick, onClickLabel = "Zmień tryb orientacji mapy")
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.size(30.dp)) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val r = size.minDimension / 2f
+            drawCircle(
+                color = Color(0xFF78909C).copy(alpha = 0.7f),
+                radius = r,
+                center = center,
+                style = Stroke(width = 1.dp.toPx())
+            )
+            // North marker rotates opposite the map bearing: in NORTH_UP it
+            // sits at the top; in HEADING_UP it spins to show where north is.
+            rotate(degrees = -azimuth, pivot = center) {
+                val tip = Offset(center.x, center.y - r * 0.8f)
+                val left = Offset(center.x - r * 0.26f, center.y - r * 0.1f)
+                val right = Offset(center.x + r * 0.26f, center.y - r * 0.1f)
+                drawPath(
+                    Path().apply {
+                        moveTo(tip.x, tip.y)
+                        lineTo(left.x, left.y)
+                        lineTo(right.x, right.y)
+                        close()
+                    },
+                    color = Color(0xFFD32F2F)
+                )
+            }
+            if (headingUp) {
+                // Fixed white caret meaning "direction of travel is up".
+                val cx = center.x
+                val cy = center.y + r * 0.45f
+                drawPath(
+                    Path().apply {
+                        moveTo(cx, cy - r * 0.28f)
+                        lineTo(cx - r * 0.2f, cy)
+                        lineTo(cx + r * 0.2f, cy)
+                        close()
+                    },
+                    color = Color.White
+                )
+            }
+            }
+        }
+    }
 }
 
 @Composable
