@@ -28,6 +28,7 @@ fun PermissionsScreen(onRequestPermission: () -> Unit) {
         Card(
             modifier = Modifier
                 .padding(24.dp)
+                .widthIn(max = 480.dp)
                 .fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = DarkForestSurface),
             shape = RoundedCornerShape(16.dp)

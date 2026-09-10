@@ -1,5 +1,6 @@
 package com.indiana.zwl.presentation
 
+import android.content.res.Configuration
 import com.indiana.zwl.presentation.theme.*
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalConfiguration
 import com.indiana.zwl.domain.model.ForestBan
 
 @Composable
@@ -37,6 +39,8 @@ fun OutsideZoneContent(
     onBanDetailsClick: (() -> Unit)? = null,
     onDebugToggle: (() -> Unit)? = null
 ) {
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     var accumulatedAzimuth by remember { mutableStateOf(azimuth) }
     LaunchedEffect(azimuth) {
         val diff = (azimuth - accumulatedAzimuth) % 360f
@@ -59,7 +63,9 @@ fun OutsideZoneContent(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        val compassSize = minOf(220.dp, maxHeight / 2f)
+        val portraitCompassSize = minOf(220.dp, maxHeight / 2f)
+        val landscapeCompassSize = maxOf(140.dp, minOf(200.dp, maxHeight * 0.6f))
+        val compassSize = if (isLandscape) landscapeCompassSize else portraitCompassSize
         val compassRadius = compassSize / 2
         val needleSize = minOf(80.dp, compassSize * 0.36f)
         val innerPadding = minOf(12.dp, compassSize * 0.06f)
@@ -69,9 +75,9 @@ fun OutsideZoneContent(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .heightIn(min = maxHeight)
-                .padding(24.dp),
+                .padding(if (isLandscape) 16.dp else 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = if (isLandscape) Arrangement.Center else Arrangement.SpaceBetween
         ) {
         if (currentForestBan != null && onBanDetailsClick != null) {
             ForestBanAlertBanner(
@@ -81,13 +87,14 @@ fun OutsideZoneContent(
             )
         }
 
+        val heroContent: @Composable () -> Unit = {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(top = 24.dp)
+            modifier = Modifier.padding(top = if (isLandscape) 0.dp else 24.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(if (isLandscape) 72.dp else 100.dp)
                     .background(AmberAccent.copy(alpha = 0.1f), RoundedCornerShape(50.dp))
                     .border(3.dp, YellowPrimary, RoundedCornerShape(50.dp))
                     .clickable(enabled = onDebugToggle != null) {
@@ -95,25 +102,32 @@ fun OutsideZoneContent(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Text("!", fontSize = 48.sp, fontWeight = FontWeight.Black, color = YellowPrimary)
+                Text(
+                    "!",
+                    fontSize = if (isLandscape) 36.sp else 48.sp,
+                    fontWeight = FontWeight.Black,
+                    color = YellowPrimary
+                )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(if (isLandscape) 12.dp else 24.dp))
 
             Text(
                 text = "Jesteś poza strefą\nprogramu \"Zanocuj w Lesie\"",
-                fontSize = 26.sp,
+                fontSize = if (isLandscape) 20.sp else 26.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 textAlign = TextAlign.Center,
-                lineHeight = 32.sp
+                lineHeight = if (isLandscape) 24.sp else 32.sp
             )
         }
+        }
 
+        val compassContent: @Composable () -> Unit = {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(vertical = 16.dp)
+            modifier = Modifier.padding(vertical = if (isLandscape) 0.dp else 16.dp)
         ) {
             Box(
                 modifier = Modifier
@@ -145,17 +159,19 @@ fun OutsideZoneContent(
                 }
             }
         }
+        }
 
+        val nearestCardContent: @Composable () -> Unit = {
         Card(
             onClick = { onViewDetailsClick?.invoke() },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = if (isLandscape) 0.dp else 16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                modifier = Modifier.fillMaxWidth().padding(if (isLandscape) 14.dp else 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -207,6 +223,32 @@ fun OutsideZoneContent(
                     textAlign = TextAlign.Center
                 )
             }
+        }
+        }
+        if (isLandscape) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    heroContent()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    nearestCardContent()
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) { compassContent() }
+            }
+        } else {
+            heroContent()
+            compassContent()
+            nearestCardContent()
         }
     }
     }

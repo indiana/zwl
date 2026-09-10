@@ -49,11 +49,17 @@ struct AboutView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity)
             .navigationTitle("O aplikacji")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Zamknij") { dismiss() }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.backward")
+                            .fontWeight(.semibold)
+                    }
+                    .accessibilityLabel("Wstecz")
                 }
             }
         }

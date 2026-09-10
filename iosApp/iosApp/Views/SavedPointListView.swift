@@ -38,14 +38,20 @@ struct SavedPointListView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity)
             .navigationTitle("Zapisane punkty")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Zamknij") {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
                         viewModel.closeSavedPointList()
                         dismiss()
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                            .fontWeight(.semibold)
                     }
+                    .accessibilityLabel("Wstecz")
                 }
             }
             .alert("Otwórz punkt ze współrzędnych", isPresented: $isPastePromptPresented) {

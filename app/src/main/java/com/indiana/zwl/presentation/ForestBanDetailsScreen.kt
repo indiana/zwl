@@ -1,5 +1,6 @@
 package com.indiana.zwl.presentation
 
+import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,6 +40,8 @@ fun ForestBanDetailsScreen(
     val nadlesnictwoUrl = remember(ban.forestDistrictName, ban.rdlpName) {
         NadlesnictwoUrls.websiteUrl(ban.forestDistrictName, ban.rdlpName)
     }
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -46,7 +50,7 @@ fun ForestBanDetailsScreen(
                     Column {
                         Text(
                             text = "Zakaz wstępu do lasu",
-                            fontSize = 20.sp,
+                            fontSize = if (isLandscape) 16.sp else 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
@@ -58,17 +62,22 @@ fun ForestBanDetailsScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onClose) {
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(if (isLandscape) 40.dp else 48.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Wstecz",
+                            modifier = Modifier.size(if (isLandscape) 20.dp else 24.dp),
                             tint = Color.White
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = DarkForestBackground
-                )
+                ),
+                windowInsets = if (isLandscape) WindowInsets(0, 0, 0, 0) else TopAppBarDefaults.windowInsets
             )
         },
         containerColor = DarkForestBackground
