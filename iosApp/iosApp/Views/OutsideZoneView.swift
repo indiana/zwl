@@ -11,45 +11,67 @@ struct OutsideZoneView: View {
     let onBanTap: () -> Void
     let onDistrictTap: () -> Void
 
-    private let compassSize: CGFloat = 220
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    @Environment(\.verticalSizeClass) private var vSizeClass
+
+    /// Two-column layout for phone landscape (compact height) and iPad (regular width).
+    private var wide: Bool { vSizeClass == .compact || hSizeClass == .regular }
+
+    private var compassSize: CGFloat { wide ? 180 : 220 }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
                 if let ban {
                     ForestBanAlertBanner(forestBan: ban, onTap: onBanTap)
-                        .padding(.bottom, 16)
+                        .padding(.bottom, wide ? 8 : 16)
                 }
 
-                VStack(spacing: 24) {
-                    ZStack {
-                        Circle()
-                            .fill(ZWL.amberAccent.opacity(0.1))
-                            .frame(width: 100, height: 100)
-                            .overlay(Circle().stroke(ZWL.yellowPrimary, lineWidth: 3))
-                        Text("!")
-                            .font(.system(size: 48, weight: .black))
-                            .foregroundColor(ZWL.yellowPrimary)
+                if wide {
+                    HStack(alignment: .center, spacing: 24) {
+                        VStack(spacing: 16) {
+                            statusHero
+                            nearestZoneCard
+                        }
+                        CompassView(azimuth: azimuth, bearing: bearingDegrees, size: compassSize)
                     }
+                    .padding(.top, 8)
+                    .frame(maxWidth: 900)
+                } else {
+                    statusHero
+                        .padding(.top, 24)
 
-                    Text("Jesteś poza strefą\nprogramu \"Zanocuj w Lesie\"")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(6)
+                    CompassView(azimuth: azimuth, bearing: bearingDegrees, size: compassSize)
+                        .padding(.vertical, 16)
+
+                    nearestZoneCard
+                        .padding(.bottom, 24)
                 }
-                .padding(.top, 24)
-
-                CompassView(azimuth: azimuth, bearing: bearingDegrees, size: compassSize)
-                    .padding(.vertical, 16)
-
-                nearestZoneCard
-                    .padding(.bottom, 24)
             }
-            .padding(24)
+            .padding(wide ? 16 : 24)
             .frame(maxWidth: .infinity)
         }
         .background(ZWL.yellowBackground.ignoresSafeArea())
+    }
+
+    private var statusHero: some View {
+        VStack(spacing: wide ? 12 : 24) {
+            ZStack {
+                Circle()
+                    .fill(ZWL.amberAccent.opacity(0.1))
+                    .frame(width: wide ? 72 : 100, height: wide ? 72 : 100)
+                    .overlay(Circle().stroke(ZWL.yellowPrimary, lineWidth: 3))
+                Text("!")
+                    .font(.system(size: wide ? 36 : 48, weight: .black))
+                    .foregroundColor(ZWL.yellowPrimary)
+            }
+
+            Text("Jesteś poza strefą\nprogramu \"Zanocuj w Lesie\"")
+                .font(.system(size: wide ? 20 : 26, weight: .bold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .lineSpacing(wide ? 2 : 6)
+        }
     }
 
     private var nearestZoneCard: some View {

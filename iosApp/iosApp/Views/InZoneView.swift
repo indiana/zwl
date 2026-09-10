@@ -9,61 +9,80 @@ struct InZoneView: View {
     let onBanTap: () -> Void
     let onDistrictTap: () -> Void
 
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    @Environment(\.verticalSizeClass) private var vSizeClass
+
+    /// Two-column layout for phone landscape (compact height) and iPad (regular width).
+    private var wide: Bool { vSizeClass == .compact || hSizeClass == .regular }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
                 if let ban {
                     ForestBanAlertBanner(forestBan: ban, onTap: onBanTap)
-                        .padding(.bottom, 16)
+                        .padding(.bottom, wide ? 8 : 16)
                 }
 
-                VStack(spacing: 24) {
-                    ZStack {
-                        Circle()
-                            .fill(ZWL.greenPrimary.opacity(0.2))
-                            .frame(width: 100, height: 100)
-                            .overlay(Circle().stroke(ZWL.forestGreenAccent, lineWidth: 3))
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 48, weight: .bold))
-                            .foregroundColor(ZWL.forestGreenAccent)
+                if wide {
+                    HStack(alignment: .center, spacing: 24) {
+                        statusHero
+                        fireRiskCard
                     }
+                    .padding(.top, 8)
+                    .frame(maxWidth: 900)
+                } else {
+                    statusHero
+                        .padding(.top, 16)
 
-                    Text("Jesteś w strefie\nprogramu \"Zanocuj w Lesie\"")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(6)
-
-                    Button(action: onDistrictTap) {
-                        HStack(spacing: 8) {
-                            Text(district)
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(ZWL.forestGreenText)
-                                .multilineTextAlignment(.center)
-                            Image(systemName: "info.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundColor(ZWL.forestGreenAccent)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(ZWL.greenPrimary.opacity(0.15))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(ZWL.forestGreenAccent, lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
+                    fireRiskCard
+                        .padding(.vertical, 24)
                 }
-                .padding(.top, 16)
-
-                fireRiskCard
-                    .padding(.vertical, 24)
             }
-            .padding(24)
+            .padding(wide ? 16 : 24)
             .frame(maxWidth: .infinity)
         }
         .background(ZWL.greenBackground.ignoresSafeArea())
+    }
+
+    private var statusHero: some View {
+        VStack(spacing: wide ? 12 : 24) {
+            ZStack {
+                Circle()
+                    .fill(ZWL.greenPrimary.opacity(0.2))
+                    .frame(width: wide ? 72 : 100, height: wide ? 72 : 100)
+                    .overlay(Circle().stroke(ZWL.forestGreenAccent, lineWidth: 3))
+                Image(systemName: "checkmark")
+                    .font(.system(size: wide ? 40 : 48, weight: .bold))
+                    .foregroundColor(ZWL.forestGreenAccent)
+            }
+
+            Text("Jesteś w strefie\nprogramu \"Zanocuj w Lesie\"")
+                .font(.system(size: wide ? 20 : 26, weight: .bold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .lineSpacing(wide ? 2 : 6)
+
+            Button(action: onDistrictTap) {
+                HStack(spacing: 8) {
+                    Text(district)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(ZWL.forestGreenText)
+                        .multilineTextAlignment(.center)
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(ZWL.forestGreenAccent)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(ZWL.greenPrimary.opacity(0.15))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(ZWL.forestGreenAccent, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var fireRiskCard: some View {
