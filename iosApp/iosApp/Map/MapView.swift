@@ -212,10 +212,17 @@ struct MapView: UIViewRepresentable {
         /// north-up, follow+heading rotation when heading-up (Android
         /// `bearing` camera-loop parity), none when follow is off.
         private func applyUserTrackingMode() {
-            mapView?.userTrackingMode = {
+            guard let map = mapView else { return }
+            map.userTrackingMode = {
                 guard followsUser else { return .none }
                 return headingUp ? .followWithHeading : .follow
             }()
+            if !headingUp {
+                // `.follow` keeps the last heading, so leaving heading-up would
+                // freeze the map rotated. Ease back to north like Android's
+                // north-up camera loop.
+                map.setDirection(0, animated: true)
+            }
         }
         var onTapZone: ((String?) -> Void) = { _ in }
         var onTapBan: (Int64) -> Void = { _ in }
