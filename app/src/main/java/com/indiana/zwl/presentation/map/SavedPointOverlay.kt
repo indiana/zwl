@@ -24,6 +24,7 @@ import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.presentation.FireRiskCard
 import com.indiana.zwl.presentation.ForestStandCard
 import com.indiana.zwl.presentation.SelectedSavedPointDetails
+import com.indiana.zwl.shared.map.CoordinateParser
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -142,7 +143,7 @@ fun SavedPointListOverlay(
             text = {
                 Column {
                     Text(
-                        text = "Wklej współrzędne, np. 52.123456, 21.123456.",
+                        text = "Wklej współrzędne lub tekst, który je zawiera, np. 52.123456, 21.123456.",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -170,9 +171,9 @@ fun SavedPointListOverlay(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        parseCoordinates(pasteInput)?.let { (lat, lng) ->
+                        CoordinateParser.parse(pasteInput)?.let { coords ->
                             pasteDialogVisible = false
-                            onPasteCoordinates(lat, lng)
+                            onPasteCoordinates(coords.latitude, coords.longitude)
                         } ?: run { pasteError = true }
                     }
                 ) {
@@ -186,17 +187,6 @@ fun SavedPointListOverlay(
             }
         )
     }
-}
-
-private fun parseCoordinates(input: String): Pair<Double, Double>? {
-    val pattern = Regex(
-        """\s*([-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([-]?\d+(?:[.,]\d+)?)\s*"""
-    )
-    val match = pattern.matchEntire(input.trim()) ?: return null
-    val lat = match.groupValues[1].replace(',', '.').toDoubleOrNull() ?: return null
-    val lng = match.groupValues[2].replace(',', '.').toDoubleOrNull() ?: return null
-    if (lat !in -90.0..90.0 || lng !in -180.0..180.0) return null
-    return lat to lng
 }
 
 @Composable

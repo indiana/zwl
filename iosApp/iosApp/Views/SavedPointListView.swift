@@ -51,8 +51,8 @@ struct SavedPointListView: View {
             .alert("Otwórz punkt ze współrzędnych", isPresented: $isPastePromptPresented) {
                 TextField("Szerokość, Długość", text: $pasteInput)
                 Button("Otwórz punkt") {
-                    if let coords = Self.parseCoordinates(pasteInput) {
-                        viewModel.openPointFromPaste(latitude: coords.lat, longitude: coords.lng)
+                    if let coords = CoordinateParser.shared.parse(input: pasteInput) {
+                        viewModel.openPointFromPaste(latitude: coords.latitude, longitude: coords.longitude)
                         viewModel.closeSavedPointList()
                         dismiss()
                     } else {
@@ -65,7 +65,7 @@ struct SavedPointListView: View {
             } message: {
                 Text(pasteError
                      ? "Nie rozpoznano współrzędnych."
-                     : "Wklej współrzędne, np. 52.123456, 21.123456.")
+                     : "Wklej współrzędne lub tekst, który je zawiera, np. 52.123456, 21.123456.")
             }
         }
     }
@@ -114,25 +114,5 @@ struct SavedPointListView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-    }
-
-    /// Parses `lat, lng` with either decimal point or Polish decimal comma,
-    /// e.g. "52.123456, 21.123456" or "52,123456; 21,123456" (Android
-    /// `parseCoordinates` parity).
-    private static func parseCoordinates(_ input: String) -> (lat: Double, lng: Double)? {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let regex = try? NSRegularExpression(
-            pattern: #"\s*([-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([-]?\d+(?:[.,]\d+)?)\s*"#
-        ) else { return nil }
-        let nsFull = NSRange(location: 0, length: (trimmed as NSString).length)
-        guard let match = regex.firstMatch(in: trimmed, range: nsFull),
-              match.range == nsFull else { return nil }
-        func number(_ at: Int) -> Double? {
-            guard let range = Range(match.range(at: at), in: trimmed) else { return nil }
-            return Double(String(trimmed[range]).replacingOccurrences(of: ",", with: "."))
-        }
-        guard let lat = number(1), let lng = number(2) else { return nil }
-        guard (-90...90).contains(lat), (-180...180).contains(lng) else { return nil }
-        return (lat, lng)
     }
 }
