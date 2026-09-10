@@ -4,6 +4,7 @@ import shared
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
+    @Environment(\.horizontalSizeClass) private var hSizeClass
     @State private var showAbout = false
     // followsUser lives on the view model (selecting a saved point turns it
     // off so the camera stays on the point; "my location" re-enables it).
@@ -180,10 +181,14 @@ struct MainView: View {
                 .padding(.top, 8)
 
                 if isSettingsOpen {
-                    settingsPanel
-                        .padding(.trailing, 16)
-                        .padding(.top, 12)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    if hSizeClass == .regular {
+                        settingsPanelWide
+                    } else {
+                        settingsPanel
+                            .padding(.trailing, 16)
+                            .padding(.top, 12)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
                 }
                 Spacer()
             }
@@ -292,6 +297,37 @@ recenterSignal: viewModel.recenterSignal,
     }
 
     private var settingsPanel: some View {
+        settingsPanelItems
+            .padding(14)
+            .frame(width: 280, alignment: .leading)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(Color.black.opacity(0.08))
+            )
+            .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+    }
+
+    /// Full-height trailing inspector for iPad (regular width) — matches the
+    /// Android side panel instead of a floating popover.
+    private var settingsPanelWide: some View {
+        ScrollView {
+            settingsPanelItems
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(width: 340)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(.regularMaterial)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .frame(width: 1)
+                .foregroundColor(Color.black.opacity(0.08))
+        }
+    }
+
+    private var settingsPanelItems: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button(action: {
                 isSettingsOpen = false
@@ -341,14 +377,6 @@ recenterSignal: viewModel.recenterSignal,
             }
             .font(.system(size: 15))
         }
-        .padding(14)
-        .frame(width: 280, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(Color.black.opacity(0.08))
-        )
-        .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
     }
 
     private var myLocationButton: some View {
