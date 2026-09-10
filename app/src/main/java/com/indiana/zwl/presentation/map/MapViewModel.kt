@@ -55,6 +55,12 @@ class MapViewModel @Inject constructor(
     private val _downloadBlockedMessage = MutableStateFlow<String?>(null)
     val downloadBlockedMessage: StateFlow<String?> = _downloadBlockedMessage.asStateFlow()
 
+    // "Pobrane obszary" is a full-screen map overlay whose open state must
+    // survive switching to the Status tab and back (ViewModel scope, not a
+    // MapViewContainer-local remember which is disposed with the map).
+    private val _showOfflineAreas = MutableStateFlow(false)
+    val showOfflineAreas: StateFlow<Boolean> = _showOfflineAreas.asStateFlow()
+
     val offlineAreas: StateFlow<List<DownloadedArea>> = offlineAreaRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -213,6 +219,14 @@ class MapViewModel @Inject constructor(
 
     fun dismissDownloadBlocked() {
         _downloadBlockedMessage.value = null
+    }
+
+    fun openOfflineAreas() {
+        _showOfflineAreas.value = true
+    }
+
+    fun closeOfflineAreas() {
+        _showOfflineAreas.value = false
     }
 
     fun focusArea(area: DownloadedArea) {

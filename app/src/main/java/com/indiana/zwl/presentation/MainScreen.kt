@@ -3,6 +3,7 @@ package com.indiana.zwl.presentation
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -16,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -111,7 +114,8 @@ fun MainScreen(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.widthIn(max = 480.dp)
                 ) {
                     CircularProgressIndicator(
                         color = ForestGreenAccent,
@@ -147,7 +151,7 @@ fun MainScreen(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth()
                 ) {
                     Text(
                         text = "Wystąpił błąd",
@@ -196,7 +200,7 @@ fun MainScreen(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth()
                 ) {
                     Text(
                         text = "Brak Danych Lokalnych",
@@ -235,6 +239,10 @@ fun MainScreen(
             val selectedSavedPointDetails by savedPointDetailViewModel.details.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
             var showAbout by rememberSaveable { mutableStateOf(false) }
+            // Which tab a zone/ban detail was opened from — the detail only shows
+            // on that tab, so switching tabs reveals the other screen and coming
+            // back restores the detail (consistent with the map-menu overlays).
+            var detailOriginTab by rememberSaveable { mutableStateOf(1) }
 
             val isDebug = BuildConfig.DEBUG
             val debugInvertZone by viewModel.debugInvertZone.collectAsStateWithLifecycle()
@@ -254,6 +262,8 @@ fun MainScreen(
             }
             val isInZone = displayStatus is LocationStatus.InZone
             val displayForestBan = debugBanOverride?.forestBan ?: state.currentForestBan
+            val isLandscape =
+                LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
             ZwlTheme(isInZone = isInZone) {
                 LaunchedEffect(state.latitude, state.longitude) {
@@ -271,42 +281,71 @@ fun MainScreen(
                         savedPointDetailViewModel.clear()
                     }
                 }
+                LaunchedEffect(selectedZoneDetails) {
+                    if (selectedZoneDetails != null) detailOriginTab = selectedTab
+                }
+                LaunchedEffect(selectedForestBan) {
+                    if (selectedForestBan != null) detailOriginTab = selectedTab
+                }
+                LaunchedEffect(pendingPoint) {
+                    // A pending point (map long-press OR a zwl://point deep link)
+                    // belongs to the map tab: make sure it is visible.
+                    if (pendingPoint != null) selectedTab = 1
+                }
                 Scaffold(
                     bottomBar = {
-                        NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ) {
-                            NavigationBarItem(
-                                selected = selectedTab == 0,
-                                onClick = { selectedTab = 0 },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Info,
-                                        contentDescription = "Status"
-                                    )
-                                },
-                                label = { Text("Status", fontWeight = FontWeight.Bold) }
-                            )
-                            NavigationBarItem(
-                                selected = selectedTab == 1,
-                                onClick = { selectedTab = 1 },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Map,
-                                        contentDescription = "Mapa"
-                                    )
-                                },
-                                label = { Text("Mapa", fontWeight = FontWeight.Bold) }
-                            )
+                        if (!isLandscape) {
+                            NavigationBar(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                            ) {
+                                NavBarTab(
+                                    selected = selectedTab == 0,
+                                    onClick = { selectedTab = 0 },
+                                    icon = Icons.Default.Info,
+                                    label = "Status"
+                                )
+                                NavBarTab(
+                                    selected = selectedTab == 1,
+                                    onClick = { selectedTab = 1 },
+                                    icon = Icons.Default.Map,
+                                    label = "Mapa"
+                                )
+                            }
                         }
                     }
                 ) { paddingValues ->
-                    Box(
+                    Row(
                         modifier = Modifier
                             .padding(paddingValues)
                             .fillMaxSize()
                     ) {
+                        if (isLandscape) {
+                            NavigationRail(
+                                modifier = Modifier.fillMaxHeight(),
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                windowInsets = WindowInsets(0, 0, 0, 0)
+                            ) {
+                                NavRailTab(
+                                    selected = selectedTab == 0,
+                                    onClick = { selectedTab = 0 },
+                                    icon = Icons.Default.Info,
+                                    label = "Status"
+                                )
+                                NavRailTab(
+                                    selected = selectedTab == 1,
+                                    onClick = { selectedTab = 1 },
+                                    icon = Icons.Default.Map,
+                                    label = "Mapa"
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxSize()
+                        ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -367,7 +406,8 @@ fun MainScreen(
                                     ) {
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.Center
+                                            verticalArrangement = Arrangement.Center,
+                                            modifier = Modifier.widthIn(max = 480.dp)
                                         ) {
                                             CircularProgressIndicator(
                                                 color = ForestGreenAccent,
@@ -416,81 +456,116 @@ fun MainScreen(
                                     isActive = true,
                                     onOpenAbout = { showAbout = true }
                                 )
+
+                                if (showAbout) {
+                                    AboutScreen(onClose = { showAbout = false })
+                                }
+
+                                if (showSavedPointList) {
+                                    SavedPointListOverlay(
+                                        points = savedPoints,
+                                        onClose = { viewModel.closeSavedPointList() },
+                                        onSelect = { point ->
+                                            viewModel.selectSavedPoint(point)
+                                            viewModel.closeSavedPointList()
+                                        },
+                                        onOpenProperties = { point ->
+                                            viewModel.openSavedPointProperties(point)
+                                            viewModel.closeSavedPointList()
+                                        },
+                                        onPasteCoordinates = { lat, lng ->
+                                            viewModel.openPointFromPaste(lat, lng)
+                                            viewModel.closeSavedPointList()
+                                        }
+                                    )
+                                }
+
+                                selectedSavedPointInfo?.let { point ->
+                                    SavedPointPropertiesCard(
+                                        point = point,
+                                        details = selectedSavedPointDetails?.takeIf { it.pointId == point.id },
+                                        onRename = { name -> viewModel.renameSavedPoint(point.id, name) },
+                                        onShare = { shareSavedPoint(context, point) },
+                                        onDelete = {
+                                            viewModel.deleteSavedPoint(point.id)
+                                        },
+                                        onClose = { viewModel.clearSavedPointProperties() },
+                                        modifier = Modifier.align(Alignment.BottomCenter)
+                                    )
+                                }
+
+                                pendingPoint?.let { point ->
+                                    PointDetailCard(
+                                        point = point,
+                                        onSave = { name -> viewModel.savePendingPoint(name) },
+                                        onShare = { sharePoint(context, point.lat, point.lng, null) },
+                                        onClose = { viewModel.clearPendingPoint() },
+                                        modifier = Modifier.align(Alignment.BottomCenter)
+                                    )
+                                }
                             }
                         }
 
                         selectedZoneDetails?.let { details ->
-                            ZoneDetailsScreen(
-                                details = details,
-                                onClose = { zoneDetailViewModel.clearSelectedZone() }
-                            )
+                            if (selectedTab == detailOriginTab) {
+                                ZoneDetailsScreen(
+                                    details = details,
+                                    onClose = { zoneDetailViewModel.clearSelectedZone() }
+                                )
+                            }
                         }
 
                         selectedForestBan?.let { ban ->
-                            ForestBanDetailsScreen(
-                                ban = ban,
-                                onClose = { viewModel.clearSelectedForestBan() },
-                                onBanIconClick = if (isDebug) {
-                                    {
-                                        viewModel.debugOverrideLocationToBan(ban)
-                                        viewModel.clearSelectedForestBan()
-                                        selectedTab = 0
-                                    }
-                                } else null
-                            )
+                            if (selectedTab == detailOriginTab) {
+                                ForestBanDetailsScreen(
+                                    ban = ban,
+                                    onClose = { viewModel.clearSelectedForestBan() },
+                                    onBanIconClick = if (isDebug) {
+                                        {
+                                            viewModel.debugOverrideLocationToBan(ban)
+                                            viewModel.clearSelectedForestBan()
+                                            selectedTab = 0
+                                        }
+                                    } else null
+                                )
+                            }
                         }
-
-                        if (showAbout) {
-                            AboutScreen(onClose = { showAbout = false })
-                        }
-
-                        pendingPoint?.let { point ->
-                            PointDetailCard(
-                                point = point,
-                                onSave = { name -> viewModel.savePendingPoint(name) },
-                                onShare = { sharePoint(context, point.lat, point.lng, null) },
-                                onClose = { viewModel.clearPendingPoint() },
-                                modifier = Modifier.align(Alignment.BottomCenter)
-                            )
-                        }
-
-                        if (showSavedPointList) {
-                            SavedPointListOverlay(
-                                points = savedPoints,
-                                onClose = { viewModel.closeSavedPointList() },
-                                onSelect = { point ->
-                                    viewModel.selectSavedPoint(point)
-                                    viewModel.closeSavedPointList()
-                                },
-                                onOpenProperties = { point ->
-                                    viewModel.openSavedPointProperties(point)
-                                    viewModel.closeSavedPointList()
-                                },
-                                onPasteCoordinates = { lat, lng ->
-                                    viewModel.openPointFromPaste(lat, lng)
-                                    viewModel.closeSavedPointList()
-                                }
-                            )
-                        }
-
-                        selectedSavedPointInfo?.let { point ->
-                            SavedPointPropertiesCard(
-                                point = point,
-                                details = selectedSavedPointDetails?.takeIf { it.pointId == point.id },
-                                onRename = { name -> viewModel.renameSavedPoint(point.id, name) },
-                                onShare = { shareSavedPoint(context, point) },
-                                onDelete = {
-                                    viewModel.deleteSavedPoint(point.id)
-                                },
-                                onClose = { viewModel.clearSavedPointProperties() },
-                                modifier = Modifier.align(Alignment.BottomCenter)
-                            )
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun RowScope.NavBarTab(
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: ImageVector,
+    label: String
+) {
+    NavigationBarItem(
+        selected = selected,
+        onClick = onClick,
+        icon = { Icon(imageVector = icon, contentDescription = label) },
+        label = { Text(label, fontWeight = FontWeight.Bold) }
+    )
+}
+
+@Composable
+private fun ColumnScope.NavRailTab(
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: ImageVector,
+    label: String
+) {
+    NavigationRailItem(
+        selected = selected,
+        onClick = onClick,
+        icon = { Icon(imageVector = icon, contentDescription = label) },
+        label = { Text(label, fontWeight = FontWeight.Bold) }
+    )
 }
 
 private fun shareSavedPoint(context: android.content.Context, point: SavedPoint) {
