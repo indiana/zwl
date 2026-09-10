@@ -682,15 +682,16 @@ fun MapViewContainer(
                     .padding(24.dp),
                 contentAlignment = Alignment.TopEnd
             ) {
+                CompassButton(
+                    headingUp = headingUp,
+                    azimuth = lastAzimuth,
+                    onClick = { viewModel.toggleOrientationMode() },
+                    modifier = Modifier.align(Alignment.TopStart)
+                )
                 Column(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    CompassButton(
-                        headingUp = headingUp,
-                        azimuth = lastAzimuth,
-                        onClick = { viewModel.toggleOrientationMode() }
-                    )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)

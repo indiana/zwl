@@ -152,34 +152,29 @@ struct MainView: View {
                     .ignoresSafeArea()
             }
 
-            VStack {
+            VStack(alignment: .leading, spacing: 8) {
+                compassButton
+
                 if (viewModel.isDownloading || !viewModel.downloadStatusText.isEmpty) && !dismissDownloadCard {
                     MapDownloadCard(text: viewModel.downloadStatusText,
                                     progress: viewModel.downloadProgress,
                                     isDownloading: viewModel.isDownloading,
                                     errorMessage: viewModel.downloadErrorText)
-                        .padding([.leading, .top], 16)
                         .onTapGesture { dismissDownloadCard = true }
                 }
+
+                if viewModel.isOffline {
+                    offlineBanner
+                }
+
                 Spacer()
             }
+            .padding([.leading, .top], 16)
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            if viewModel.isOffline {
-                VStack {
-                    HStack {
-                        offlineBanner
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding([.leading, .top], 16)
-            }
 
             VStack {
                 HStack(spacing: 8) {
                     Spacer()
-                    compassButton
                     myLocationButton
                     settingsButton
                 }
