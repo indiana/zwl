@@ -74,7 +74,7 @@ class OrientationModeTest {
         zoneRepository, poiRepository, savedPointRepository, locationRepository, compassRepository,
         syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
         getForestBansUseCase, getFireRiskUseCase,
-        getZonesUseCase, spatialEngine, context
+        getZonesUseCase, spatialEngine, mainDispatcherRule.testDispatcher, context
     )
 
     @Test
