@@ -96,6 +96,9 @@ dependencies {
     // Google Play Services Location
     implementation(libs.play.services.location)
 
+    // Google Play In-App Updates
+    implementation(libs.play.app.update)
+
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
 
