@@ -71,7 +71,7 @@ struct MapView: UIViewRepresentable {
         // Heading-up toggles the camera bearing; MapLibre would then pop its
         // built-in compass widget under our own controls. Android disables it
         // too (`isCompassEnabled = false`) — our custom compass is the only one.
-        map.showsCompass = false
+        map.showsCompassView = false
         map.userTrackingMode = .follow
         // Android parity: the user position is a direction arrow that rotates
         // with the device heading, not a plain dot.
