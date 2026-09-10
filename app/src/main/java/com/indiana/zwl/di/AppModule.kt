@@ -12,6 +12,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
@@ -40,6 +42,11 @@ object AppModule {
     fun provideCompassRepository(@ApplicationContext context: Context): CompassRepository {
         return CompassRepositoryImpl(context)
     }
+
+    @Provides
+    @Singleton
+    @IoDispatcher
+    fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 
     @Provides
     @Singleton
