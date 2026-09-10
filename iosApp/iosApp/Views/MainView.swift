@@ -78,9 +78,8 @@ struct MainView: View {
                 .presentationDetents([.medium, .large])
             }
         }
-        .sheet(isPresented: isSavedPointListPresented) {
+        .fullScreenCover(isPresented: isSavedPointListPresented) {
             SavedPointListView(viewModel: viewModel)
-                .presentationDetents([.large])
         }
         .sheet(isPresented: isSavedPointPropertiesPresented) {
             if let point = viewModel.selectedSavedPoint {
@@ -88,17 +87,16 @@ struct MainView: View {
                     .presentationDetents([.medium, .large])
             }
         }
-        .sheet(isPresented: isLayersSettingsPresented) {
+        .fullScreenCover(isPresented: isLayersSettingsPresented) {
             LayersSettingsView(viewModel: viewModel)
-                .presentationDetents([.large])
         }
-        .sheet(isPresented: Binding(
+        .fullScreenCover(isPresented: Binding(
             get: { viewModel.showOfflineAreas },
             set: { if !$0 { viewModel.closeOfflineAreas() } }
         )) {
             OfflineAreasView(viewModel: viewModel)
         }
-        .sheet(isPresented: $showAbout) {
+        .fullScreenCover(isPresented: $showAbout) {
             AboutView()
         }
         .alert("Obszar za duży", isPresented: Binding(
