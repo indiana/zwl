@@ -11,11 +11,8 @@ struct OutsideZoneView: View {
     let onBanTap: () -> Void
     let onDistrictTap: () -> Void
 
-    @Environment(\.horizontalSizeClass) private var hSizeClass
-    @Environment(\.verticalSizeClass) private var vSizeClass
-
-    /// Two-column layout for phone landscape (compact height) and iPad (regular width).
-    private var wide: Bool { vSizeClass == .compact || hSizeClass == .regular }
+    /// Two-column layout in landscape only (passed from the host).
+    let wide: Bool
 
     private var compassSize: CGFloat { wide ? 180 : 220 }
 
