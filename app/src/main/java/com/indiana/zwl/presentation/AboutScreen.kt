@@ -1,6 +1,7 @@
 package com.indiana.zwl.presentation
 
 import android.content.res.Configuration
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,14 +39,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.BuildConfig
+import com.indiana.zwl.R
 import com.indiana.zwl.presentation.theme.DarkForestBackground
 import com.indiana.zwl.presentation.theme.ForestGreenAccent
 import com.indiana.zwl.presentation.theme.ForestGreenText
@@ -53,6 +57,7 @@ import com.indiana.zwl.presentation.theme.ForestGreenText
 private const val BDL_PORTAL_URL = "https://www.bdl.lasy.gov.pl/portal/"
 private const val IBL_FIRE_URL = "https://bazapozarow.ibles.pl/"
 private const val ZANOCUJ_W_LESIE_URL = "https://www.lasy.gov.pl/pl/turystyka/program-zanocuj-w-lesie"
+private const val BUYCOFFEE_URL = "https://buycoffee.to/legalny-bushcraft"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -229,6 +234,35 @@ fun AboutScreen(
                 }
             }
 
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Wsparcie",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Jeśli aplikacja jest dla Ciebie przydatna, możesz wesprzeć jej dalszy rozwój.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 19.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    BuyCoffeeButton()
+                }
+            }
+
             Text(
                 text = "Legalny Bushcraft • wersja ${BuildConfig.VERSION_NAME}",
                 fontSize = 12.sp,
@@ -239,6 +273,20 @@ fun AboutScreen(
         }
         }
     }
+}
+
+@Composable
+private fun BuyCoffeeButton() {
+    val context = LocalContext.current
+    Image(
+        painter = painterResource(id = R.drawable.buycoffee_button),
+        contentDescription = "Wesprzyj projekt w BuyCoffee",
+        contentScale = ContentScale.Fit,
+        modifier = Modifier
+            .width(220.dp)
+            .height(58.dp)
+            .clickable { openNadlesnictwoWebsite(context, BUYCOFFEE_URL) }
+    )
 }
 
 @Composable

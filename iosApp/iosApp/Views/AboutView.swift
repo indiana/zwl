@@ -8,6 +8,7 @@ struct AboutView: View {
     private let bdlPortalUrl = URL(string: "https://www.bdl.lasy.gov.pl/portal/")!
     private let iblFireUrl = URL(string: "https://bazapozarow.ibles.pl/")!
     private let zanocujWLeseUrl = URL(string: "https://www.lasy.gov.pl/pl/turystyka/program-zanocuj-w-lesie")!
+    private let buyCoffeeUrl = URL(string: "https://buycoffee.to/legalny-bushcraft")!
 
     var body: some View {
         NavigationStack {
@@ -39,6 +40,29 @@ struct AboutView: View {
                         .font(.system(size: 13))
                 } header: {
                     sectionHeader("Prywatność", systemImage: "lock")
+                }
+
+                Section {
+                    VStack(spacing: 12) {
+                        Text("Jeśli aplikacja jest dla Ciebie przydatna, możesz wesprzeć jej dalszy rozwój.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        Button {
+                            UIApplication.shared.open(buyCoffeeUrl)
+                        } label: {
+                            Image("BuyCoffeeButton")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 220, height: 58)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Wesprzyj projekt w BuyCoffee")
+                    }
+                    .frame(maxWidth: .infinity)
+                } header: {
+                    sectionHeader("Wsparcie", systemImage: "heart")
                 }
 
                 Section {
