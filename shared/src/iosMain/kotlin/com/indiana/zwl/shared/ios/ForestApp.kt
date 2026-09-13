@@ -164,7 +164,7 @@ class ForestApp(
         }
 
         refreshSpatialIndexes()
-        ok
+        return ok
     }
 
     /**
