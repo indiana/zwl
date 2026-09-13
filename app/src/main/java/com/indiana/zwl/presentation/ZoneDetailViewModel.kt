@@ -11,6 +11,7 @@ import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
+import com.indiana.zwl.shared.data.remote.isTransientRemoteError
 import kotlinx.serialization.json.Json
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -249,13 +250,7 @@ class ZoneDetailViewModel @Inject constructor(
         }
     }
 
-    private fun isNetworkException(e: Throwable?): Boolean {
-        return e is java.net.UnknownHostException ||
-               e is java.net.ConnectException ||
-               e is java.net.SocketTimeoutException ||
-               e is java.net.SocketException ||
-               e is javax.net.ssl.SSLException
-    }
+    private fun isNetworkException(e: Throwable?): Boolean = isTransientRemoteError(e)
 
     companion object {
         private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000

@@ -273,17 +273,17 @@ final class MainViewModel: NSObject, ObservableObject {
         phase = .loading
         Task { [weak self] in
             guard let self = self else { return }
-            do {
-                _ = try await self.app.syncZones()
-                _ = try await self.app.syncBans()
-                _ = try await self.app.syncPois()
-                try await self.app.refreshSpatialIndexes()
-                await self.refreshMapData()
-                await self.computeLocationStatus()
-                self.phase = .ready
-            } catch {
-                self.phase = .error("Błąd odświeżania danych: \(error.localizedDescription)")
+            // Bounded in shared code (same hard cap as start-up) so a hanging
+            // request can never leave the retry path stuck on the splash.
+            let ok = (try? await self.app.refreshAll().boolValue) ?? false
+            await self.reloadOfflineAreas()
+            await self.refreshMapData()
+            if !ok && self.app.cachedZones().isEmpty {
+                self.phase = .error("Błąd odświeżania danych. Sprawdź połączenie internetowe.")
+                return
             }
+            await self.computeLocationStatus()
+            self.phase = .ready
         }
     }
 
@@ -347,11 +347,20 @@ final class MainViewModel: NSObject, ObservableObject {
         guard let lat = userLatitude, let lon = userLongitude,
               locationStatus is LocationStatusInZone || locationStatus is LocationStatusOutsideZone else { return }
         if fireRiskLevel >= 0 { return }
-        do {
-            fireRiskLevel = try await app.getFireRisk(latitude: lat, longitude: lon).intValue
-        } catch {
-            fireRiskLevel = -1
+        let district: String?
+        if let inZone = locationStatus as? LocationStatusInZone {
+            district = inZone.forestDistrict
+        } else if let outsideZone = locationStatus as? LocationStatusOutsideZone {
+            district = outsideZone.nearestDistrict
+        } else {
+            district = nil
         }
+        fireRiskLevel = (try? await app.zoneFireRisk(
+            forestDistrict: district,
+            latitude: lat,
+            longitude: lon,
+            now: Self.currentTimeMillis()
+        ).intValue) ?? -2
     }
 
     /// Structural equality for the bridged `LocationStatus`: SKIE/Kotlin data
@@ -434,7 +443,12 @@ final class MainViewModel: NSObject, ObservableObject {
                 self.isLoadingZoneFireRisk = false
                 return
             }
-            let level = (try? await self.app.getFireRisk(latitude: first.0, longitude: first.1).intValue) ?? -1
+            let level = (try? await self.app.zoneFireRisk(
+                forestDistrict: district,
+                latitude: first.0,
+                longitude: first.1,
+                now: Self.currentTimeMillis()
+            ).intValue) ?? -2
             self.selectedZoneFireRiskLevel = level
             self.isLoadingZoneFireRisk = false
         }

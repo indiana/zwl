@@ -22,8 +22,7 @@ class SyncZonesUseCase @Inject constructor(
             val zones = ZoneSyncParser.parse(collection)
 
             if (zones.isNotEmpty()) {
-                zoneRepository.clearAll()
-                zoneRepository.insertAll(zones)
+                zoneRepository.syncAll(zones)
                 Result.success(zones)
             } else {
                 Result.failure(Exception("Otrzymano pusta liste stref od API ArcGis."))

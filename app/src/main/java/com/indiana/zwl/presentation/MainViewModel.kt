@@ -18,6 +18,7 @@ import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
+import com.indiana.zwl.shared.data.remote.isTransientRemoteError
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import com.indiana.zwl.domain.util.PoiUiGroup
@@ -588,13 +589,7 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    private fun isNetworkException(e: Throwable?): Boolean {
-        return e is java.net.UnknownHostException ||
-               e is java.net.ConnectException ||
-               e is java.net.SocketTimeoutException ||
-               e is java.net.SocketException ||
-               e is javax.net.ssl.SSLException
-    }
+    private fun isNetworkException(e: Throwable?): Boolean = isTransientRemoteError(e)
 
     private fun resolveCachedFireRisk(level: Int?, timestamp: Long?): Int {
         val now = System.currentTimeMillis()

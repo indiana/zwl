@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit
 actual class HttpClientFactory(private val context: Context) {
     actual fun create(): HttpClient {
         return HttpClient(OkHttp) {
+            expectSuccess = true
             install(ContentNegotiation) {
                 json(Json {
                     ignoreUnknownKeys = true
