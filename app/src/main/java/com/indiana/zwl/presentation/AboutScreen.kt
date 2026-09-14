@@ -22,9 +22,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,6 +60,8 @@ private const val BDL_PORTAL_URL = "https://www.bdl.lasy.gov.pl/portal/"
 private const val IBL_FIRE_URL = "https://bazapozarow.ibles.pl/"
 private const val ZANOCUJ_W_LESIE_URL = "https://www.lasy.gov.pl/pl/turystyka/program-zanocuj-w-lesie"
 private const val BUYCOFFEE_URL = "https://buycoffee.to/legalny-bushcraft"
+private const val FACEBOOK_URL = "https://www.facebook.com/profile.php?id=61593227626210"
+private const val INSTAGRAM_URL = "https://instagram.com/legalny.bushcraft"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -240,6 +244,36 @@ fun AboutScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = null,
+                            tint = ForestGreenAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Media społecznościowe",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    SocialLinkRow(label = "Facebook", handle = "Legalny Bushcraft", url = FACEBOOK_URL)
+                    SocialLinkRow(label = "Instagram", handle = "@legalny.bushcraft", url = INSTAGRAM_URL)
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
@@ -287,6 +321,40 @@ private fun BuyCoffeeButton() {
             .height(58.dp)
             .clickable { openNadlesnictwoWebsite(context, BUYCOFFEE_URL) }
     )
+}
+
+@Composable
+private fun SocialLinkRow(label: String, handle: String, url: String) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { openNadlesnictwoWebsite(context, url) },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = handle,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = ForestGreenAccent,
+                textDecoration = TextDecoration.Underline
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                contentDescription = "Otwórz $label",
+                tint = ForestGreenAccent,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
 }
 
 @Composable

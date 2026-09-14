@@ -8,6 +8,8 @@ struct AboutView: View {
     private let bdlPortalUrl = URL(string: "https://www.bdl.lasy.gov.pl/portal/")!
     private let iblFireUrl = URL(string: "https://bazapozarow.ibles.pl/")!
     private let zanocujWLeseUrl = URL(string: "https://www.lasy.gov.pl/pl/turystyka/program-zanocuj-w-lesie")!
+    private let facebookUrl = URL(string: "https://www.facebook.com/profile.php?id=61593227626210")!
+    private let instagramUrl = URL(string: "https://instagram.com/legalny.bushcraft")!
     private let buyCoffeeUrl = URL(string: "https://buycoffee.to/legalny-bushcraft")!
 
     var body: some View {
@@ -40,6 +42,13 @@ struct AboutView: View {
                         .font(.system(size: 13))
                 } header: {
                     sectionHeader("Prywatność", systemImage: "lock")
+                }
+
+                Section {
+                    socialLink(label: "Facebook", handle: "Legalny Bushcraft", url: facebookUrl)
+                    socialLink(label: "Instagram", handle: "@legalny.bushcraft", url: instagramUrl)
+                } header: {
+                    sectionHeader("Media społecznościowe", systemImage: "person.2")
                 }
 
                 Section {
@@ -114,5 +123,26 @@ struct AboutView: View {
                     .underline()
             }
         }
+    }
+
+    private func socialLink(label: String, handle: String, url: URL) -> some View {
+        Button {
+            UIApplication.shared.open(url)
+        } label: {
+            HStack {
+                Text(label)
+                    .font(.system(size: 13))
+                    .foregroundColor(.primary)
+                Spacer()
+                Text(handle)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(ZWL.forestGreenAccent)
+                    .underline()
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(ZWL.forestGreenAccent)
+            }
+        }
+        .accessibilityLabel("Otwórz \(label)")
     }
 }
