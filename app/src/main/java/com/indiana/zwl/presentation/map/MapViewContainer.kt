@@ -3,6 +3,7 @@ package com.indiana.zwl.presentation.map
 import android.content.Context
 import android.content.res.Configuration
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -379,6 +380,20 @@ fun MapViewContainer(
     val offlineAreas by mapViewModel.offlineAreas.collectAsState()
     val showOfflineAreas by mapViewModel.showOfflineAreas.collectAsState()
     val downloadBlockedMessage by mapViewModel.downloadBlockedMessage.collectAsState()
+
+    // System back closes the topmost map overlay instead of finishing the app.
+    // The map menu dropdown and AlertDialogs handle back on their own; this
+    // covers the full-screen overlays and the bottom detail card.
+    BackHandler(
+        enabled = showOfflineAreas || showLayersOverlay || selectedPoi != null || isSettingsOpen
+    ) {
+        when {
+            showOfflineAreas -> mapViewModel.closeOfflineAreas()
+            showLayersOverlay -> viewModel.closeLayersOverlay()
+            selectedPoi != null -> zoneDetailViewModel.clearSelectedPoi()
+            isSettingsOpen -> isSettingsOpen = false
+        }
+    }
 
     // Offline rendering: every downloaded area is its own `mbtiles://` raster
     // source, layered under the online OSM layer (same style, overlaps are

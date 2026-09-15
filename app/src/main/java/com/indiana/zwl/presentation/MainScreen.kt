@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -531,6 +532,23 @@ fun MainScreen(
                             }
                         }
                         }
+                    }
+                }
+                BackHandler(
+                    enabled = showAbout || showSavedPointList ||
+                        selectedSavedPointInfo != null || pendingPoint != null ||
+                        (selectedZoneDetails != null && selectedTab == detailOriginTab) ||
+                        (selectedForestBan != null && selectedTab == detailOriginTab)
+                ) {
+                    when {
+                        selectedForestBan != null && selectedTab == detailOriginTab ->
+                            viewModel.clearSelectedForestBan()
+                        selectedZoneDetails != null && selectedTab == detailOriginTab ->
+                            zoneDetailViewModel.clearSelectedZone()
+                        showAbout -> showAbout = false
+                        showSavedPointList -> viewModel.closeSavedPointList()
+                        selectedSavedPointInfo != null -> viewModel.clearSavedPointProperties()
+                        pendingPoint != null -> viewModel.clearPendingPoint()
                     }
                 }
             }
