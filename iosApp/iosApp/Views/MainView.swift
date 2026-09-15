@@ -4,6 +4,7 @@ import shared
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isSettingsOpen = false
+    @State private var isLandscape = false
     @State private var showAbout = false
     // followsUser lives on the view model (selecting a saved point turns it
     // off so the camera stays on the point; "my location" re-enables it).
@@ -43,6 +44,15 @@ struct MainView: View {
                 .tabItem { Label("Mapa", systemImage: "map") }
         }
         .tint(viewModel.displayInZone != nil ? ZWL.forestGreenAccent : ZWL.yellowPrimary)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { isLandscape = geo.size.width > geo.size.height }
+                    .onChange(of: geo.size) { newSize in
+                        isLandscape = newSize.width > newSize.height
+                    }
+            }
+        )
         .sheet(isPresented: isZoneSheetPresented) {
             if let zone = viewModel.selectedZone {
                 ZoneDetailView(zone: zone,
@@ -78,9 +88,8 @@ struct MainView: View {
                 .presentationDetents([.medium, .large])
             }
         }
-        .sheet(isPresented: isSavedPointListPresented) {
+        .fullScreenCover(isPresented: isSavedPointListPresented) {
             SavedPointListView(viewModel: viewModel)
-                .presentationDetents([.large])
         }
         .sheet(isPresented: isSavedPointPropertiesPresented) {
             if let point = viewModel.selectedSavedPoint {
@@ -88,17 +97,16 @@ struct MainView: View {
                     .presentationDetents([.medium, .large])
             }
         }
-        .sheet(isPresented: isLayersSettingsPresented) {
+        .fullScreenCover(isPresented: isLayersSettingsPresented) {
             LayersSettingsView(viewModel: viewModel)
-                .presentationDetents([.large])
         }
-        .sheet(isPresented: Binding(
+        .fullScreenCover(isPresented: Binding(
             get: { viewModel.showOfflineAreas },
             set: { if !$0 { viewModel.closeOfflineAreas() } }
         )) {
             OfflineAreasView(viewModel: viewModel)
         }
-        .sheet(isPresented: $showAbout) {
+        .fullScreenCover(isPresented: $showAbout) {
             AboutView()
         }
         .alert("Obszar za duży", isPresented: Binding(
@@ -119,7 +127,8 @@ struct MainView: View {
                 fireRisk: viewModel.fireRiskLevel,
                 ban: viewModel.activeForestBan,
                 onBanTap: { viewModel.openActiveBan() },
-                onDistrictTap: { viewModel.selectZone(named: inZone.forestDistrict) }
+                onDistrictTap: { viewModel.selectZone(named: inZone.forestDistrict) },
+                wide: isLandscape
             )
         } else if let outside = viewModel.displayOutsideZone {
             OutsideZoneView(
@@ -129,7 +138,8 @@ struct MainView: View {
                 azimuth: viewModel.azimuth,
                 ban: viewModel.activeForestBan,
                 onBanTap: { viewModel.openActiveBan() },
-                onDistrictTap: { viewModel.selectZone(named: outside.nearestDistrict) }
+                onDistrictTap: { viewModel.selectZone(named: outside.nearestDistrict) },
+                wide: isLandscape
             )
         } else {
             GpsLocatingView()
@@ -152,29 +162,25 @@ struct MainView: View {
                     .ignoresSafeArea()
             }
 
-            VStack {
+            VStack(alignment: .leading, spacing: 8) {
+                compassButton
+
                 if (viewModel.isDownloading || !viewModel.downloadStatusText.isEmpty) && !dismissDownloadCard {
                     MapDownloadCard(text: viewModel.downloadStatusText,
                                     progress: viewModel.downloadProgress,
                                     isDownloading: viewModel.isDownloading,
                                     errorMessage: viewModel.downloadErrorText)
-                        .padding([.leading, .top], 16)
                         .onTapGesture { dismissDownloadCard = true }
                 }
+
+                if viewModel.isOffline {
+                    offlineBanner
+                }
+
                 Spacer()
             }
+            .padding([.leading, .top], 16)
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            if viewModel.isOffline {
-                VStack {
-                    HStack {
-                        offlineBanner
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding([.leading, .top], 16)
-            }
 
             VStack {
                 HStack(spacing: 8) {
@@ -216,6 +222,7 @@ struct MainView: View {
             showOthers: viewModel.showOthers,
             isOffline: viewModel.isOffline,
             followsUser: viewModel.followsUser,
+            headingUp: viewModel.headingUp,
             userLatitude: viewModel.userLatitude,
             userLongitude: viewModel.userLongitude,
 recenterSignal: viewModel.recenterSignal,
@@ -278,7 +285,37 @@ recenterSignal: viewModel.recenterSignal,
         }
     }
 
+    /// Compass orientation-toggle button (Android `CompassButton` parity):
+    /// tap toggles NORTH_UP / HEADING_UP; the red needle shows where north is,
+    /// the blue caret appears in heading-up mode pointing "direction of travel
+    /// is up".
+    private var compassButton: some View {
+        Button(action: viewModel.toggleOrientationMode) {
+            CompassDial(headingUp: viewModel.headingUp, azimuth: viewModel.azimuth)
+                .frame(width: 26, height: 26)
+                .padding(9)
+                .background(Color(.systemBackground).opacity(0.9), in: Circle())
+                .overlay(
+                    Circle().stroke(Color.blue.opacity(0.4), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+        }
+        .accessibilityLabel(Text(viewModel.headingUp ? "Kierunek marszu u góry" : "Północ u góry"))
+    }
+
     private var settingsPanel: some View {
+        settingsPanelItems
+            .padding(14)
+            .frame(width: 280, alignment: .leading)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(Color.black.opacity(0.08))
+            )
+            .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+    }
+
+    private var settingsPanelItems: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button(action: {
                 isSettingsOpen = false
@@ -328,14 +365,6 @@ recenterSignal: viewModel.recenterSignal,
             }
             .font(.system(size: 15))
         }
-        .padding(14)
-        .frame(width: 280, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(Color.black.opacity(0.08))
-        )
-        .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
     }
 
     private var myLocationButton: some View {
@@ -483,5 +512,46 @@ struct ErrorView: View {
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ZWL.errorDarkBackground.ignoresSafeArea())
+    }
+}
+
+/// ≈1 Hz red N-indicator mirroring the map bearing. 1 Hz is plenty for a
+/// 26 pt dial and keeps SwiftUI churn at the watchdog-safe level (the map
+/// itself rotates via MapLibre tracking, not through this view).
+struct CompassDial: View {
+    let headingUp: Bool
+    let azimuth: Float
+
+    var body: some View {
+        Canvas { context, size in
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let r = min(size.width, size.height) / 2
+
+            var ring = Path()
+            ring.addEllipse(in: CGRect(x: center.x - r, y: center.y - r,
+                                       width: 2 * r, height: 2 * r))
+            context.stroke(ring, with: .color(.secondary.opacity(0.7)), lineWidth: 0.8)
+
+            var viewRotated = context
+            viewRotated.translateBy(x: center.x, y: center.y)
+            viewRotated.rotate(by: .degrees(-Double(azimuth)))
+            viewRotated.translateBy(x: -center.x, y: -center.y)
+            var north = Path()
+            north.move(to: CGPoint(x: center.x, y: center.y - r * 0.82))
+            north.addLine(to: CGPoint(x: center.x - r * 0.26, y: center.y - r * 0.1))
+            north.addLine(to: CGPoint(x: center.x + r * 0.26, y: center.y - r * 0.1))
+            north.closeSubpath()
+            viewRotated.fill(north, with: .color(.red))
+
+            if headingUp {
+                var caret = Path()
+                let cy = center.y + r * 0.42
+                caret.move(to: CGPoint(x: center.x, y: cy - r * 0.3))
+                caret.addLine(to: CGPoint(x: center.x - r * 0.2, y: cy))
+                caret.addLine(to: CGPoint(x: center.x + r * 0.2, y: cy))
+                caret.closeSubpath()
+                context.fill(caret, with: .color(.blue))
+            }
+        }
     }
 }

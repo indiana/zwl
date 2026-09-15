@@ -14,8 +14,8 @@ android {
         applicationId = "com.indiana.zwl"
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "1.18"
+        versionCode = 20
+        versionName = "1.19"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -95,6 +95,9 @@ dependencies {
 
     // Google Play Services Location
     implementation(libs.play.services.location)
+
+    // Google Play In-App Updates
+    implementation(libs.play.app.update)
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)

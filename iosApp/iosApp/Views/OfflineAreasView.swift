@@ -22,14 +22,20 @@ struct OfflineAreasView: View {
                     areaList
                 }
             }
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
             .navigationTitle("Pobrane obszary")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Zamknij") {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
                         viewModel.closeOfflineAreas()
                         dismiss()
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                            .fontWeight(.semibold)
                     }
+                    .accessibilityLabel("Wstecz")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Usuń wszystkie", role: .destructive) {

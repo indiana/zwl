@@ -1,6 +1,7 @@
 package com.indiana.zwl.presentation
 
 import android.content.Context
+import android.content.res.Configuration
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.LinearEasing
@@ -27,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -43,6 +45,8 @@ fun ZoneDetailsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -51,7 +55,7 @@ fun ZoneDetailsScreen(
                     Column {
                         Text(
                             text = details.zone.forestDistrict,
-                            fontSize = 20.sp,
+                            fontSize = if (isLandscape) 16.sp else 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
@@ -63,17 +67,22 @@ fun ZoneDetailsScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onClose) {
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(if (isLandscape) 40.dp else 48.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Wstecz",
+                            modifier = Modifier.size(if (isLandscape) 20.dp else 24.dp),
                             tint = Color.White
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = DarkForestBackground
-                )
+                ),
+                windowInsets = if (isLandscape) WindowInsets(0, 0, 0, 0) else TopAppBarDefaults.windowInsets
             )
         },
         containerColor = DarkForestBackground

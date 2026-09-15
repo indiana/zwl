@@ -1,8 +1,14 @@
 package com.indiana.zwl.presentation.map
 
 import android.content.Context
+import android.content.res.Configuration
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,6 +79,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -84,6 +92,8 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Info
+import com.indiana.zwl.presentation.map.MapOrientationMode
+import com.indiana.zwl.presentation.map.util.OrientationMath
 
 /** Upper bound for cleanup sweeps of generation-stamped offline sources. */
 private const val MAX_OFFLINE_AREA_SOURCES = 64
@@ -120,6 +130,10 @@ fun MapViewContainer(
     val pendingPoint by viewModel.pendingPoint.collectAsState()
     val showLayersOverlay by viewModel.showLayersOverlay.collectAsState()
     val focusSavedPoint by viewModel.focusSavedPoint.collectAsState()
+    val orientationMode by viewModel.orientationMode.collectAsState()
+    val headingUp = orientationMode == MapOrientationMode.HEADING_UP
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     val rememberedMapView = remember {
         try {
@@ -137,7 +151,6 @@ fun MapViewContainer(
 
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
-    var isOfflineAreasOpen by remember { mutableStateOf(false) }
     val geometryCache = remember { GeometryCache() }
     var zoneGeoJson by remember { mutableStateOf<String?>(null) }
     var banGeoJson by remember { mutableStateOf<String?>(null) }
@@ -295,6 +308,38 @@ fun MapViewContainer(
             }
         }
     }
+    // Heading-up mode: rotate the camera bearing with each compass azimuth so
+    // the marching direction stays at the top of the screen. Only direct
+    // bearing writes (no @Published-style recomposition), deltas under 0.25
+    // are ignored to keep the render pipeline calm.
+    LaunchedEffect(mapboxMapInstance, headingUp, viewModel) {
+        if (!headingUp) return@LaunchedEffect
+        val map = mapboxMapInstance ?: return@LaunchedEffect
+        viewModel.azimuth.collect { az ->
+            val current = map.cameraPosition?.bearing ?: 0.0
+            if (OrientationMath.bearingDifference(current, az.toDouble()) >= 0.25) {
+                map.cameraPosition = CameraPosition.Builder(map.cameraPosition)
+                    .bearing(az.toDouble())
+                    .build()
+            }
+        }
+    }
+
+    // Back to north-up: ease the bearing to 0 (only when it was actually rotated).
+    LaunchedEffect(mapboxMapInstance, headingUp) {
+        if (headingUp) return@LaunchedEffect
+        val map = mapboxMapInstance ?: return@LaunchedEffect
+        val bearing = ((map.cameraPosition?.bearing ?: 0.0) % 360.0 + 360.0) % 360.0
+        if (bearing > 0.5 && bearing < 359.5) {
+            map.easeCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder(map.cameraPosition).bearing(0.0).build()
+                ),
+                250
+            )
+        }
+    }
+
     val userLat = (uiState as? MainUiState.Success)?.latitude
     val userLon = (uiState as? MainUiState.Success)?.longitude
 
@@ -333,7 +378,22 @@ fun MapViewContainer(
     val isInZone = (uiState as? MainUiState.Success)?.locationStatus is LocationStatus.InZone
 
     val offlineAreas by mapViewModel.offlineAreas.collectAsState()
+    val showOfflineAreas by mapViewModel.showOfflineAreas.collectAsState()
     val downloadBlockedMessage by mapViewModel.downloadBlockedMessage.collectAsState()
+
+    // System back closes the topmost map overlay instead of finishing the app.
+    // The map menu dropdown and AlertDialogs handle back on their own; this
+    // covers the full-screen overlays and the bottom detail card.
+    BackHandler(
+        enabled = showOfflineAreas || showLayersOverlay || selectedPoi != null || isSettingsOpen
+    ) {
+        when {
+            showOfflineAreas -> mapViewModel.closeOfflineAreas()
+            showLayersOverlay -> viewModel.closeLayersOverlay()
+            selectedPoi != null -> zoneDetailViewModel.clearSelectedPoi()
+            isSettingsOpen -> isSettingsOpen = false
+        }
+    }
 
     // Offline rendering: every downloaded area is its own `mbtiles://` raster
     // source, layered under the online OSM layer (same style, overlaps are
@@ -381,6 +441,9 @@ fun MapViewContainer(
 
                             map.uiSettings.isRotateGesturesEnabled = false
                             map.uiSettings.isTiltGesturesEnabled = false
+                            // Custom compass overlay button instead: it toggles the
+                            // orientation mode and also tracks north while rotated.
+                            map.uiSettings.isCompassEnabled = false
 
                             map.addOnCameraIdleListener {
                                 map.cameraPosition?.zoom?.let { currentZoom = it.toFloat() }
@@ -631,7 +694,57 @@ fun MapViewContainer(
                 map.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(focus.latitude, focus.longitude))
                     .zoom(15.0)
+                    .bearing(if (headingUp) map.cameraPosition?.bearing ?: 0.0 else 0.0)
                     .build()
+            }
+
+            val openSavedPoints: () -> Unit = {
+                isSettingsOpen = false
+                viewModel.openSavedPointList()
+            }
+            val openLayers: () -> Unit = {
+                isSettingsOpen = false
+                viewModel.openLayersOverlay()
+            }
+            val downloadArea: () -> Unit = {
+                isSettingsOpen = false
+                if (!isOnline(context)) {
+                    Toast.makeText(context, "Jesteś w trybie offline", Toast.LENGTH_SHORT).show()
+                } else {
+                    val map = mapboxMapInstance
+                    if (map != null) {
+                        val pos = map.cameraPosition
+                        val center = pos.target
+                        val zoom = pos.zoom
+                        if (center != null) {
+                            val mv = rememberedMapView
+                            val width = mv.width.toDouble()
+                            val height = mv.height.toDouble()
+                            val latRad = Math.toRadians(center.latitude)
+                            val metersPerPixel = 156543.03392 * Math.cos(latRad) / Math.pow(2.0, zoom)
+                            val latSpan = (height / 2) * metersPerPixel / 111320.0
+                            val lngSpan = (width / 2) * metersPerPixel / (111320.0 * Math.cos(latRad))
+                            mapViewModel.downloadMapArea(
+                                latSouth = center.latitude - latSpan,
+                                latNorth = center.latitude + latSpan,
+                                lonWest = center.longitude - lngSpan,
+                                lonEast = center.longitude + lngSpan
+                            )
+                        } else {
+                            Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            val openOfflineAreas: () -> Unit = {
+                isSettingsOpen = false
+                mapViewModel.openOfflineAreas()
+            }
+            val openAbout: () -> Unit = {
+                isSettingsOpen = false
+                onOpenAbout()
             }
 
             Box(
@@ -640,6 +753,12 @@ fun MapViewContainer(
                     .padding(24.dp),
                 contentAlignment = Alignment.TopEnd
             ) {
+                CompassButton(
+                    headingUp = headingUp,
+                    azimuth = lastAzimuth,
+                    onClick = { viewModel.toggleOrientationMode() },
+                    modifier = Modifier.align(Alignment.TopStart)
+                )
                 Column(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -685,6 +804,7 @@ fun MapViewContainer(
                                         mapboxMapInstance?.cameraPosition = CameraPosition.Builder()
                                             .target(LatLng(lat, lon))
                                             .zoom(15.0)
+                                            .bearing(if (headingUp) mapboxMapInstance?.cameraPosition?.bearing ?: 0.0 else 0.0)
                                             .build()
                                     } else {
                                         Toast.makeText(context, "Oczekiwanie na sygnał GPS...", Toast.LENGTH_SHORT).show()
@@ -717,184 +837,64 @@ fun MapViewContainer(
                                     contentDescription = "Menu mapy"
                                 )
                             }
-                            DropdownMenu(
-                                expanded = isSettingsOpen,
-                                onDismissRequest = { isSettingsOpen = false },
-                                shape = RoundedCornerShape(16.dp),
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-                                modifier = Modifier.width(240.dp),
-                                offset = androidx.compose.ui.unit.DpOffset(x = (-196).dp, y = 4.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                            if (!isLandscape) {
+                                DropdownMenu(
+                                    expanded = isSettingsOpen,
+                                    onDismissRequest = { isSettingsOpen = false },
+                                    shape = RoundedCornerShape(16.dp),
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                                    modifier = Modifier.width(240.dp),
+                                    offset = androidx.compose.ui.unit.DpOffset(x = (-196).dp, y = 4.dp)
                                 ) {
-                                    Button(
-                                        onClick = {
-                                            isSettingsOpen = false
-                                            viewModel.openSavedPointList()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Bookmark,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Zapisane punkty",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
-                                    }
-
-                                    Button(
-                                        onClick = {
-                                            isSettingsOpen = false
-                                            viewModel.openLayersOverlay()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Layers,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Wyświetlanie na mapie",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
-                                    }
-
-                                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
-
-                                    if (isOnlineState) {
-                                        Button(
-                                            onClick = {
-                                                isSettingsOpen = false
-                                                if (!isOnline(context)) {
-                                                    Toast.makeText(context, "Jesteś w trybie offline", Toast.LENGTH_SHORT).show()
-                                                    return@Button
-                                                }
-                                                val map = mapboxMapInstance
-                                                val mv = rememberedMapView
-                                                if (map != null) {
-                                                    val pos = map.cameraPosition
-                                                    val center = pos.target
-                                                    val zoom = pos.zoom
-                                                    if (center != null) {
-                                                        val width = mv.width.toDouble()
-                                                        val height = mv.height.toDouble()
-                                                        val latRad = Math.toRadians(center.latitude)
-                                                        val metersPerPixel = 156543.03392 * Math.cos(latRad) / Math.pow(2.0, zoom)
-                                                        val latSpan = (height / 2) * metersPerPixel / 111320.0
-                                                        val lngSpan = (width / 2) * metersPerPixel / (111320.0 * Math.cos(latRad))
-
-                                                        mapViewModel.downloadMapArea(
-                                                            latSouth = center.latitude - latSpan,
-                                                            latNorth = center.latitude + latSpan,
-                                                            lonWest = center.longitude - lngSpan,
-                                                            lonEast = center.longitude + lngSpan
-                                                        )
-                                                    } else {
-                                                        Toast.makeText(context, "Brak widocznego obszaru", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                } else {
-                                                    Toast.makeText(context, "Mapa nie jest gotowa.", Toast.LENGTH_SHORT).show()
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.fillMaxWidth(),
-                                            enabled = !isDownloadingArea,
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.CloudDownload,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = "Pobierz obszar",
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 12.sp,
-                                                color = Color.White
-                                            )
-                                        }
-                                    } else {
-                                        Text(
-                                            text = "Pobieranie niedostępne w trybie offline",
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.error,
-                                            lineHeight = 16.sp
-                                        )
-                                    }
-
-                                    OutlinedButton(
-                                        onClick = {
-                                            isSettingsOpen = false
-                                            isOfflineAreasOpen = true
-                                        },
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth(),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Map,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Pobrane obszary",
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-
-                                    Button(
-                                        onClick = {
-                                            isSettingsOpen = false
-                                            onOpenAbout()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Info,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "O aplikacji",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
-                                    }
+                                    SettingsMenuContent(
+                                        isOnline = isOnlineState,
+                                        isDownloadingArea = isDownloadingArea,
+                                        onOpenSavedPoints = openSavedPoints,
+                                        onOpenLayers = openLayers,
+                                        onDownloadArea = downloadArea,
+                                        onOpenOfflineAreas = openOfflineAreas,
+                                        onOpenAbout = openAbout
+                                    )
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            if (isSettingsOpen && isLandscape) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { isSettingsOpen = false }
+                )
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(16.dp)
+                        .fillMaxHeight()
+                        .width(360.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                    shadowElevation = 8.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        SettingsMenuContent(
+                            isOnline = isOnlineState,
+                            isDownloadingArea = isDownloadingArea,
+                            onOpenSavedPoints = openSavedPoints,
+                            onOpenLayers = openLayers,
+                            onDownloadArea = downloadArea,
+                            onOpenOfflineAreas = openOfflineAreas,
+                            onOpenAbout = openAbout
+                        )
                     }
                 }
             }
@@ -910,14 +910,14 @@ fun MapViewContainer(
                 )
             }
 
-            if (isOfflineAreasOpen) {
+            if (showOfflineAreas) {
                 OfflineAreasScreen(
                     areas = offlineAreas,
                     isOffline = !isOnlineState,
                     isDownloading = isDownloadingArea,
-                    onDismiss = { isOfflineAreasOpen = false },
+                    onDismiss = mapViewModel::closeOfflineAreas,
                     onAreaTap = { area ->
-                        isOfflineAreasOpen = false
+                        mapViewModel.closeOfflineAreas()
                         mapViewModel.focusArea(area)
                     },
                     onDeleteArea = mapViewModel::deleteArea,
@@ -1010,8 +1010,205 @@ fun MapViewContainer(
     }
 }
 
+@Composable
+private fun SettingsMenuContent(
+    isOnline: Boolean,
+    isDownloadingArea: Boolean,
+    onOpenSavedPoints: () -> Unit,
+    onOpenLayers: () -> Unit,
+    onDownloadArea: () -> Unit,
+    onOpenOfflineAreas: () -> Unit,
+    onOpenAbout: () -> Unit
+) {
+    Column(
+        modifier = Modifier.padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Button(
+            onClick = onOpenSavedPoints,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Bookmark,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Zapisane punkty",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+
+        Button(
+            onClick = onOpenLayers,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Layers,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Wyświetlanie na mapie",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+
+        HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 1.dp)
+
+        if (isOnline) {
+            Button(
+                onClick = onDownloadArea,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isDownloadingArea,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CloudDownload,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Pobierz obszar",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color.White
+                )
+            }
+        } else {
+            Text(
+                text = "Pobieranie niedostępne w trybie offline",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.error,
+                lineHeight = 16.sp
+            )
+        }
+
+        OutlinedButton(
+            onClick = onOpenOfflineAreas,
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Map,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Pobrane obszary",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Button(
+            onClick = onOpenAbout,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "O aplikacji",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+    }
+}
+
 private fun buildPendingMarkerGeoJson(lat: Double, lng: Double): String {
     return """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[$lng,$lat]}}]}"""
+}
+
+@Composable
+private fun CompassButton(
+    headingUp: Boolean,
+    azimuth: Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .size(48.dp)
+            .clickable(onClick = onClick, onClickLabel = "Zmień tryb orientacji mapy")
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.size(30.dp)) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val r = size.minDimension / 2f
+            drawCircle(
+                color = Color(0xFF78909C).copy(alpha = 0.7f),
+                radius = r,
+                center = center,
+                style = Stroke(width = 1.dp.toPx())
+            )
+            // North marker rotates opposite the map bearing: in NORTH_UP it
+            // sits at the top; in HEADING_UP it spins to show where north is.
+            rotate(degrees = -azimuth, pivot = center) {
+                val tip = Offset(center.x, center.y - r * 0.8f)
+                val left = Offset(center.x - r * 0.26f, center.y - r * 0.1f)
+                val right = Offset(center.x + r * 0.26f, center.y - r * 0.1f)
+                drawPath(
+                    Path().apply {
+                        moveTo(tip.x, tip.y)
+                        lineTo(left.x, left.y)
+                        lineTo(right.x, right.y)
+                        close()
+                    },
+                    color = Color(0xFFD32F2F)
+                )
+            }
+            if (headingUp) {
+                // Fixed white caret meaning "direction of travel is up".
+                val cx = center.x
+                val cy = center.y + r * 0.45f
+                drawPath(
+                    Path().apply {
+                        moveTo(cx, cy - r * 0.28f)
+                        lineTo(cx - r * 0.2f, cy)
+                        lineTo(cx + r * 0.2f, cy)
+                        close()
+                    },
+                    color = Color.White
+                )
+            }
+            }
+        }
+    }
 }
 
 @Composable

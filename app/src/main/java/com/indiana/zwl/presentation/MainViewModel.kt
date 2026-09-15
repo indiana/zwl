@@ -3,6 +3,8 @@ package com.indiana.zwl.presentation
 import android.location.Location
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.indiana.zwl.di.IoDispatcher
+import kotlinx.coroutines.CoroutineDispatcher
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
@@ -16,11 +18,14 @@ import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
+import com.indiana.zwl.shared.data.remote.isTransientRemoteError
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import com.indiana.zwl.domain.util.PoiUiGroup
 import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.domain.util.uiGroup
+import com.indiana.zwl.presentation.map.MapOrientationMode
+import com.indiana.zwl.presentation.map.MapSettingsPrefsKeys
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
@@ -86,6 +91,7 @@ class MainViewModel @Inject constructor(
     private val getFireRiskUseCase: GetFireRiskUseCase,
     private val getZonesUseCase: GetZonesUseCase,
     private val spatialEngine: SpatialEngine,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -160,6 +166,22 @@ class MainViewModel @Inject constructor(
     }
 
     private val sharedPrefs = context.getSharedPreferences("zwl_map_settings", Context.MODE_PRIVATE)
+
+    private val _orientationMode = MutableStateFlow(
+        MapOrientationMode.entries.getOrElse(
+            sharedPrefs.getInt(MapSettingsPrefsKeys.ORIENTATION_MODE, MapOrientationMode.NORTH_UP.ordinal)
+        ) { MapOrientationMode.NORTH_UP }
+    )
+    val orientationMode: StateFlow<MapOrientationMode> = _orientationMode.asStateFlow()
+
+    fun toggleOrientationMode() {
+        val next = when (_orientationMode.value) {
+            MapOrientationMode.NORTH_UP -> MapOrientationMode.HEADING_UP
+            MapOrientationMode.HEADING_UP -> MapOrientationMode.NORTH_UP
+        }
+        _orientationMode.value = next
+        sharedPrefs.edit().putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, next.ordinal).apply()
+    }
 
     private val _showForestBans = MutableStateFlow(sharedPrefs.getBoolean("show_forest_bans", true))
     val showForestBans: StateFlow<Boolean> = _showForestBans
@@ -359,7 +381,7 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             setZonesLoading(true)
 
-            viewModelScope.launch(Dispatchers.IO) {
+            viewModelScope.launch(ioDispatcher) {
                 try {
                     syncPoiUseCase()
                 } catch (e: Exception) {
@@ -368,16 +390,16 @@ class MainViewModel @Inject constructor(
                 }
             }
 
-            viewModelScope.launch(Dispatchers.IO) {
+            viewModelScope.launch(ioDispatcher) {
                 try {
                     val localBans = getForestBansUseCase()
-                    withContext(Dispatchers.Default) {
+                    withContext(ioDispatcher) {
                         spatialEngine.initializeBans(localBans)
                     }
                     val syncResult = syncForestBansUseCase()
                     if (syncResult.isSuccess) {
                         val updatedBans = syncResult.getOrNull() ?: emptyList()
-                        withContext(Dispatchers.Default) {
+                        withContext(ioDispatcher) {
                             spatialEngine.initializeBans(updatedBans)
                         }
                     }
@@ -390,7 +412,7 @@ class MainViewModel @Inject constructor(
             try {
                 android.util.Log.d("ZWL_INIT", "init START (timeout=${INIT_HARD_TIMEOUT_MS} ms)")
                 val outcome = withTimeoutOrNull(INIT_HARD_TIMEOUT_MS) {
-                    withContext(Dispatchers.IO) {
+                    withContext(ioDispatcher) {
                         initializeEngineData()
                     }
                 }
@@ -424,7 +446,7 @@ class MainViewModel @Inject constructor(
                 this.zones = zones
                 val t0 = android.os.SystemClock.elapsedRealtime()
                 android.util.Log.d("ZWL_INIT", "engine init START zones=${zones.size}")
-                withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
+                withContext(ioDispatcher) { spatialEngine.initialize(zones) }
                 android.util.Log.d("ZWL_INIT", "engine init ${android.os.SystemClock.elapsedRealtime() - t0} ms")
                 isEngineInitialized = true
                 android.util.Log.d("ZWL_INIT", "hasLocationPermission=$hasLocationPermission; startTracking=${hasLocationPermission}")
@@ -445,7 +467,7 @@ class MainViewModel @Inject constructor(
             this.zones = zones
             val t0 = android.os.SystemClock.elapsedRealtime()
             android.util.Log.d("ZWL_INIT", "engine init START zones=${zones.size}")
-            withContext(Dispatchers.Default) { spatialEngine.initialize(zones) }
+            withContext(ioDispatcher) { spatialEngine.initialize(zones) }
             android.util.Log.d("ZWL_INIT", "engine init ${android.os.SystemClock.elapsedRealtime() - t0} ms")
             isEngineInitialized = true
             android.util.Log.d("ZWL_INIT", "hasLocationPermission=$hasLocationPermission; startTracking=${hasLocationPermission}")
@@ -567,13 +589,7 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    private fun isNetworkException(e: Throwable?): Boolean {
-        return e is java.net.UnknownHostException ||
-               e is java.net.ConnectException ||
-               e is java.net.SocketTimeoutException ||
-               e is java.net.SocketException ||
-               e is javax.net.ssl.SSLException
-    }
+    private fun isNetworkException(e: Throwable?): Boolean = isTransientRemoteError(e)
 
     private fun resolveCachedFireRisk(level: Int?, timestamp: Long?): Int {
         val now = System.currentTimeMillis()

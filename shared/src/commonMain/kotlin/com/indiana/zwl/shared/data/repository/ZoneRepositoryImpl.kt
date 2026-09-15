@@ -64,6 +64,25 @@ class ZoneRepositoryImpl(
         }
     }
 
+    override suspend fun syncAll(zones: List<Zone>) {
+        val cached = getAllZones().associateBy { it.forestDistrict.lowercase() }
+        database.transaction {
+            database.zoneQueries.deleteAll()
+            zones.forEach { zone ->
+                val previous = cached[zone.forestDistrict.lowercase()]
+                database.zoneQueries.insertAll(
+                    zone.forestDistrict,
+                    zone.geometryWkt,
+                    previous?.fireRiskLevel?.toLong(),
+                    previous?.fireRiskTimestamp,
+                    previous?.forestStandJson,
+                    previous?.forestStandTimestamp,
+                    zone.websiteUrl ?: previous?.websiteUrl
+                )
+            }
+        }
+    }
+
     override suspend fun clearAll() {
         database.zoneQueries.deleteAll()
     }

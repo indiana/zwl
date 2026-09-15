@@ -42,6 +42,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import platform.Foundation.NSTimeZone
@@ -88,9 +89,30 @@ class ForestApp(
     companion object {
         private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
         private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
+        private const val INIT_TIMEOUT_MS = 30_000L
     }
 
+    /**
+     * Hard cap so a silently hanging BDL request can never leave the iOS
+     * splash screen up forever — Android guards the same path with
+     * `withTimeoutOrNull(INIT_HARD_TIMEOUT_MS)`. On timeout this reports
+     * failure; Swift then falls back to cached zones or shows the retry
+     * screen instead of spinning indefinitely.
+     */
     suspend fun initialize(): Boolean = withContext(Dispatchers.Default) {
+        // Expose whatever is already cached before any network work, so a
+        // later timeout can fall back to the local DB instead of an empty map.
+        try {
+            refreshSpatialIndexes()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            println("ForestApp: initial index load failed: ${e.message}")
+        }
+        withTimeoutOrNull(INIT_TIMEOUT_MS) { doInitialize() } ?: false
+    }
+
+    private suspend fun doInitialize(): Boolean {
         // One-shot housekeeping: drop the legacy map.mbtiles + orphaned
         // area files from killed downloads. Best-effort, must not block init.
         try {
@@ -142,7 +164,22 @@ class ForestApp(
         }
 
         refreshSpatialIndexes()
-        ok
+        return ok
+    }
+
+    /**
+     * Retry path for the error screen: forces a full re-sync under the same
+     * hard cap as [initialize], so a hanging request cannot pin the loading
+     * screen. Returns whether every sync succeeded.
+     */
+    suspend fun refreshAll(): Boolean = withContext(Dispatchers.Default) {
+        withTimeoutOrNull(INIT_TIMEOUT_MS) {
+            val zonesOk = syncZones()
+            val bansOk = syncBans()
+            val poisOk = syncPois()
+            refreshSpatialIndexes()
+            zonesOk && bansOk && poisOk
+        } ?: false
     }
 
     suspend fun refreshSpatialIndexes() = withContext(Dispatchers.Default) {
@@ -161,8 +198,7 @@ class ForestApp(
             val collection = Json.decodeFromString<GeoJsonCollection>(responseStr)
             val zones = ZoneSyncParser.parse(collection)
             if (zones.isEmpty()) return@withContext false
-            zoneRepository.clearAll()
-            zoneRepository.insertAll(zones)
+            zoneRepository.syncAll(zones)
             cachedZones = zones
             true
         } catch (e: CancellationException) {
@@ -249,14 +285,42 @@ class ForestApp(
             banEngine.checkForestBan(latitude, longitude)
         }
 
-    suspend fun getFireRisk(latitude: Double, longitude: Double): Int = withContext(Dispatchers.Default) {
+    /**
+     * Fire-risk code at the given coordinates, used for both the in-zone
+     * banner and the zone-detail card. On success a live 0..3 code is
+     * persisted against [forestDistrict] (cache is preserved across zone
+     * re-syncs); on any remote failure a <24h cached level is served as an
+     * archived code (+10), otherwise -2 ("brak danych"). [now] comes from
+     * Swift since Kotlin/Native has no wall clock.
+     */
+    suspend fun zoneFireRisk(
+        forestDistrict: String?,
+        latitude: Double,
+        longitude: Double,
+        now: Long
+    ): Int = withContext(Dispatchers.Default) {
         try {
             val response = fireApi.getFireHazard(geometry = "$longitude,$latitude")
-            response.features?.firstOrNull()?.properties?.kodInt ?: -1
+            val code = response.features?.firstOrNull()?.properties?.kodInt ?: -1
+            if (forestDistrict != null && code in 0..3) {
+                zoneRepository.updateFireRisk(forestDistrict, code, now)
+            }
+            code
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            -1
+            val cached = forestDistrict?.let { zoneRepository.getByForestDistrict(it) }
+            resolveCachedFireRisk(cached?.fireRiskLevel, cached?.fireRiskTimestamp, now)
+        }
+    }
+
+    private fun resolveCachedFireRisk(level: Int?, timestamp: Long?, now: Long): Int {
+        return if (level != null && level in 0..3 &&
+            timestamp != null && now - timestamp < FIRE_RISK_CACHE_MAX_AGE_MS
+        ) {
+            level + 10
+        } else {
+            -2
         }
     }
 
@@ -365,11 +429,7 @@ class ForestApp(
             throw e
         } catch (e: Exception) {
             val fresh = savedPointRepository.getAllPoints().first().firstOrNull { it.id == point.id }
-            val level = fresh?.fireRiskLevel?.toInt()
-            val timestamp = fresh?.fireRiskTimestamp?.toLong()
-            if (level != null && level in 0..3 &&
-                timestamp != null && now - timestamp < FIRE_RISK_CACHE_MAX_AGE_MS
-            ) level + 10 else -2
+            resolveCachedFireRisk(fresh?.fireRiskLevel, fresh?.fireRiskTimestamp, now)
         }
     }
 

@@ -95,6 +95,18 @@ final class MainViewModel: NSObject, ObservableObject {
         didSet { UserDefaults.standard.set(followsUser, forKey: Self.keyFollowsUser) }
     }
 
+    /// Map orientation mode: false = north always up (default, Android parity
+    /// NORTH_UP), true = the marching direction (heading) stays at the top
+    /// (HEADING_UP). Maps to `MLNUserTrackingMode.followWithHeading` on the
+    /// map side; persisted like the other map toggles.
+    @Published var headingUp: Bool = false {
+        didSet { UserDefaults.standard.set(headingUp, forKey: Self.keyHeadingUp) }
+    }
+
+    func toggleOrientationMode() {
+        headingUp.toggle()
+    }
+
     // Selections
     @Published var selectedZone: Zone?
     @Published var selectedBan: ForestBan?
@@ -199,6 +211,7 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyShowParking = "mapSettings.showParking"
     private static let keyShowEducation = "mapSettings.showEducation"
     private static let keyFollowsUser = "settings.followsUser"
+    private static let keyHeadingUp = "mapSettings.headingUp"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
     // re-renders the map on the main thread (the iPad-class bottleneck), so
@@ -221,6 +234,7 @@ final class MainViewModel: NSObject, ObservableObject {
         showParking = defaults.object(forKey: Self.keyShowParking) as? Bool ?? true
         showEducation = defaults.object(forKey: Self.keyShowEducation) as? Bool ?? true
         followsUser = defaults.object(forKey: Self.keyFollowsUser) as? Bool ?? true
+        headingUp = defaults.object(forKey: Self.keyHeadingUp) as? Bool ?? false
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor [weak self] in
@@ -259,17 +273,17 @@ final class MainViewModel: NSObject, ObservableObject {
         phase = .loading
         Task { [weak self] in
             guard let self = self else { return }
-            do {
-                _ = try await self.app.syncZones()
-                _ = try await self.app.syncBans()
-                _ = try await self.app.syncPois()
-                try await self.app.refreshSpatialIndexes()
-                await self.refreshMapData()
-                await self.computeLocationStatus()
-                self.phase = .ready
-            } catch {
-                self.phase = .error("Błąd odświeżania danych: \(error.localizedDescription)")
+            // Bounded in shared code (same hard cap as start-up) so a hanging
+            // request can never leave the retry path stuck on the splash.
+            let ok = (try? await self.app.refreshAll().boolValue) ?? false
+            await self.reloadOfflineAreas()
+            await self.refreshMapData()
+            if !ok && self.app.cachedZones().isEmpty {
+                self.phase = .error("Błąd odświeżania danych. Sprawdź połączenie internetowe.")
+                return
             }
+            await self.computeLocationStatus()
+            self.phase = .ready
         }
     }
 
@@ -333,11 +347,20 @@ final class MainViewModel: NSObject, ObservableObject {
         guard let lat = userLatitude, let lon = userLongitude,
               locationStatus is LocationStatusInZone || locationStatus is LocationStatusOutsideZone else { return }
         if fireRiskLevel >= 0 { return }
-        do {
-            fireRiskLevel = try await app.getFireRisk(latitude: lat, longitude: lon).intValue
-        } catch {
-            fireRiskLevel = -1
+        let district: String?
+        if let inZone = locationStatus as? LocationStatusInZone {
+            district = inZone.forestDistrict
+        } else if let outsideZone = locationStatus as? LocationStatusOutsideZone {
+            district = outsideZone.nearestDistrict
+        } else {
+            district = nil
         }
+        fireRiskLevel = (try? await app.zoneFireRisk(
+            forestDistrict: district,
+            latitude: lat,
+            longitude: lon,
+            now: Self.currentTimeMillis()
+        ).intValue) ?? -2
     }
 
     /// Structural equality for the bridged `LocationStatus`: SKIE/Kotlin data
@@ -420,7 +443,12 @@ final class MainViewModel: NSObject, ObservableObject {
                 self.isLoadingZoneFireRisk = false
                 return
             }
-            let level = (try? await self.app.getFireRisk(latitude: first.0, longitude: first.1).intValue) ?? -1
+            let level = (try? await self.app.zoneFireRisk(
+                forestDistrict: district,
+                latitude: first.0,
+                longitude: first.1,
+                now: Self.currentTimeMillis()
+            ).intValue) ?? -2
             self.selectedZoneFireRiskLevel = level
             self.isLoadingZoneFireRisk = false
         }

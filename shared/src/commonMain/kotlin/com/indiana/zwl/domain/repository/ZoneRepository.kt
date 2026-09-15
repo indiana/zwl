@@ -9,5 +9,12 @@ interface ZoneRepository {
     suspend fun updateFireRisk(forestDistrict: String, fireRiskLevel: Int, timestamp: Long)
     suspend fun updateForestStand(forestDistrict: String, json: String, timestamp: Long)
     suspend fun insertAll(zones: List<Zone>)
+
+    /**
+     * Replaces the zone list with [zones] while carrying over the cached
+     * columns (fire risk, forest stand) of zones that already existed —
+     * a plain clear+insert used to wipe the offline fallback on every sync.
+     */
+    suspend fun syncAll(zones: List<Zone>)
     suspend fun clearAll()
 }

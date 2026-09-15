@@ -26,6 +26,7 @@ struct MapView: UIViewRepresentable {
     let showOthers: Bool
     let isOffline: Bool
     let followsUser: Bool
+    let headingUp: Bool
     let userLatitude: Double?
     let userLongitude: Double?
     let recenterSignal: Int
@@ -67,6 +68,10 @@ struct MapView: UIViewRepresentable {
         map.prefetchesTiles = true
         map.showsUserLocation = true
         map.allowsRotating = false
+        // Heading-up toggles the camera bearing; MapLibre would then pop its
+        // built-in compass widget under our own controls. Android disables it
+        // too (`isCompassEnabled = false`) — our custom compass is the only one.
+        map.showsCompassView = false
         map.userTrackingMode = .follow
         // Android parity: the user position is a direction arrow that rotates
         // with the device heading, not a plain dot.
@@ -115,6 +120,7 @@ struct MapView: UIViewRepresentable {
         coordinator.showOthers = showOthers
         coordinator.isOffline = isOffline
         coordinator.followsUser = followsUser
+        coordinator.headingUp = headingUp
         coordinator.onTapZone = onTapZone
         coordinator.onTapBan = onTapBan
         coordinator.onTapPoi = onTapPoi
@@ -188,7 +194,34 @@ struct MapView: UIViewRepresentable {
         var followsUser = true {
             didSet {
                 guard oldValue != followsUser else { return }
-                mapView?.userTrackingMode = followsUser ? .follow : .none
+                applyUserTrackingMode()
+            }
+        }
+        /// HEADING_UP mode: the map rotates so the device heading stays up
+        /// (MapLibre tracks it via `.followWithHeading` internally — no extra
+        /// published writes on our side). NORTH_UP (false) is the default
+        /// (Android parity).
+        var headingUp = false {
+            didSet {
+                guard oldValue != headingUp else { return }
+                applyUserTrackingMode()
+            }
+        }
+
+        /// Single source of truth for `userTrackingMode`: follow-only when
+        /// north-up, follow+heading rotation when heading-up (Android
+        /// `bearing` camera-loop parity), none when follow is off.
+        private func applyUserTrackingMode() {
+            guard let map = mapView else { return }
+            map.userTrackingMode = {
+                guard followsUser else { return .none }
+                return headingUp ? .followWithHeading : .follow
+            }()
+            if !headingUp {
+                // `.follow` keeps the last heading, so leaving heading-up would
+                // freeze the map rotated. Ease back to north like Android's
+                // north-up camera loop.
+                map.setDirection(0, animated: true)
             }
         }
         var onTapZone: ((String?) -> Void) = { _ in }
@@ -741,7 +774,7 @@ struct MapView: UIViewRepresentable {
                 zoomLevel: MapStyle.shared.DEFAULT_ZOOM,
                 animated: animated
             )
-            mapView.userTrackingMode = followsUser ? .follow : .none
+            applyUserTrackingMode()
             let bounds = mapView.visibleCoordinateBounds
             onVisibleRegionChange(
                 MapRegion(latSouth: bounds.sw.latitude,
@@ -821,7 +854,7 @@ struct MapView: UIViewRepresentable {
             mapView.setCenter(CLLocationCoordinate2D(latitude: lat, longitude: lon),
                               zoomLevel: 15.0,
                               animated: true)
-            mapView.userTrackingMode = followsUser ? .follow : .none
+            applyUserTrackingMode()
         }
 
         // MARK: Tap handling

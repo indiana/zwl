@@ -1,8 +1,11 @@
 package com.indiana.zwl.presentation
 
+import android.content.res.Configuration
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,14 +15,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,13 +41,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.BuildConfig
+import com.indiana.zwl.R
 import com.indiana.zwl.presentation.theme.DarkForestBackground
 import com.indiana.zwl.presentation.theme.ForestGreenAccent
 import com.indiana.zwl.presentation.theme.ForestGreenText
@@ -48,6 +59,9 @@ import com.indiana.zwl.presentation.theme.ForestGreenText
 private const val BDL_PORTAL_URL = "https://www.bdl.lasy.gov.pl/portal/"
 private const val IBL_FIRE_URL = "https://bazapozarow.ibles.pl/"
 private const val ZANOCUJ_W_LESIE_URL = "https://www.lasy.gov.pl/pl/turystyka/program-zanocuj-w-lesie"
+private const val BUYCOFFEE_URL = "https://buycoffee.to/legalny-bushcraft"
+private const val FACEBOOK_URL = "https://www.facebook.com/profile.php?id=61593227626210"
+private const val INSTAGRAM_URL = "https://instagram.com/legalny.bushcraft"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +69,8 @@ fun AboutScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -62,35 +78,46 @@ fun AboutScreen(
                 title = {
                     Text(
                         text = "O aplikacji",
-                        fontSize = 20.sp,
+                        fontSize = if (isLandscape) 16.sp else 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onClose) {
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(if (isLandscape) 40.dp else 48.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Wstecz",
+                            modifier = Modifier.size(if (isLandscape) 20.dp else 24.dp),
                             tint = Color.White
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = DarkForestBackground
-                )
+                ),
+                windowInsets = if (isLandscape) WindowInsets(0, 0, 0, 0) else TopAppBarDefaults.windowInsets
             )
         },
         containerColor = DarkForestBackground
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(paddingValues),
+            contentAlignment = Alignment.TopCenter
         ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -211,12 +238,120 @@ fun AboutScreen(
                 }
             }
 
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = null,
+                            tint = ForestGreenAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Media społecznościowe",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    SocialLinkRow(label = "Facebook", handle = "Legalny Bushcraft", url = FACEBOOK_URL)
+                    SocialLinkRow(label = "Instagram", handle = "@legalny.bushcraft", url = INSTAGRAM_URL)
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Wsparcie",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Jeśli aplikacja jest dla Ciebie przydatna, możesz wesprzeć jej dalszy rozwój.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 19.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    BuyCoffeeButton()
+                }
+            }
+
             Text(
                 text = "Legalny Bushcraft • wersja ${BuildConfig.VERSION_NAME}",
                 fontSize = 12.sp,
                 color = ForestGreenText,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
+            )
+        }
+        }
+    }
+}
+
+@Composable
+private fun BuyCoffeeButton() {
+    val context = LocalContext.current
+    Image(
+        painter = painterResource(id = R.drawable.buycoffee_button),
+        contentDescription = "Wesprzyj projekt w BuyCoffee",
+        contentScale = ContentScale.Fit,
+        modifier = Modifier
+            .width(220.dp)
+            .height(58.dp)
+            .clickable { openNadlesnictwoWebsite(context, BUYCOFFEE_URL) }
+    )
+}
+
+@Composable
+private fun SocialLinkRow(label: String, handle: String, url: String) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { openNadlesnictwoWebsite(context, url) },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = handle,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = ForestGreenAccent,
+                textDecoration = TextDecoration.Underline
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                contentDescription = "Otwórz $label",
+                tint = ForestGreenAccent,
+                modifier = Modifier.size(14.dp)
             )
         }
     }

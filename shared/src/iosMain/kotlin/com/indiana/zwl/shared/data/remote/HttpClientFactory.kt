@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 actual class HttpClientFactory {
     actual fun create(): HttpClient {
         return HttpClient(Darwin) {
+            expectSuccess = true
             install(ContentNegotiation) {
                 json(Json {
                     ignoreUnknownKeys = true

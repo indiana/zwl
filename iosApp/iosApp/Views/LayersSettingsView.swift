@@ -72,11 +72,17 @@ struct LayersSettingsView: View {
                     }
                 }
             }
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity)
             .navigationTitle("Wyświetlanie na mapie")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Gotowe") { dismiss() }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.backward")
+                            .fontWeight(.semibold)
+                    }
+                    .accessibilityLabel("Wstecz")
                 }
             }
         }

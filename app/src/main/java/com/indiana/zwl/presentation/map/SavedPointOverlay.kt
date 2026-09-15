@@ -1,5 +1,6 @@
 package com.indiana.zwl.presentation.map
 
+import android.content.res.Configuration
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
@@ -13,17 +14,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.presentation.FireRiskCard
 import com.indiana.zwl.presentation.ForestStandCard
 import com.indiana.zwl.presentation.SelectedSavedPointDetails
+import com.indiana.zwl.shared.map.CoordinateParser
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -34,32 +37,47 @@ fun SavedPointListOverlay(
     onOpenProperties: (SavedPoint) -> Unit,
     onPasteCoordinates: (Double, Double) -> Unit
 ) {
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     var pasteDialogVisible by remember { mutableStateOf(false) }
     var pasteInput by remember { mutableStateOf("") }
     var pasteError by remember { mutableStateOf(false) }
 
     Surface(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
         ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .statusBarsPadding()
+            ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(
+                        horizontal = 16.dp,
+                        vertical = if (isLandscape) 4.dp else 12.dp
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onClose) {
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(if (isLandscape) 36.dp else 48.dp)
+                ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Zamknij"
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Wstecz",
+                        modifier = Modifier.size(if (isLandscape) 20.dp else 24.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "Zapisane punkty",
-                    fontSize = 18.sp,
+                    fontSize = if (isLandscape) 15.sp else 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -133,16 +151,18 @@ fun SavedPointListOverlay(
                 }
             }
         }
+        }
     }
 
     if (pasteDialogVisible) {
         AlertDialog(
+            modifier = Modifier.imePadding(),
             onDismissRequest = { pasteDialogVisible = false },
             title = { Text("Otwórz punkt ze współrzędnych") },
             text = {
                 Column {
                     Text(
-                        text = "Wklej współrzędne, np. 52.123456, 21.123456.",
+                        text = "Wklej współrzędne lub tekst, który je zawiera, np. 52.123456, 21.123456.",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -170,9 +190,9 @@ fun SavedPointListOverlay(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        parseCoordinates(pasteInput)?.let { (lat, lng) ->
+                        CoordinateParser.parse(pasteInput)?.let { coords ->
                             pasteDialogVisible = false
-                            onPasteCoordinates(lat, lng)
+                            onPasteCoordinates(coords.latitude, coords.longitude)
                         } ?: run { pasteError = true }
                     }
                 ) {
@@ -186,17 +206,6 @@ fun SavedPointListOverlay(
             }
         )
     }
-}
-
-private fun parseCoordinates(input: String): Pair<Double, Double>? {
-    val pattern = Regex(
-        """\s*([-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([-]?\d+(?:[.,]\d+)?)\s*"""
-    )
-    val match = pattern.matchEntire(input.trim()) ?: return null
-    val lat = match.groupValues[1].replace(',', '.').toDoubleOrNull() ?: return null
-    val lng = match.groupValues[2].replace(',', '.').toDoubleOrNull() ?: return null
-    if (lat !in -90.0..90.0 || lng !in -180.0..180.0) return null
-    return lat to lng
 }
 
 @Composable
@@ -223,11 +232,17 @@ fun SavedPointPropertiesCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            // The whole card scrolls within the host's available height so it can
+            // never be clipped from the top in landscape / short windows.
+            val maxContentHeight = (maxHeight - 32.dp).let { if (it < 0.dp) 0.dp else it }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .heightIn(max = maxContentHeight)
+                    .verticalScroll(rememberScrollState())
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -259,10 +274,7 @@ fun SavedPointPropertiesCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 460.dp)
-                    .verticalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
@@ -314,11 +326,13 @@ fun SavedPointPropertiesCard(
                     )
                 }
             }
+            }
         }
     }
 
     if (renameDialogVisible) {
         AlertDialog(
+            modifier = Modifier.imePadding(),
             onDismissRequest = { renameDialogVisible = false },
             title = { Text("Zmień nazwę") },
             text = {

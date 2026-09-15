@@ -87,7 +87,7 @@ class MainViewModelTest {
             zoneRepository, poiRepository, savedPointRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
             getForestBansUseCase, getFireRiskUseCase,
-            getZonesUseCase, spatialEngine, context
+            getZonesUseCase, spatialEngine, mainDispatcherRule.testDispatcher, context
         )
 
         val success = waitForState(viewModel.uiState, 5000) { it is MainUiState.PermissionsRequired }
@@ -108,7 +108,7 @@ class MainViewModelTest {
             zoneRepository, poiRepository, savedPointRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
             getForestBansUseCase, getFireRiskUseCase,
-            getZonesUseCase, spatialEngine, context
+            getZonesUseCase, spatialEngine, mainDispatcherRule.testDispatcher, context
         )
 
         val success = waitForState(viewModel.uiState, 5000) { it is MainUiState.PermissionsRequired }
@@ -131,7 +131,7 @@ class MainViewModelTest {
             zoneRepository, poiRepository, savedPointRepository, locationRepository, compassRepository,
             syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
             getForestBansUseCase, getFireRiskUseCase,
-            getZonesUseCase, spatialEngine, context
+            getZonesUseCase, spatialEngine, mainDispatcherRule.testDispatcher, context
         )
 
         viewModel.pois.test {

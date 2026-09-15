@@ -1,7 +1,9 @@
 package com.indiana.zwl.presentation.map
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,18 +30,25 @@ fun PointDetailCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(16.dp)
+            .imePadding(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            // Whole card scrolls within the host's available height so it cannot
+            // be clipped from the top in landscape / short windows.
+            val maxContentHeight = (maxHeight - 32.dp).let { if (it < 0.dp) 0.dp else it }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .heightIn(max = maxContentHeight)
+                    .verticalScroll(rememberScrollState())
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -139,6 +148,7 @@ fun PointDetailCard(
                 ) {
                     Text("Podziel się", fontWeight = FontWeight.Bold)
                 }
+            }
             }
         }
     }

@@ -2,6 +2,7 @@ package com.indiana.zwl.presentation
 
 import com.indiana.zwl.presentation.theme.*
 
+import android.content.res.Configuration
 import android.provider.Settings
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
@@ -46,6 +48,8 @@ fun InZoneContent(
     onDebugToggle: (() -> Unit)? = null,
     isActive: Boolean = true
 ) {
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Unbounded-constraint assumption: the host (Scaffold content Box with fillMaxSize) always
     // provides finite maxHeight, including the hidden tab (size(0.dp) -> maxHeight = 0.dp).
     BoxWithConstraints(
@@ -58,7 +62,7 @@ fun InZoneContent(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .heightIn(min = maxHeight)
-                .padding(24.dp),
+                .padding(if (isLandscape) 16.dp else 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -70,13 +74,13 @@ fun InZoneContent(
             )
         }
 
+        val heroContent: @Composable () -> Unit = {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(top = 16.dp)
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(if (isLandscape) 72.dp else 100.dp)
                     .background(GreenPrimary.copy(alpha = 0.2f), RoundedCornerShape(50.dp))
                     .border(3.dp, ForestGreenAccent, RoundedCornerShape(50.dp))
                     .clickable(enabled = onDebugToggle != null) {
@@ -88,19 +92,19 @@ fun InZoneContent(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
                     tint = ForestGreenAccent,
-                    modifier = Modifier.size(56.dp)
+                    modifier = Modifier.size(if (isLandscape) 40.dp else 56.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(if (isLandscape) 12.dp else 24.dp))
 
             Text(
                 text = "Jesteś w strefie\nprogramu \"Zanocuj w Lesie\"",
-                fontSize = 26.sp,
+                fontSize = if (isLandscape) 20.sp else 26.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 textAlign = TextAlign.Center,
-                lineHeight = 32.sp
+                lineHeight = if (isLandscape) 24.sp else 32.sp
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -133,17 +137,17 @@ fun InZoneContent(
             }
         }
         
-        Spacer(modifier = Modifier.height(24.dp))
-
+        }
+        val riskCardContent: @Composable () -> Unit = {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 16.dp),
+                .padding(vertical = if (isLandscape) 8.dp else 16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                modifier = Modifier.fillMaxWidth().padding(if (isLandscape) 14.dp else 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -169,12 +173,15 @@ fun InZoneContent(
                     fontWeight = FontWeight.Bold,
                     color = riskColor,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                    modifier = Modifier.padding(
+                        top = 4.dp,
+                        bottom = if (isLandscape) 10.dp else 16.dp
+                    )
                 )
 
                 HorizontalDivider(color = Color.DarkGray, thickness = 1.dp)
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(if (isLandscape) 10.dp else 16.dp))
 
                 Text(
                     text = "Używanie kuchenek gazowych",
@@ -197,7 +204,7 @@ fun InZoneContent(
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = ForestGreenAccent,
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = if (isLandscape) 8.dp else 10.dp)
                             )
                         }
                     }
@@ -212,7 +219,7 @@ fun InZoneContent(
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = ForestGreenAccent,
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = if (isLandscape) 8.dp else 10.dp)
                             )
                         }
                     }
@@ -247,7 +254,7 @@ fun InZoneContent(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(if (isLandscape) 8.dp else 12.dp))
 
                 Text(
                     text = GAS_STOVE_STATUS_DISCLAIMER,
@@ -257,6 +264,29 @@ fun InZoneContent(
                     lineHeight = 15.sp
                 )
             }
+        }
+        }
+        if (isLandscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) { heroContent() }
+                Column(modifier = Modifier.weight(1f)) { riskCardContent() }
+            }
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(top = 16.dp)
+            ) { heroContent() }
+            Spacer(modifier = Modifier.height(24.dp))
+            riskCardContent()
         }
     }
     }

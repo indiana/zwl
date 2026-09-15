@@ -65,8 +65,7 @@ class SyncZonesUseCaseTest {
         assertEquals(1, zones.size)
         assertEquals("Nadleśnictwo Kudypy", zones[0].forestDistrict)
 
-        coVerify(exactly = 1) { zoneRepository.clearAll() }
-        coVerify(exactly = 1) { zoneRepository.insertAll(any()) }
+        coVerify(exactly = 1) { zoneRepository.syncAll(any()) }
     }
 
     @Test
@@ -86,8 +85,7 @@ class SyncZonesUseCaseTest {
 
         // Assert
         assertTrue(result.isFailure)
-        coVerify(exactly = 0) { zoneRepository.clearAll() }
-        coVerify(exactly = 0) { zoneRepository.insertAll(any()) }
+        coVerify(exactly = 0) { zoneRepository.syncAll(any()) }
     }
 
     @Test
@@ -102,7 +100,6 @@ class SyncZonesUseCaseTest {
         // Assert
         assertTrue(result.isFailure)
         assertEquals(exception, result.exceptionOrNull())
-        coVerify(exactly = 0) { zoneRepository.clearAll() }
-        coVerify(exactly = 0) { zoneRepository.insertAll(any()) }
+        coVerify(exactly = 0) { zoneRepository.syncAll(any()) }
     }
 }

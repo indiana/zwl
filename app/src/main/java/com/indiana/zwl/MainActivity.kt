@@ -4,11 +4,14 @@ import android.os.Bundle
 import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import com.indiana.zwl.presentation.MainScreen
 import com.indiana.zwl.presentation.MainViewModel
 import com.indiana.zwl.presentation.ZoneDetailViewModel
 import com.indiana.zwl.presentation.map.MapViewModel
+import com.indiana.zwl.update.PlayAppUpdateChecker
 import dagger.hilt.android.AndroidEntryPoint
 
 import androidx.compose.runtime.DisposableEffect
@@ -20,10 +23,18 @@ class MainActivity : ComponentActivity() {
     private val zoneDetailViewModel: ZoneDetailViewModel by viewModels()
     private val mapViewModel: MapViewModel by viewModels()
 
+    private val updateFlowLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { }
+
+    private var playUpdateChecker: PlayAppUpdateChecker? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         handleDeepLink(intent)
+
+        playUpdateChecker = PlayAppUpdateChecker(this, updateFlowLauncher).also { it.check() }
 
         setContent {
             DisposableEffect(Unit) {
@@ -57,6 +68,11 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleDeepLink(intent)
+    }
+
+    override fun onDestroy() {
+        playUpdateChecker?.dispose()
+        super.onDestroy()
     }
 
     private fun handleDeepLink(intent: Intent?) {
