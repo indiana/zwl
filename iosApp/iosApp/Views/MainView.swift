@@ -241,7 +241,8 @@ recenterSignal: viewModel.recenterSignal,
             onTapSavedPoint: { viewModel.openSavedPointProperties(id: $0) },
             onTapBackground: { viewModel.clearSelection() },
             onVisibleRegionChange: { viewModel.visibleRegion = $0 },
-            onLongPressPoint: { lat, lng in viewModel.onLongPressPoint(latitude: lat, longitude: lng) }
+            onLongPressPoint: { lat, lng in viewModel.onLongPressPoint(latitude: lat, longitude: lng) },
+            onUserTrackingModeChange: { viewModel.setFollowsUser($0) }
             )
         .ignoresSafeArea(edges: .top)
     }
@@ -368,13 +369,19 @@ recenterSignal: viewModel.recenterSignal,
     }
 
     private var myLocationButton: some View {
-        Button(action: { viewModel.recenterMap() }) {
+        let followColor: Color = viewModel.followsUser ? .yellow : .green
+        return Button(action: { viewModel.recenterMap() }) {
             Image(systemName: "location.fill")
                 .font(.system(size: 17, weight: .semibold))
                 .frame(width: 44, height: 44)
-                .foregroundColor(.blue)
+                .foregroundColor(followColor)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(followColor, lineWidth: 2)
+                )
         }
+        .accessibilityLabel(Text(viewModel.followsUser ? "Podążanie włączone" : "Podążanie wyłączone"))
     }
 
     /// Transient pill at the bottom of the map (Android toast parity) shown

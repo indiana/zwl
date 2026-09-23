@@ -183,6 +183,29 @@ class MainViewModel @Inject constructor(
         sharedPrefs.edit().putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, next.ordinal).apply()
     }
 
+    // Follow-the-user is session state: it always starts enabled on a fresh map
+    // entry and is never persisted. A user pan disables it; the "my location"
+    // button re-enables it. `recenterSignal` bumps on an explicit recenter so
+    // the camera re-applies the default zoom.
+    private val _followsUser = MutableStateFlow(true)
+    val followsUser: StateFlow<Boolean> = _followsUser.asStateFlow()
+
+    private val _recenterSignal = MutableStateFlow(0)
+    val recenterSignal: StateFlow<Int> = _recenterSignal.asStateFlow()
+
+    fun setFollowsUser(follow: Boolean) {
+        _followsUser.value = follow
+    }
+
+    fun onMapPanned() {
+        _followsUser.value = false
+    }
+
+    fun recenterMap() {
+        _followsUser.value = true
+        _recenterSignal.value++
+    }
+
     private val _showForestBans = MutableStateFlow(sharedPrefs.getBoolean("show_forest_bans", true))
     val showForestBans: StateFlow<Boolean> = _showForestBans
 
@@ -323,6 +346,7 @@ class MainViewModel @Inject constructor(
 
     fun selectSavedPoint(point: SavedPoint) {
         _focusSavedPoint.value = point
+        _followsUser.value = false
         viewModelScope.launch {
             kotlinx.coroutines.delay(100)
             _focusSavedPoint.value = null

@@ -87,12 +87,14 @@ final class MainViewModel: NSObject, ObservableObject {
     }
 
     /// Whether the map follows the user's live location (`MLNMapView`
-    /// `userTrackingMode == .follow`). Owned here (not MainView's @AppStorage)
-    /// so selecting a saved point can drop follow and keep the camera on the
-    /// point (Android parity: the camera doesn't snap back to the user). The
-    /// user can re-enable it with the settings-panel toggle.
-    @Published var followsUser: Bool = true {
-        didSet { UserDefaults.standard.set(followsUser, forKey: Self.keyFollowsUser) }
+    /// `userTrackingMode == .follow`). Session state: always starts enabled on
+    /// a fresh map entry, never persisted. A user pan disables it (synced back
+    /// from the map delegate); the "my location" button re-enables it. The
+    /// button border/icon shows the state (yellow = following, green = off).
+    @Published var followsUser: Bool = true
+
+    func setFollowsUser(_ follow: Bool) {
+        followsUser = follow
     }
 
     /// Map orientation mode: false = north always up (default, Android parity
@@ -210,7 +212,6 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyShowViewpoints = "mapSettings.showViewpoints"
     private static let keyShowParking = "mapSettings.showParking"
     private static let keyShowEducation = "mapSettings.showEducation"
-    private static let keyFollowsUser = "settings.followsUser"
     private static let keyHeadingUp = "mapSettings.headingUp"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
@@ -233,7 +234,6 @@ final class MainViewModel: NSObject, ObservableObject {
         showViewpoints = defaults.object(forKey: Self.keyShowViewpoints) as? Bool ?? true
         showParking = defaults.object(forKey: Self.keyShowParking) as? Bool ?? true
         showEducation = defaults.object(forKey: Self.keyShowEducation) as? Bool ?? true
-        followsUser = defaults.object(forKey: Self.keyFollowsUser) as? Bool ?? true
         headingUp = defaults.object(forKey: Self.keyHeadingUp) as? Bool ?? false
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
