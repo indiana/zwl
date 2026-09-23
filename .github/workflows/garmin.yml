@@ -1,0 +1,99 @@
+name: Garmin Connect IQ
+
+# Recznie uruchamiany: wymaga sekretow Garmin i zwalidowanej listy iq:product.
+# Sekrety (Settings -> Secrets and variables -> Actions):
+#   CIQ_DEV_KEY, GARMIN_USERNAME, GARMIN_PASSWORD, CIQ_AGREEMENT_HASH
+# Instrukcje generowania: docs/garmin-companion-PLAN.md (sekcja 9).
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: "Device id dla buildu .prg (sideload), np. fenix7"
+        required: false
+        default: "fenix7"
+      sdk_version:
+        description: "Wersja Connect IQ SDK"
+        required: false
+        default: "9.2.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Sprawdz wymagane sekrety
+        env:
+          GARMIN_USERNAME: ${{ secrets.GARMIN_USERNAME }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          CIQ_AGREEMENT_HASH: ${{ secrets.CIQ_AGREEMENT_HASH }}
+          CIQ_DEV_KEY: ${{ secrets.CIQ_DEV_KEY }}
+        run: |
+          missing=0
+          for v in GARMIN_USERNAME GARMIN_PASSWORD CIQ_AGREEMENT_HASH CIQ_DEV_KEY; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Brak sekretu $v — patrz docs/garmin-companion-PLAN.md (sekcja 9)."
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+
+      - name: Instalacja connect-iq-sdk-manager
+        run: |
+          go install github.com/lindell/connect-iq-sdk-manager-cli@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Akceptacja licencji + logowanie
+        env:
+          GARMIN_USERNAME: ${{ secrets.GARMIN_USERNAME }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+        run: |
+          connect-iq-sdk-manager agreement accept --acceptance-hash="${{ secrets.CIQ_AGREEMENT_HASH }}"
+          connect-iq-sdk-manager login
+
+      - name: SDK + urzadzenia z manifestu
+        run: |
+          connect-iq-sdk-manager sdk set "${{ inputs.sdk_version }}"
+          echo "$(connect-iq-sdk-manager sdk current-path --bin)" >> "$GITHUB_PATH"
+          connect-iq-sdk-manager device download --manifest=garmin/manifest.xml
+
+      - name: Klucz deweloperski
+        run: echo "${{ secrets.CIQ_DEV_KEY }}" | base64 -d > developer_key.der
+
+      - name: Build (.prg sideload)
+        working-directory: garmin
+        run: |
+          mkdir -p bin
+          monkeyc -d "${{ inputs.device }}" -f monkey.jungle \
+            -o bin/zwl.prg -y ../developer_key.der
+
+      - name: Build (.iq store)
+        working-directory: garmin
+        run: |
+          monkeyc -w -e -f monkey.jungle \
+            -o bin/zwl.iq -y ../developer_key.der
+
+      - name: Sprzatanie klucza
+        if: always()
+        run: rm -f developer_key.der
+
+      - name: Upload artefaktow
+        uses: actions/upload-artifact@v4
+        with:
+          name: zwl-garmin
+          path: |
+            garmin/bin/zwl.prg
+            garmin/bin/zwl.iq
+          if-no-files-found: error

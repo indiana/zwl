@@ -1,0 +1,4 @@
+# Jungle build configuration for the Connect IQ watch app.
+# The SDK default jungle already maps `source/` and `resources/`; we only pin the
+# manifest explicitly so `monkeyc` can be invoked from any working directory.
+project.manifest = manifest.xml

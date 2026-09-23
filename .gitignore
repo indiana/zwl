@@ -26,3 +26,10 @@ __pycache__/
 .opencode/
 
 FAZY3-plan.md
+
+# Garmin Connect IQ (watch app)
+garmin/bin/
+*.prg
+*.iq
+*.der
+*.pem
