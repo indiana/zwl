@@ -8,7 +8,11 @@ import com.indiana.zwl.shared.offline.TileFetcher
 import com.indiana.zwl.shared.offline.TileRef
 import com.indiana.zwl.shared.offline.TileMath
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -76,7 +80,7 @@ class MbtilesTilePackagerTest {
     }
 
     @Test
-    fun `store is not opened when area exceeds tile cap`() = runBlocking {
+    fun `store is not opened when area exceeds the safety ceiling`() = runBlocking {
         val store = FakeStore()
         val fetcher = FakeFetcher()
         val driver = run(
@@ -142,5 +146,33 @@ class MbtilesTilePackagerTest {
         assertEquals(1, driver.errors.size)
         assertTrue(driver.errors[0].contains("Błąd połączenia"))
         assertEquals(1, store.closeCount)
+    }
+
+    @Test
+    fun `cancellation closes the store and rethrows`() = runBlocking {
+        val store = FakeStore()
+        val blockingFetcher = object : TileFetcher {
+            override suspend fun fetch(x: Int, y: Int, z: Int): TileFetchResult =
+                awaitCancellation()
+        }
+        var success: Int? = null
+        var error: String? = null
+
+        val job = launch {
+            packer(blockingFetcher, store).download(
+                region = Region(52.20, 52.25, 21.00, 21.05),
+                onProgress = { _, _ -> },
+                onSuccess = { success = it },
+                onError = { error = it }
+            )
+        }
+        // Let the packager open the store and block on the first fetch.
+        while (store.openCount == 0) yield()
+        job.cancelAndJoin()
+
+        assertTrue(job.isCancelled)
+        assertEquals(1, store.closeCount)
+        assertEquals(null, success)
+        assertEquals(null, error)
     }
 }

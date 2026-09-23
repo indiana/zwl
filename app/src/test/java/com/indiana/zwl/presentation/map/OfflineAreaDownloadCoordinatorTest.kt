@@ -4,7 +4,12 @@ import com.indiana.zwl.shared.offline.MbtilesStoreFactory
 import com.indiana.zwl.shared.offline.OfflineLimits
 import com.indiana.zwl.shared.offline.OfflineAreaDownloadCoordinator
 import com.indiana.zwl.shared.offline.Region
+import com.indiana.zwl.shared.offline.TileFetcher
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -20,7 +25,7 @@ class OfflineAreaDownloadCoordinatorTest {
     private fun coordinator(
         repo: InMemoryOfflineAreaRepository,
         files: FakeOfflineAreaFiles,
-        fetcher: FakeFetcher,
+        fetcher: TileFetcher,
         stores: MutableList<FakeStore>
     ): OfflineAreaDownloadCoordinator = OfflineAreaDownloadCoordinator(
         repository = repo,
@@ -155,5 +160,73 @@ class OfflineAreaDownloadCoordinatorTest {
         assertEquals("area_old.mbtiles", repo.items.first().fileName)
         assertTrue(files.files.containsKey("area_old.mbtiles"))
         assertEquals(1, files.files.size)
+    }
+
+    private fun blockingFetcher(): TileFetcher = object : TileFetcher {
+        override suspend fun fetch(x: Int, y: Int, z: Int): com.indiana.zwl.shared.offline.TileFetchResult =
+            awaitCancellation()
+    }
+
+    @Test
+    fun `cancelled download removes partial file and does not register`() = runBlocking {
+        val repo = InMemoryOfflineAreaRepository()
+        val files = FakeOfflineAreaFiles()
+        val stores = mutableListOf<FakeStore>()
+        val expectedFile = "area_${files.now}.mbtiles"
+        files.files[expectedFile] = byteArrayOf(1)
+        val callbacks = Callbacks()
+
+        val job = launch {
+            coordinator(repo, files, blockingFetcher(), stores).download(
+                region = Region(52.20, 52.25, 21.00, 21.05),
+                onProgress = { _, _ -> },
+                onSuccess = { callbacks.success = it },
+                onError = { callbacks.error = it }
+            )
+        }
+        while (stores.isEmpty() || stores.first().openCount == 0) yield()
+        job.cancelAndJoin()
+
+        assertEquals(null, callbacks.success)
+        assertTrue(repo.items.isEmpty())
+        assertFalse(files.files.containsKey(expectedFile))
+        assertEquals(1, stores.first().closeCount)
+    }
+
+    @Test
+    fun `cancelled refresh keeps old data and removes new file`() = runBlocking {
+        val repo = InMemoryOfflineAreaRepository()
+        val files = FakeOfflineAreaFiles()
+        val stores = mutableListOf<FakeStore>()
+        files.files["area_old.mbtiles"] = byteArrayOf(9, 9)
+        repo.insert(
+            com.indiana.zwl.domain.model.NewDownloadedArea(
+                name = "Old", fileName = "area_old.mbtiles",
+                latSouth = 52.0, latNorth = 52.1, lonWest = 21.0, lonEast = 21.1,
+                minZoom = 10, maxZoom = 16, tileCount = 10,
+                fileSizeBytes = 2, downloadedAt = 1_000
+            )
+        )
+        val area = repo.items.first()
+        val newFile = "area_${files.now}.mbtiles"
+        files.files[newFile] = byteArrayOf(1)
+        val callbacks = Callbacks()
+
+        val job = launch {
+            coordinator(repo, files, blockingFetcher(), stores).refresh(
+                area = area,
+                onProgress = { _, _ -> },
+                onSuccess = { callbacks.success = it },
+                onError = { callbacks.error = it }
+            )
+        }
+        while (stores.isEmpty() || stores.first().openCount == 0) yield()
+        job.cancelAndJoin()
+
+        assertEquals(null, callbacks.success)
+        assertEquals(1, repo.items.size)
+        assertEquals("area_old.mbtiles", repo.items.first().fileName)
+        assertTrue(files.files.containsKey("area_old.mbtiles"))
+        assertFalse(files.files.containsKey(newFile))
     }
 }

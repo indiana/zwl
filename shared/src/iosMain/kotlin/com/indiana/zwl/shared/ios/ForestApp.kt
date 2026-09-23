@@ -50,6 +50,16 @@ import platform.Foundation.secondsFromGMT
 import platform.Foundation.systemTimeZone
 
 /**
+ * Result of the pre-flight area size check (see [ForestApp.checkAreaDownload]).
+ * [message] non-null = show it to the user; [canProceed] = a confirmation
+ * actually starts the download (false = hard safety ceiling).
+ */
+data class AreaDownloadCheck(
+    val message: String?,
+    val canProceed: Boolean
+)
+
+/**
  * SKIE-friendly facade for the iOS app (SwiftUI). All heavy/suspending work is
  * run on background dispatchers; the Swift side calls these via Task/async.
  */
@@ -595,25 +605,34 @@ class ForestApp(
     fun offlineAreaFilePath(fileName: String): String = offlineAreaFiles.filePath(fileName)
 
     /**
-     * Rejects oversized views up front with a ready-to-display message
-     * (null = size OK). The numeric comparison stays in Kotlin so Swift never
-     * has to touch SKIE-boxed integers.
+     * Pre-flight size check. Both the numeric comparison and the message stay
+     * in Kotlin so Swift never has to touch SKIE-boxed integers.
+     *
+     * [AreaDownloadCheck.message] is non-null when the user must be told
+     * something; [AreaDownloadCheck.canProceed] says whether a confirmation
+     * leads to a download (false = hard safety limit exceeded).
      */
-    suspend fun areaTooBigMessage(
+    suspend fun checkAreaDownload(
         latSouth: Double,
         latNorth: Double,
         lonWest: Double,
         lonEast: Double
-    ): String? = withContext(Dispatchers.Default) {
+    ): AreaDownloadCheck = withContext(Dispatchers.Default) {
         val total = TileMath.estimateTileCount(
             Region(latSouth, latNorth, lonWest, lonEast),
             OfflineLimits.MIN_ZOOM,
             OfflineLimits.MAX_ZOOM
         )
-        if (total > OfflineLimits.MAX_TILES) {
-            "Ten widok obejmuje $total kafelków — limit to ${OfflineLimits.MAX_TILES}. Przybliż mapę i spróbuj ponownie."
-        } else {
-            null
+        when {
+            total > OfflineLimits.MAX_TILES -> AreaDownloadCheck(
+                message = "Ten widok obejmuje $total kafelków — maksymalnie ${OfflineLimits.MAX_TILES}. Przybliż mapę i spróbuj ponownie.",
+                canProceed = false
+            )
+            total > OfflineLimits.CONFIRM_TILES_THRESHOLD -> AreaDownloadCheck(
+                message = "Ten obszar obejmuje $total kafelków. Pobieranie może potrwać dłuższą chwilę. Kontynuować?",
+                canProceed = true
+            )
+            else -> AreaDownloadCheck(message = null, canProceed = true)
         }
     }
 

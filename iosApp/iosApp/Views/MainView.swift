@@ -117,6 +117,15 @@ struct MainView: View {
         } message: {
             Text(viewModel.downloadBlockedMessage ?? "")
         }
+        .alert("Duży obszar", isPresented: Binding(
+            get: { viewModel.downloadConfirmMessage != nil },
+            set: { if !$0 { viewModel.cancelDownloadConfirmation() } }
+        )) {
+            Button("Kontynuuj") { viewModel.confirmDownload() }
+            Button("Anuluj", role: .cancel) { viewModel.cancelDownloadConfirmation() }
+        } message: {
+            Text(viewModel.downloadConfirmMessage ?? "")
+        }
     }
 
     @ViewBuilder
@@ -169,7 +178,8 @@ struct MainView: View {
                     MapDownloadCard(text: viewModel.downloadStatusText,
                                     progress: viewModel.downloadProgress,
                                     isDownloading: viewModel.isDownloading,
-                                    errorMessage: viewModel.downloadErrorText)
+                                    errorMessage: viewModel.downloadErrorText,
+                                    onCancel: { viewModel.cancelDownload() })
                         .onTapGesture { dismissDownloadCard = true }
                 }
 

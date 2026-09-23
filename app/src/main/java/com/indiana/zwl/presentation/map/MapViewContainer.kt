@@ -410,6 +410,7 @@ fun MapViewContainer(
     val offlineAreas by mapViewModel.offlineAreas.collectAsState()
     val showOfflineAreas by mapViewModel.showOfflineAreas.collectAsState()
     val downloadBlockedMessage by mapViewModel.downloadBlockedMessage.collectAsState()
+    val downloadConfirmMessage by mapViewModel.downloadConfirmMessage.collectAsState()
 
     // System back closes the topmost map overlay instead of finishing the app.
     // The map menu dropdown and AlertDialogs handle back on their own; this
@@ -955,6 +956,20 @@ fun MapViewContainer(
                 )
             }
 
+            downloadConfirmMessage?.let { message ->
+                AlertDialog(
+                    onDismissRequest = mapViewModel::dismissDownloadConfirm,
+                    title = { Text("Duży obszar") },
+                    text = { Text(message) },
+                    confirmButton = {
+                        TextButton(onClick = mapViewModel::confirmDownload) { Text("Kontynuuj") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = mapViewModel::dismissDownloadConfirm) { Text("Anuluj") }
+                    }
+                )
+            }
+
             if (showOfflineAreas) {
                 OfflineAreasScreen(
                     areas = offlineAreas,
@@ -1006,6 +1021,13 @@ fun MapViewContainer(
                                 modifier = Modifier.fillMaxWidth(),
                                 color = MaterialTheme.colorScheme.primary
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            TextButton(
+                                onClick = mapViewModel::cancelDownload,
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("Anuluj", fontSize = 11.sp)
+                            }
                         }
                     }
                 }

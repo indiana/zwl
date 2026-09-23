@@ -194,8 +194,18 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var offlineSourcesSignal = 0
     @Published var showOfflineAreas = false
     // Non-nil -> MainView shows a modal explanation why the download cannot
-    // start (oversized view). The status card is too easy to miss.
+    // start (above the absolute safety ceiling). The status card is too easy
+    // to miss.
     @Published var downloadBlockedMessage: String? = nil
+    // Non-nil -> the area is large; MainView asks the user to confirm. The
+    // pending region is started by `confirmDownload()`.
+    @Published var downloadConfirmMessage: String? = nil
+    private var pendingDownloadRegion: MapRegion?
+    // The running download/refresh, kept so the progress card can cancel it.
+    private var downloadTask: Task<Void, Never>?
+    // While cancelling, ignore late progress callbacks that would otherwise
+    // overwrite the "Anulowanie..." text.
+    private var isCancellingDownload = false
     // Increment to fly the map camera to a downloaded area's bounding box.
     @Published var focusAreaSignal = 0
     private(set) var focusAreaRegion: MapRegion?
@@ -829,6 +839,7 @@ final class MainViewModel: NSObject, ObservableObject {
     func refreshOfflineArea(_ area: DownloadedArea) {
         guard !isDownloading else { return }
         isDownloading = true
+        isCancellingDownload = false
         downloadProgress = 0
         downloadStatusText = "Rozpoczynanie odświeżania..."
         downloadFinished = false
@@ -837,7 +848,7 @@ final class MainViewModel: NSObject, ObservableObject {
         lastDownloadTextShown = ""
         lastDownloadTextAt = Date.distantPast
 
-        Task { [weak self] in
+        downloadTask = Task { [weak self] in
             guard let self = self else { return }
             do {
                 try await self.app.refreshOfflineArea(
@@ -862,11 +873,17 @@ final class MainViewModel: NSObject, ObservableObject {
                     }
                 )
             } catch {
-                self.downloadStatusText = "Błąd odświeżania: \(error.localizedDescription)"
-                self.downloadErrorText = self.downloadStatusText
+                if Task.isCancelled {
+                    self.downloadStatusText = "Odświeżanie anulowane"
+                    self.downloadErrorText = nil
+                } else {
+                    self.downloadStatusText = "Błąd odświeżania: \(error.localizedDescription)"
+                    self.downloadErrorText = self.downloadStatusText
+                }
                 self.downloadFinished = true
             }
             self.isDownloading = false
+            self.downloadTask = nil
             await self.reloadOfflineAreas()
         }
     }
@@ -894,6 +911,8 @@ final class MainViewModel: NSObject, ObservableObject {
     /// Coalesce: progress on ~2% steps (forcing the final 1.0), text at most
     /// every 0.35s unless the progress stepped.
     private func applyDownloadProgress(_ progress: Float, text: String) {
+        // Late callbacks while cancelling must not overwrite the cancel text.
+        guard !isCancellingDownload else { return }
         let step: Float = 0.02
         let steped = abs(progress - lastDownloadProgressShown) >= step || progress >= 0.999
         let now = Date()
@@ -912,29 +931,59 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func downloadArea(region: MapRegion) {
         guard !isDownloading else { return }
-        // Reject oversized views up front with a modal message (Android
-        // parity) — the packager's error would only flash the status card.
         downloadBlockedMessage = nil
+        downloadConfirmMessage = nil
         Task { [weak self] in
             guard let self = self else { return }
-            // Reject oversized views up front with a modal message (Android
-            // parity) — the packager's error would only flash the status card.
-            // The count comparison + message live in Kotlin (SKIE boxes Ints).
-            if let message = try? await self.app.areaTooBigMessage(
+            // Size check + message live in Kotlin (SKIE boxes Ints). Above the
+            // absolute ceiling we refuse; between the confirm threshold and the
+            // ceiling we ask the user to confirm.
+            guard let check = try? await self.app.checkAreaDownload(
                 latSouth: region.latSouth,
                 latNorth: region.latNorth,
                 lonWest: region.lonWest,
                 lonEast: region.lonEast
-            ) {
-                self.downloadBlockedMessage = message
+            ) else { return }
+
+            guard check.canProceed else {
+                self.downloadBlockedMessage = check.message
                 return
             }
-            await self.startDownload(region: region)
+            if let message = check.message {
+                self.pendingDownloadRegion = region
+                self.downloadConfirmMessage = message
+                return
+            }
+            self.startDownload(region: region)
         }
     }
 
-    private func startDownload(region: MapRegion) async {
+    /// User confirmed a large download.
+    func confirmDownload() {
+        guard let region = pendingDownloadRegion else { return }
+        pendingDownloadRegion = nil
+        downloadConfirmMessage = nil
+        startDownload(region: region)
+    }
+
+    func cancelDownloadConfirmation() {
+        pendingDownloadRegion = nil
+        downloadConfirmMessage = nil
+    }
+
+    /// Cancels the running download/refresh. The Kotlin coordinator removes the
+    /// partial file; the task's completion updates the card text.
+    func cancelDownload() {
+        guard isDownloading else { return }
+        isCancellingDownload = true
+        downloadStatusText = "Anulowanie..."
+        downloadTask?.cancel()
+    }
+
+    private func startDownload(region: MapRegion) {
+        guard !isDownloading else { return }
         isDownloading = true
+        isCancellingDownload = false
         downloadProgress = 0
         downloadStatusText = "Rozpoczynanie..."
         downloadFinished = false
@@ -943,43 +992,52 @@ final class MainViewModel: NSObject, ObservableObject {
         lastDownloadTextShown = ""
         lastDownloadTextAt = Date.distantPast
 
-        do {
-            try await app.downloadArea(
-                    latSouth: region.latSouth,
-                    latNorth: region.latNorth,
-                    lonWest: region.lonWest,
-                    lonEast: region.lonEast,
-                    onProgress: { [weak self] progress, text in
-                        // Kotlin invokes these from Dispatchers.Default; hop to
-                        // the main actor before touching @Published state.
-                        Task { @MainActor [weak self] in
-                            guard let self = self else { return }
-                            self.applyDownloadProgress(progress.floatValue, text: text)
+        downloadTask = Task { [weak self] in
+            guard let self = self else { return }
+            do {
+                try await self.app.downloadArea(
+                        latSouth: region.latSouth,
+                        latNorth: region.latNorth,
+                        lonWest: region.lonWest,
+                        lonEast: region.lonEast,
+                        onProgress: { [weak self] progress, text in
+                            // Kotlin invokes these from Dispatchers.Default; hop to
+                            // the main actor before touching @Published state.
+                            Task { @MainActor [weak self] in
+                                guard let self = self else { return }
+                                self.applyDownloadProgress(progress.floatValue, text: text)
+                            }
+                        },
+                        onSuccess: { [weak self] count in
+                            Task { @MainActor [weak self] in
+                                guard let self = self else { return }
+                                self.downloadStatusText = "Pobrano kafelków: \(count)"
+                                self.downloadFinished = true
+                            }
+                        },
+                        onError: { [weak self] message in
+                            Task { @MainActor [weak self] in
+                                guard let self = self else { return }
+                                self.downloadStatusText = message
+                                self.downloadErrorText = message
+                                self.downloadFinished = true
+                            }
                         }
-                    },
-                    onSuccess: { [weak self] count in
-                        Task { @MainActor [weak self] in
-                            guard let self = self else { return }
-                            self.downloadStatusText = "Pobrano kafelków: \(count)"
-                            self.downloadFinished = true
-                        }
-                    },
-                    onError: { [weak self] message in
-                        Task { @MainActor [weak self] in
-                            guard let self = self else { return }
-                            self.downloadStatusText = message
-                            self.downloadErrorText = message
-                            self.downloadFinished = true
-                        }
-                    }
-                )
-        } catch {
-            downloadStatusText = "Błąd pobierania: \(error.localizedDescription)"
-            downloadErrorText = "Błąd pobierania: \(error.localizedDescription)"
-            downloadFinished = true
+                    )
+            } catch {
+                if Task.isCancelled {
+                    self.downloadStatusText = "Pobieranie anulowane"
+                    self.downloadErrorText = nil
+                } else {
+                    self.downloadStatusText = "Błąd pobierania: \(error.localizedDescription)"
+                    self.downloadErrorText = self.downloadStatusText
+                }
+                self.downloadFinished = true
+            }
+            self.isDownloading = false
+            self.downloadTask = nil
+            await self.reloadOfflineAreas()
         }
-        isDownloading = false
-        await reloadOfflineAreas()
     }
 
     // MARK: - Helpers
