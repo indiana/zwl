@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<strings>
+    <string id="AppName">Legalny Bushcraft</string>
+
+    <string id="InZoneTitle">Jestes w strefie\n"Zanocuj w Lesie"</string>
+    <string id="OutsideZoneTitle">Jestes poza strefa\n"Zanocuj w Lesie"</string>
+    <string id="DetailsTitle">Szczegoly strefy</string>
+
+    <string id="NearestZoneLabel">NAJBLIZSZA STREFA</string>
+    <string id="DistanceLabel">Odleglosc</string>
+    <string id="FireRiskLabel">Zagrozenie pozarowe</string>
+    <string id="DistrictLabel">Nadlesnictwo</string>
+
+    <string id="BanTitle">ZAKAZ WSTEPU DO LASU</string>
+    <string id="BanValidUntil">Obowiazuje do</string>
+
+    <string id="NoData">BRAK DANYCH</string>
+    <string id="StaleData">Dane nieaktualne</string>
+
+    <string id="Risk0">STOPIEN 0 (Brak)</string>
+    <string id="Risk1">STOPIEN 1 (Niskie)</string>
+    <string id="Risk2">STOPIEN 2 (Srednie)</string>
+    <string id="Risk3">STOPIEN 3 (WYSOKIE)</string>
+    <string id="RiskUnknown">Nieznany</string>
+</strings>

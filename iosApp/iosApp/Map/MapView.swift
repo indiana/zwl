@@ -46,6 +46,7 @@ struct MapView: UIViewRepresentable {
     let onTapBackground: () -> Void
     let onVisibleRegionChange: (MapRegion) -> Void
     let onLongPressPoint: (Double, Double) -> Void
+    let onUserTrackingModeChange: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -138,6 +139,7 @@ struct MapView: UIViewRepresentable {
         coordinator.offlineSourcesSignal = offlineSourcesSignal
         coordinator.focusAreaSignal = focusAreaSignal
         coordinator.onLongPressPoint = onLongPressPoint
+        coordinator.onUserTrackingModeChange = onUserTrackingModeChange
         coordinator.applySourcesIfReady()
         coordinator.handleCentering(userLatitude: userLatitude,
                                     userLongitude: userLongitude,
@@ -236,6 +238,10 @@ struct MapView: UIViewRepresentable {
         var centerSavedPointLongitude: Double?
         var centerSavedPointSignal = 0
         var onLongPressPoint: (Double, Double) -> Void = { _, _ in }
+        /// Reports a follow-the-user state change caused by the map itself (a
+        /// user pan drops MapLibre's tracking). Wired to the view model so the
+        /// button indicator stays in sync with the camera.
+        var onUserTrackingModeChange: ((Bool) -> Void)?
 
         private var lastSavedPointCenterSignal = 0
         private var lastSavedPointLayerSignature = ""
@@ -326,8 +332,19 @@ struct MapView: UIViewRepresentable {
             // driven by CLLocationManager in the view model.
         }
 
-        func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) {
-            // A gesture (or programmatic camera move) has settled.
+        func mapView(_ mapView: MLNMapView, regionDidChangeWith reason: MLNCameraChangeReason, animated: Bool) {
+            // A gesture (or programmatic camera move) has settled. Implementing
+            // this reason variant suppresses `regionDidChangeAnimated:`.
+            reportVisibleRegion(mapView)
+            // Only a user pan drops follow-the-user (MapLibre falls back to
+            // `.none` on pan only); pinch/rotate/zoom must not.
+            if reason.contains(.gesturePan), followsUser {
+                followsUser = false
+                onUserTrackingModeChange?(false)
+            }
+        }
+
+        private func reportVisibleRegion(_ mapView: MLNMapView) {
             let bounds = mapView.visibleCoordinateBounds
             onVisibleRegionChange(
                 MapRegion(latSouth: bounds.sw.latitude,
@@ -619,6 +636,10 @@ struct MapView: UIViewRepresentable {
         /// Animates the camera so the area's bounding box fits the viewport.
         private func flyToArea(_ region: MapRegion) {
             guard let map = mapView else { return }
+            if followsUser {
+                followsUser = false
+                onUserTrackingModeChange?(false)
+            }
             let bounds = MLNCoordinateBounds(
                 sw: CLLocationCoordinate2D(latitude: region.latSouth, longitude: region.lonWest),
                 ne: CLLocationCoordinate2D(latitude: region.latNorth, longitude: region.lonEast)

@@ -6,6 +6,7 @@ import com.indiana.zwl.MainDispatcherRule
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
+import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
@@ -19,7 +20,6 @@ import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import com.indiana.zwl.presentation.map.MapOrientationMode
 import com.indiana.zwl.presentation.map.MapSettingsPrefsKeys
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -33,7 +33,7 @@ import org.junit.Rule
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class OrientationModeTest {
+class FollowModeTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
@@ -80,29 +80,46 @@ class OrientationModeTest {
     )
 
     @Test
-    fun `toggleOrientationMode alternates north-up and heading-up and persists`() = runTest {
+    fun `follow starts enabled`() = runTest {
         val viewModel = createViewModel()
-
-        assertEquals(MapOrientationMode.NORTH_UP, viewModel.orientationMode.value)
-
-        viewModel.toggleOrientationMode()
-        assertEquals(MapOrientationMode.HEADING_UP, viewModel.orientationMode.value)
         assertTrue(viewModel.followsUser.value)
-        verify(exactly = 1) {
-            sharedPreferencesEditor.putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, 1)
-        }
-
-        viewModel.toggleOrientationMode()
-        assertEquals(MapOrientationMode.NORTH_UP, viewModel.orientationMode.value)
-        verify(exactly = 1) {
-            sharedPreferencesEditor.putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, 0)
-        }
+        assertEquals(0, viewModel.recenterSignal.value)
     }
 
     @Test
-    fun `enabling heading-up turns follow back on when it was off`() = runTest {
+    fun `onMapPanned disables follow`() = runTest {
         val viewModel = createViewModel()
-        viewModel.setFollowsUser(false)
+        viewModel.onMapPanned()
+        assertFalse(viewModel.followsUser.value)
+    }
+
+    @Test
+    fun `recenterMap enables follow and bumps the signal`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.onMapPanned()
+        assertFalse(viewModel.followsUser.value)
+
+        viewModel.recenterMap()
+        assertTrue(viewModel.followsUser.value)
+        assertEquals(1, viewModel.recenterSignal.value)
+
+        viewModel.recenterMap()
+        assertEquals(2, viewModel.recenterSignal.value)
+    }
+
+    @Test
+    fun `selectSavedPoint disables follow`() = runTest {
+        val viewModel = createViewModel()
+        assertTrue(viewModel.followsUser.value)
+
+        viewModel.selectSavedPoint(SavedPoint(id = 1L, name = "Punkt", latitude = 52.0, longitude = 21.0))
+        assertFalse(viewModel.followsUser.value)
+    }
+
+    @Test
+    fun `enabling heading-up also enables follow`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.onMapPanned()
         assertFalse(viewModel.followsUser.value)
 
         viewModel.toggleOrientationMode()
@@ -111,10 +128,36 @@ class OrientationModeTest {
     }
 
     @Test
-    fun `orientation mode is loaded from prefs on start`() = runTest {
-        every { sharedPreferences.getInt(MapSettingsPrefsKeys.ORIENTATION_MODE, 0) } returns 1
+    fun `onMapPanned clears heading-up back to north-up`() = runTest {
         val viewModel = createViewModel()
+        viewModel.toggleOrientationMode()
         assertEquals(MapOrientationMode.HEADING_UP, viewModel.orientationMode.value)
-        coVerify(exactly = 1) { syncPoiUseCase() }
+
+        viewModel.onMapPanned()
+        assertFalse(viewModel.followsUser.value)
+        assertEquals(MapOrientationMode.NORTH_UP, viewModel.orientationMode.value)
+        verify(exactly = 1) {
+            sharedPreferencesEditor.putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, 0)
+        }
+    }
+
+    @Test
+    fun `setFollowsUser false clears heading-up`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.toggleOrientationMode()
+        assertEquals(MapOrientationMode.HEADING_UP, viewModel.orientationMode.value)
+
+        viewModel.setFollowsUser(false)
+        assertEquals(MapOrientationMode.NORTH_UP, viewModel.orientationMode.value)
+    }
+
+    @Test
+    fun `selectSavedPoint clears heading-up`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.toggleOrientationMode()
+        assertEquals(MapOrientationMode.HEADING_UP, viewModel.orientationMode.value)
+
+        viewModel.selectSavedPoint(SavedPoint(id = 1L, name = "Punkt", latitude = 52.0, longitude = 21.0))
+        assertEquals(MapOrientationMode.NORTH_UP, viewModel.orientationMode.value)
     }
 }

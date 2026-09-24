@@ -174,13 +174,47 @@ class MainViewModel @Inject constructor(
     )
     val orientationMode: StateFlow<MapOrientationMode> = _orientationMode.asStateFlow()
 
+    private fun setOrientationMode(mode: MapOrientationMode) {
+        if (_orientationMode.value == mode) return
+        _orientationMode.value = mode
+        sharedPrefs.edit().putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, mode.ordinal).apply()
+    }
+
+    // Invariant: HEADING_UP implies follow-the-user. Enabling the marching
+    // direction turns follow on (without a zoom reset); any action that drops
+    // follow returns the map to north-up.
     fun toggleOrientationMode() {
-        val next = when (_orientationMode.value) {
-            MapOrientationMode.NORTH_UP -> MapOrientationMode.HEADING_UP
-            MapOrientationMode.HEADING_UP -> MapOrientationMode.NORTH_UP
+        when (_orientationMode.value) {
+            MapOrientationMode.NORTH_UP -> {
+                setOrientationMode(MapOrientationMode.HEADING_UP)
+                _followsUser.value = true
+            }
+            MapOrientationMode.HEADING_UP -> setOrientationMode(MapOrientationMode.NORTH_UP)
         }
-        _orientationMode.value = next
-        sharedPrefs.edit().putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, next.ordinal).apply()
+    }
+
+    // Follow-the-user is session state: it always starts enabled on a fresh map
+    // entry and is never persisted. A user pan disables it; the "my location"
+    // button re-enables it. `recenterSignal` bumps on an explicit recenter so
+    // the camera re-applies the default zoom.
+    private val _followsUser = MutableStateFlow(true)
+    val followsUser: StateFlow<Boolean> = _followsUser.asStateFlow()
+
+    private val _recenterSignal = MutableStateFlow(0)
+    val recenterSignal: StateFlow<Int> = _recenterSignal.asStateFlow()
+
+    fun setFollowsUser(follow: Boolean) {
+        _followsUser.value = follow
+        if (!follow) setOrientationMode(MapOrientationMode.NORTH_UP)
+    }
+
+    fun onMapPanned() {
+        setFollowsUser(false)
+    }
+
+    fun recenterMap() {
+        setFollowsUser(true)
+        _recenterSignal.value++
     }
 
     private val _showForestBans = MutableStateFlow(sharedPrefs.getBoolean("show_forest_bans", true))
@@ -323,6 +357,7 @@ class MainViewModel @Inject constructor(
 
     fun selectSavedPoint(point: SavedPoint) {
         _focusSavedPoint.value = point
+        setFollowsUser(false)
         viewModelScope.launch {
             kotlinx.coroutines.delay(100)
             _focusSavedPoint.value = null

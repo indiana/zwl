@@ -7,6 +7,7 @@ struct MapDownloadCard: View {
     let progress: Float
     let isDownloading: Bool
     let errorMessage: String?
+    let onCancel: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -30,6 +31,15 @@ struct MapDownloadCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxHeight: 76)
+
+            if isDownloading, let onCancel {
+                Button(role: .destructive, action: onCancel) {
+                    Text("Anuluj")
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderless)
+            }
         }
         .padding(10)
         .frame(width: 200)

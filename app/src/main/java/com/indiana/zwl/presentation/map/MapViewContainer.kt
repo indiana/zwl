@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
@@ -45,6 +46,7 @@ import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.gestures.MoveGestureDetector
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
@@ -98,6 +100,24 @@ import com.indiana.zwl.presentation.map.util.OrientationMath
 /** Upper bound for cleanup sweeps of generation-stamped offline sources. */
 private const val MAX_OFFLINE_AREA_SOURCES = 64
 
+/**
+ * Eases the camera bearing back to north (0°) when the map is left rotated.
+ * Used both when heading-up is turned off and after a pan gesture settles —
+ * the latter matters because an ease started at gesture begin gets cancelled
+ * by the ongoing drag, leaving the map frozen at the last heading.
+ */
+private fun easeBearingToNorth(map: MapLibreMap) {
+    val bearing = (map.cameraPosition.bearing % 360.0 + 360.0) % 360.0
+    if (bearing > 0.5 && bearing < 359.5) {
+        map.easeCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder(map.cameraPosition).bearing(0.0).build()
+            ),
+            250
+        )
+    }
+}
+
 @Composable
 fun MapViewContainer(
     viewModel: MainViewModel,
@@ -132,6 +152,8 @@ fun MapViewContainer(
     val focusSavedPoint by viewModel.focusSavedPoint.collectAsState()
     val orientationMode by viewModel.orientationMode.collectAsState()
     val headingUp = orientationMode == MapOrientationMode.HEADING_UP
+    val followsUser by viewModel.followsUser.collectAsState()
+    val recenterSignal by viewModel.recenterSignal.collectAsState()
     val isLandscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -171,6 +193,36 @@ fun MapViewContainer(
                     .build()
                 hasCenteredOnStartup = true
             }
+        }
+    }
+
+    // Continuous follow: while enabled, keep the camera target on the latest
+    // GPS fix. Bearing is owned by the heading-up loop, so only the target is
+    // written here (zoom is preserved); an explicit recenter re-applies
+    // DEFAULT_ZOOM. This is the single owner of the camera target while
+    // following, so the follow state and the camera can never desync.
+    var lastRecenterSignal by remember { mutableIntStateOf(0) }
+    LaunchedEffect(mapboxMapInstance, followsUser, recenterSignal) {
+        if (!followsUser) return@LaunchedEffect
+        val map = mapboxMapInstance ?: return@LaunchedEffect
+        // Only an explicit recenter resets the zoom; re-enabling follow from the
+        // compass (heading-up) must keep the current zoom level.
+        var applyDefaultZoom = recenterSignal != lastRecenterSignal
+        lastRecenterSignal = recenterSignal
+        viewModel.uiState.collect { state ->
+            val success = state as? MainUiState.Success ?: return@collect
+            val lat = success.latitude ?: return@collect
+            val lon = success.longitude ?: return@collect
+            val current = map.cameraPosition
+            val target = current.target
+            val moved = target == null || target.latitude != lat || target.longitude != lon
+            if (!moved && !applyDefaultZoom) return@collect
+            val builder = CameraPosition.Builder(current).target(LatLng(lat, lon))
+            if (applyDefaultZoom) {
+                builder.zoom(MapStyle.DEFAULT_ZOOM)
+                applyDefaultZoom = false
+            }
+            map.cameraPosition = builder.build()
         }
     }
 
@@ -329,15 +381,7 @@ fun MapViewContainer(
     LaunchedEffect(mapboxMapInstance, headingUp) {
         if (headingUp) return@LaunchedEffect
         val map = mapboxMapInstance ?: return@LaunchedEffect
-        val bearing = ((map.cameraPosition?.bearing ?: 0.0) % 360.0 + 360.0) % 360.0
-        if (bearing > 0.5 && bearing < 359.5) {
-            map.easeCamera(
-                CameraUpdateFactory.newCameraPosition(
-                    CameraPosition.Builder(map.cameraPosition).bearing(0.0).build()
-                ),
-                250
-            )
-        }
+        easeBearingToNorth(map)
     }
 
     val userLat = (uiState as? MainUiState.Success)?.latitude
@@ -380,6 +424,7 @@ fun MapViewContainer(
     val offlineAreas by mapViewModel.offlineAreas.collectAsState()
     val showOfflineAreas by mapViewModel.showOfflineAreas.collectAsState()
     val downloadBlockedMessage by mapViewModel.downloadBlockedMessage.collectAsState()
+    val downloadConfirmMessage by mapViewModel.downloadConfirmMessage.collectAsState()
 
     // System back closes the topmost map overlay instead of finishing the app.
     // The map menu dropdown and AlertDialogs handle back on their own; this
@@ -423,6 +468,7 @@ fun MapViewContainer(
     LaunchedEffect(Unit) {
         mapViewModel.flyToArea.collect { area ->
             val map = mapboxMapInstance ?: return@collect
+            viewModel.setFollowsUser(false)
             val bounds = LatLngBounds.from(area.latNorth, area.lonEast, area.latSouth, area.lonWest)
             map.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100), 800)
         }
@@ -447,7 +493,31 @@ fun MapViewContainer(
 
                             map.addOnCameraIdleListener {
                                 map.cameraPosition?.zoom?.let { currentZoom = it.toFloat() }
+                                // Safety net: once any pan/fling settles in
+                                // north-up mode, make sure the map isn't left
+                                // rotated (a fling can cancel the onMoveEnd ease).
+                                if (viewModel.orientationMode.value == MapOrientationMode.NORTH_UP) {
+                                    easeBearingToNorth(map)
+                                }
                             }
+
+                            // A user pan disables follow-the-user. Pinch-zoom and
+                            // rotation use the scale/rotate detectors, so they do
+                            // not reach onMoveBegin (only pan does).
+                            map.addOnMoveListener(object : MapLibreMap.OnMoveListener {
+                                override fun onMoveBegin(detector: MoveGestureDetector) {
+                                    viewModel.onMapPanned()
+                                }
+
+                                override fun onMove(detector: MoveGestureDetector) = Unit
+
+                                // The north-up ease started in onMoveBegin gets
+                                // cancelled by the ongoing drag, so re-apply it
+                                // once the pan settles (heading is off by now).
+                                override fun onMoveEnd(detector: MoveGestureDetector) {
+                                    easeBearingToNorth(map)
+                                }
+                            })
 
                             map.setStyle(Style.Builder().fromJson(MapStyle.OSM_STYLE_JSON)) { style ->
                                 styleInstance = style
@@ -794,32 +864,33 @@ fun MapViewContainer(
                             }
                         }
 
+                        val followColor = if (followsUser) Color(0xFFFFB300) else Color(0xFF2E7D32)
                         FloatingActionButton(
                             onClick = {
                                 val state = uiState
-                                if (state is MainUiState.Success) {
-                                    val lat = state.latitude
-                                    val lon = state.longitude
-                                    if (lat != null && lon != null) {
-                                        mapboxMapInstance?.cameraPosition = CameraPosition.Builder()
-                                            .target(LatLng(lat, lon))
-                                            .zoom(15.0)
-                                            .bearing(if (headingUp) mapboxMapInstance?.cameraPosition?.bearing ?: 0.0 else 0.0)
-                                            .build()
-                                    } else {
-                                        Toast.makeText(context, "Oczekiwanie na sygnał GPS...", Toast.LENGTH_SHORT).show()
-                                    }
+                                val lat = (state as? MainUiState.Success)?.latitude
+                                val lon = (state as? MainUiState.Success)?.longitude
+                                if (lat != null && lon != null) {
+                                    viewModel.recenterMap()
+                                } else {
+                                    Toast.makeText(context, "Oczekiwanie na sygnał GPS...", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                            contentColor = MaterialTheme.colorScheme.primary,
+                            contentColor = followColor,
                             shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.size(48.dp),
+                            modifier = Modifier
+                                .size(48.dp)
+                                .border(2.dp, followColor, RoundedCornerShape(12.dp)),
                             elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MyLocation,
-                                contentDescription = "Moja lokalizacja"
+                                contentDescription = if (followsUser) {
+                                    "Moja lokalizacja (podążanie włączone)"
+                                } else {
+                                    "Moja lokalizacja (podążanie wyłączone)"
+                                }
                             )
                         }
 
@@ -910,6 +981,20 @@ fun MapViewContainer(
                 )
             }
 
+            downloadConfirmMessage?.let { message ->
+                AlertDialog(
+                    onDismissRequest = mapViewModel::dismissDownloadConfirm,
+                    title = { Text("Duży obszar") },
+                    text = { Text(message) },
+                    confirmButton = {
+                        TextButton(onClick = mapViewModel::confirmDownload) { Text("Kontynuuj") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = mapViewModel::dismissDownloadConfirm) { Text("Anuluj") }
+                    }
+                )
+            }
+
             if (showOfflineAreas) {
                 OfflineAreasScreen(
                     areas = offlineAreas,
@@ -961,6 +1046,13 @@ fun MapViewContainer(
                                 modifier = Modifier.fillMaxWidth(),
                                 color = MaterialTheme.colorScheme.primary
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            TextButton(
+                                onClick = mapViewModel::cancelDownload,
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("Anuluj", fontSize = 11.sp)
+                            }
                         }
                     }
                 }

@@ -117,6 +117,15 @@ struct MainView: View {
         } message: {
             Text(viewModel.downloadBlockedMessage ?? "")
         }
+        .alert("Duży obszar", isPresented: Binding(
+            get: { viewModel.downloadConfirmMessage != nil },
+            set: { if !$0 { viewModel.cancelDownloadConfirmation() } }
+        )) {
+            Button("Kontynuuj") { viewModel.confirmDownload() }
+            Button("Anuluj", role: .cancel) { viewModel.cancelDownloadConfirmation() }
+        } message: {
+            Text(viewModel.downloadConfirmMessage ?? "")
+        }
     }
 
     @ViewBuilder
@@ -169,7 +178,8 @@ struct MainView: View {
                     MapDownloadCard(text: viewModel.downloadStatusText,
                                     progress: viewModel.downloadProgress,
                                     isDownloading: viewModel.isDownloading,
-                                    errorMessage: viewModel.downloadErrorText)
+                                    errorMessage: viewModel.downloadErrorText,
+                                    onCancel: { viewModel.cancelDownload() })
                         .onTapGesture { dismissDownloadCard = true }
                 }
 
@@ -241,7 +251,8 @@ recenterSignal: viewModel.recenterSignal,
             onTapSavedPoint: { viewModel.openSavedPointProperties(id: $0) },
             onTapBackground: { viewModel.clearSelection() },
             onVisibleRegionChange: { viewModel.visibleRegion = $0 },
-            onLongPressPoint: { lat, lng in viewModel.onLongPressPoint(latitude: lat, longitude: lng) }
+            onLongPressPoint: { lat, lng in viewModel.onLongPressPoint(latitude: lat, longitude: lng) },
+            onUserTrackingModeChange: { viewModel.setFollowsUser($0) }
             )
         .ignoresSafeArea(edges: .top)
     }
@@ -368,13 +379,19 @@ recenterSignal: viewModel.recenterSignal,
     }
 
     private var myLocationButton: some View {
-        Button(action: { viewModel.recenterMap() }) {
+        let followColor: Color = viewModel.followsUser ? .yellow : .green
+        return Button(action: { viewModel.recenterMap() }) {
             Image(systemName: "location.fill")
                 .font(.system(size: 17, weight: .semibold))
                 .frame(width: 44, height: 44)
-                .foregroundColor(.blue)
+                .foregroundColor(followColor)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(followColor, lineWidth: 2)
+                )
         }
+        .accessibilityLabel(Text(viewModel.followsUser ? "Podążanie włączone" : "Podążanie wyłączone"))
     }
 
     /// Transient pill at the bottom of the map (Android toast parity) shown
