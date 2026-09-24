@@ -100,6 +100,24 @@ import com.indiana.zwl.presentation.map.util.OrientationMath
 /** Upper bound for cleanup sweeps of generation-stamped offline sources. */
 private const val MAX_OFFLINE_AREA_SOURCES = 64
 
+/**
+ * Eases the camera bearing back to north (0°) when the map is left rotated.
+ * Used both when heading-up is turned off and after a pan gesture settles —
+ * the latter matters because an ease started at gesture begin gets cancelled
+ * by the ongoing drag, leaving the map frozen at the last heading.
+ */
+private fun easeBearingToNorth(map: MapLibreMap) {
+    val bearing = (map.cameraPosition.bearing % 360.0 + 360.0) % 360.0
+    if (bearing > 0.5 && bearing < 359.5) {
+        map.easeCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder(map.cameraPosition).bearing(0.0).build()
+            ),
+            250
+        )
+    }
+}
+
 @Composable
 fun MapViewContainer(
     viewModel: MainViewModel,
@@ -183,10 +201,14 @@ fun MapViewContainer(
     // written here (zoom is preserved); an explicit recenter re-applies
     // DEFAULT_ZOOM. This is the single owner of the camera target while
     // following, so the follow state and the camera can never desync.
+    var lastRecenterSignal by remember { mutableIntStateOf(0) }
     LaunchedEffect(mapboxMapInstance, followsUser, recenterSignal) {
         if (!followsUser) return@LaunchedEffect
         val map = mapboxMapInstance ?: return@LaunchedEffect
-        var applyDefaultZoom = true
+        // Only an explicit recenter resets the zoom; re-enabling follow from the
+        // compass (heading-up) must keep the current zoom level.
+        var applyDefaultZoom = recenterSignal != lastRecenterSignal
+        lastRecenterSignal = recenterSignal
         viewModel.uiState.collect { state ->
             val success = state as? MainUiState.Success ?: return@collect
             val lat = success.latitude ?: return@collect
@@ -359,15 +381,7 @@ fun MapViewContainer(
     LaunchedEffect(mapboxMapInstance, headingUp) {
         if (headingUp) return@LaunchedEffect
         val map = mapboxMapInstance ?: return@LaunchedEffect
-        val bearing = ((map.cameraPosition?.bearing ?: 0.0) % 360.0 + 360.0) % 360.0
-        if (bearing > 0.5 && bearing < 359.5) {
-            map.easeCamera(
-                CameraUpdateFactory.newCameraPosition(
-                    CameraPosition.Builder(map.cameraPosition).bearing(0.0).build()
-                ),
-                250
-            )
-        }
+        easeBearingToNorth(map)
     }
 
     val userLat = (uiState as? MainUiState.Success)?.latitude
@@ -479,6 +493,12 @@ fun MapViewContainer(
 
                             map.addOnCameraIdleListener {
                                 map.cameraPosition?.zoom?.let { currentZoom = it.toFloat() }
+                                // Safety net: once any pan/fling settles in
+                                // north-up mode, make sure the map isn't left
+                                // rotated (a fling can cancel the onMoveEnd ease).
+                                if (viewModel.orientationMode.value == MapOrientationMode.NORTH_UP) {
+                                    easeBearingToNorth(map)
+                                }
                             }
 
                             // A user pan disables follow-the-user. Pinch-zoom and
@@ -491,7 +511,12 @@ fun MapViewContainer(
 
                                 override fun onMove(detector: MoveGestureDetector) = Unit
 
-                                override fun onMoveEnd(detector: MoveGestureDetector) = Unit
+                                // The north-up ease started in onMoveBegin gets
+                                // cancelled by the ongoing drag, so re-apply it
+                                // once the pan settles (heading is off by now).
+                                override fun onMoveEnd(detector: MoveGestureDetector) {
+                                    easeBearingToNorth(map)
+                                }
                             })
 
                             map.setStyle(Style.Builder().fromJson(MapStyle.OSM_STYLE_JSON)) { style ->

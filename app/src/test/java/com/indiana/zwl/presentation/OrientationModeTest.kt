@@ -26,6 +26,8 @@ import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -85,6 +87,7 @@ class OrientationModeTest {
 
         viewModel.toggleOrientationMode()
         assertEquals(MapOrientationMode.HEADING_UP, viewModel.orientationMode.value)
+        assertTrue(viewModel.followsUser.value)
         verify(exactly = 1) {
             sharedPreferencesEditor.putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, 1)
         }
@@ -94,6 +97,17 @@ class OrientationModeTest {
         verify(exactly = 1) {
             sharedPreferencesEditor.putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, 0)
         }
+    }
+
+    @Test
+    fun `enabling heading-up turns follow back on when it was off`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.setFollowsUser(false)
+        assertFalse(viewModel.followsUser.value)
+
+        viewModel.toggleOrientationMode()
+        assertEquals(MapOrientationMode.HEADING_UP, viewModel.orientationMode.value)
+        assertTrue(viewModel.followsUser.value)
     }
 
     @Test

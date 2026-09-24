@@ -17,10 +17,12 @@ import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncForestBansUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
+import com.indiana.zwl.presentation.map.MapOrientationMode
 import com.indiana.zwl.presentation.map.MapSettingsPrefsKeys
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -112,5 +114,50 @@ class FollowModeTest {
 
         viewModel.selectSavedPoint(SavedPoint(id = 1L, name = "Punkt", latitude = 52.0, longitude = 21.0))
         assertFalse(viewModel.followsUser.value)
+    }
+
+    @Test
+    fun `enabling heading-up also enables follow`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.onMapPanned()
+        assertFalse(viewModel.followsUser.value)
+
+        viewModel.toggleOrientationMode()
+        assertEquals(MapOrientationMode.HEADING_UP, viewModel.orientationMode.value)
+        assertTrue(viewModel.followsUser.value)
+    }
+
+    @Test
+    fun `onMapPanned clears heading-up back to north-up`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.toggleOrientationMode()
+        assertEquals(MapOrientationMode.HEADING_UP, viewModel.orientationMode.value)
+
+        viewModel.onMapPanned()
+        assertFalse(viewModel.followsUser.value)
+        assertEquals(MapOrientationMode.NORTH_UP, viewModel.orientationMode.value)
+        verify(exactly = 1) {
+            sharedPreferencesEditor.putInt(MapSettingsPrefsKeys.ORIENTATION_MODE, 0)
+        }
+    }
+
+    @Test
+    fun `setFollowsUser false clears heading-up`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.toggleOrientationMode()
+        assertEquals(MapOrientationMode.HEADING_UP, viewModel.orientationMode.value)
+
+        viewModel.setFollowsUser(false)
+        assertEquals(MapOrientationMode.NORTH_UP, viewModel.orientationMode.value)
+    }
+
+    @Test
+    fun `selectSavedPoint clears heading-up`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.toggleOrientationMode()
+        assertEquals(MapOrientationMode.HEADING_UP, viewModel.orientationMode.value)
+
+        viewModel.selectSavedPoint(SavedPoint(id = 1L, name = "Punkt", latitude = 52.0, longitude = 21.0))
+        assertEquals(MapOrientationMode.NORTH_UP, viewModel.orientationMode.value)
     }
 }

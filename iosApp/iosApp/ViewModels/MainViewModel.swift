@@ -95,6 +95,9 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func setFollowsUser(_ follow: Bool) {
         followsUser = follow
+        // Invariant: HEADING_UP implies follow-the-user. Dropping follow returns
+        // the map to north-up (Android parity).
+        if !follow { headingUp = false }
     }
 
     /// Map orientation mode: false = north always up (default, Android parity
@@ -106,7 +109,14 @@ final class MainViewModel: NSObject, ObservableObject {
     }
 
     func toggleOrientationMode() {
-        headingUp.toggle()
+        // Invariant: HEADING_UP implies follow-the-user. Enabling the marching
+        // direction turns follow on; disabling just returns to north-up.
+        if headingUp {
+            headingUp = false
+        } else {
+            headingUp = true
+            followsUser = true
+        }
     }
 
     // Selections
@@ -696,7 +706,7 @@ final class MainViewModel: NSObject, ObservableObject {
         centerSavedPointLatitude = point.latitude
         centerSavedPointLongitude = point.longitude
         centerSavedPointSignal += 1
-        followsUser = false
+        setFollowsUser(false)
     }
 
     func openSavedPointProperties(_ point: SavedPoint) {
