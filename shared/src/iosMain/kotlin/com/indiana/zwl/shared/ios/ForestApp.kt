@@ -22,6 +22,8 @@ import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
 import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.domain.util.NadlesnictwoUrls
+import com.indiana.zwl.domain.util.WaterSourceGroup
+import com.indiana.zwl.domain.util.waterGroup
 import com.indiana.zwl.shared.data.offline.KtorIosTileFetcher
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
@@ -227,8 +229,20 @@ class ForestApp(
         result.isSuccess
     }
 
-    suspend fun waterSourcesGeoJson(): String =
-        withContext(Dispatchers.Default) { MapGeoJson.waterSourcesToGeoJson(cachedWaterSources) }
+    suspend fun waterSourcesGeoJson(
+        includeDrinking: Boolean,
+        includeSprings: Boolean,
+        includeWells: Boolean
+    ): String = withContext(Dispatchers.Default) {
+        val filtered = cachedWaterSources.filter { source ->
+            when (source.type.waterGroup()) {
+                WaterSourceGroup.DRINKING -> includeDrinking
+                WaterSourceGroup.SPRING -> includeSprings
+                WaterSourceGroup.WELL -> includeWells
+            }
+        }
+        MapGeoJson.waterSourcesToGeoJson(filtered)
+    }
 
     fun cachedWaterSources(): List<WaterSource> = cachedWaterSources
 

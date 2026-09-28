@@ -89,8 +89,41 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var showWaterLaunch: Bool = true {
         didSet { UserDefaults.standard.set(showWaterLaunch, forKey: Self.keyShowWaterLaunch) }
     }
-    @Published var showWaterSources: Bool = true {
-        didSet { UserDefaults.standard.set(showWaterSources, forKey: Self.keyShowWaterSources) }
+    @Published var showWaterDrinking: Bool = true {
+        didSet {
+            UserDefaults.standard.set(showWaterDrinking, forKey: Self.keyShowWaterDrinking)
+            scheduleWaterGeoJsonRefresh()
+        }
+    }
+    @Published var showWaterSprings: Bool = true {
+        didSet {
+            UserDefaults.standard.set(showWaterSprings, forKey: Self.keyShowWaterSprings)
+            scheduleWaterGeoJsonRefresh()
+        }
+    }
+    @Published var showWaterWells: Bool = true {
+        didSet {
+            UserDefaults.standard.set(showWaterWells, forKey: Self.keyShowWaterWells)
+            scheduleWaterGeoJsonRefresh()
+        }
+    }
+
+    var showWaterSources: Bool { showWaterDrinking || showWaterSprings || showWaterWells }
+
+    func setAllWater(_ show: Bool) {
+        showWaterDrinking = show
+        showWaterSprings = show
+        showWaterWells = show
+    }
+
+    private func scheduleWaterGeoJsonRefresh() {
+        Task { [weak self] in
+            guard let self else { return }
+            self.waterGeoJson = (try? await self.app.waterSourcesGeoJson(
+                includeDrinking: self.showWaterDrinking,
+                includeSprings: self.showWaterSprings,
+                includeWells: self.showWaterWells)) ?? ""
+        }
     }
 
     /// Whether the map follows the user's live location (`MLNMapView`
@@ -243,6 +276,9 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyShowEducation = "mapSettings.showEducation"
     private static let keyShowWaterLaunch = "mapSettings.showWaterLaunch"
     private static let keyShowWaterSources = "mapSettings.showWaterSources"
+    private static let keyShowWaterDrinking = "mapSettings.showWaterDrinking"
+    private static let keyShowWaterSprings = "mapSettings.showWaterSprings"
+    private static let keyShowWaterWells = "mapSettings.showWaterWells"
     private static let keyHeadingUp = "mapSettings.headingUp"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
@@ -266,7 +302,10 @@ final class MainViewModel: NSObject, ObservableObject {
         showParking = defaults.object(forKey: Self.keyShowParking) as? Bool ?? true
         showEducation = defaults.object(forKey: Self.keyShowEducation) as? Bool ?? true
         showWaterLaunch = defaults.object(forKey: Self.keyShowWaterLaunch) as? Bool ?? true
-        showWaterSources = defaults.object(forKey: Self.keyShowWaterSources) as? Bool ?? true
+        let legacyWater = defaults.object(forKey: Self.keyShowWaterSources) as? Bool ?? true
+        showWaterDrinking = defaults.object(forKey: Self.keyShowWaterDrinking) as? Bool ?? legacyWater
+        showWaterSprings = defaults.object(forKey: Self.keyShowWaterSprings) as? Bool ?? legacyWater
+        showWaterWells = defaults.object(forKey: Self.keyShowWaterWells) as? Bool ?? legacyWater
         headingUp = defaults.object(forKey: Self.keyHeadingUp) as? Bool ?? false
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
@@ -329,7 +368,10 @@ final class MainViewModel: NSObject, ObservableObject {
     }
 
     func refreshMapData() async {
-        waterGeoJson = (try? await app.waterSourcesGeoJson()) ?? ""
+        waterGeoJson = (try? await app.waterSourcesGeoJson(
+            includeDrinking: showWaterDrinking,
+            includeSprings: showWaterSprings,
+            includeWells: showWaterWells)) ?? ""
         guard let zones = try? await app.zonesGeoJson(),
               let bans = try? await app.bansGeoJson(),
               let pois = try? await app.poisGeoJson() else { return }

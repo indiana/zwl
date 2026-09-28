@@ -25,8 +25,10 @@ import com.indiana.zwl.shared.data.remote.isTransientRemoteError
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import com.indiana.zwl.domain.util.PoiUiGroup
+import com.indiana.zwl.domain.util.WaterSourceGroup
 import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.domain.util.uiGroup
+import com.indiana.zwl.domain.util.waterGroup
 import com.indiana.zwl.presentation.map.MapOrientationMode
 import com.indiana.zwl.presentation.map.MapSettingsPrefsKeys
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,6 +43,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.combine
@@ -230,19 +233,60 @@ class MainViewModel @Inject constructor(
         sharedPrefs.edit().putBoolean("show_forest_bans", show).apply()
     }
 
-    private val _showWaterSources = MutableStateFlow(sharedPrefs.getBoolean("show_water_sources", true))
-    val showWaterSources: StateFlow<Boolean> = _showWaterSources
+    private val waterGroupDefault = sharedPrefs.getBoolean("show_water_sources", true)
 
-    fun setShowWaterSources(show: Boolean) {
-        _showWaterSources.value = show
-        sharedPrefs.edit().putBoolean("show_water_sources", show).apply()
+    private val _showWaterDrinking = MutableStateFlow(sharedPrefs.getBoolean("show_water_drinking", waterGroupDefault))
+    val showWaterDrinking: StateFlow<Boolean> = _showWaterDrinking
+
+    private val _showWaterSprings = MutableStateFlow(sharedPrefs.getBoolean("show_water_springs", waterGroupDefault))
+    val showWaterSprings: StateFlow<Boolean> = _showWaterSprings
+
+    private val _showWaterWells = MutableStateFlow(sharedPrefs.getBoolean("show_water_wells", waterGroupDefault))
+    val showWaterWells: StateFlow<Boolean> = _showWaterWells
+
+    fun setShowWaterDrinking(show: Boolean) {
+        _showWaterDrinking.value = show
+        sharedPrefs.edit().putBoolean("show_water_drinking", show).apply()
     }
 
-    val waterSources: StateFlow<List<WaterSource>> = waterSourceRepository.getAll().stateIn(
+    fun setShowWaterSprings(show: Boolean) {
+        _showWaterSprings.value = show
+        sharedPrefs.edit().putBoolean("show_water_springs", show).apply()
+    }
+
+    fun setShowWaterWells(show: Boolean) {
+        _showWaterWells.value = show
+        sharedPrefs.edit().putBoolean("show_water_wells", show).apply()
+    }
+
+    fun setShowAllWater(show: Boolean) {
+        setShowWaterDrinking(show)
+        setShowWaterSprings(show)
+        setShowWaterWells(show)
+    }
+
+    val showWaterSources: StateFlow<Boolean> = combine(
+        _showWaterDrinking, _showWaterSprings, _showWaterWells
+    ) { drinking, springs, wells -> drinking || springs || wells }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    private val allWaterSources: StateFlow<List<WaterSource>> = waterSourceRepository.getAll().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    val waterSources: StateFlow<List<WaterSource>> = combine(
+        allWaterSources, _showWaterDrinking, _showWaterSprings, _showWaterWells
+    ) { sources, drinking, springs, wells ->
+        sources.filter { source ->
+            when (source.type.waterGroup()) {
+                WaterSourceGroup.DRINKING -> drinking
+                WaterSourceGroup.SPRING -> springs
+                WaterSourceGroup.WELL -> wells
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _showPoiGroups = MutableStateFlow(
         PoiUiGroup.entries.associateWith { sharedPrefs.getBoolean("show_poi_${it.key}", true) }

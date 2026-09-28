@@ -143,6 +143,9 @@ fun MapViewContainer(
     val showOthers by viewModel.showOthers.collectAsState()
     val showWaterLaunch by viewModel.showWaterLaunch.collectAsState()
     val showWaterSources by viewModel.showWaterSources.collectAsState()
+    val showWaterDrinking by viewModel.showWaterDrinking.collectAsState()
+    val showWaterSprings by viewModel.showWaterSprings.collectAsState()
+    val showWaterWells by viewModel.showWaterWells.collectAsState()
     val waterSources by viewModel.waterSources.collectAsState()
     val selectedWaterSource by zoneDetailViewModel.selectedWaterSourceDetails.collectAsState()
     val showForestBans by viewModel.showForestBans.collectAsState()
@@ -1195,7 +1198,9 @@ fun MapViewContainer(
                     showFireplaces = showFireplaces,
                     showViewpoints = showViewpoints,
                     showWaterLaunch = showWaterLaunch,
-                    showWaterSources = showWaterSources,
+                    showWaterDrinking = showWaterDrinking,
+                    showWaterSprings = showWaterSprings,
+                    showWaterWells = showWaterWells,
                     showParking = showParking,
                     showEducation = showEducation,
                     showOthers = showOthers,
@@ -1207,7 +1212,10 @@ fun MapViewContainer(
                     onShowFireplacesChange = viewModel::setShowFireplaces,
                     onShowViewpointsChange = viewModel::setShowViewpoints,
                     onShowWaterLaunchChange = viewModel::setShowWaterLaunch,
-                    onShowWaterSourcesChange = viewModel::setShowWaterSources,
+                    onShowWaterDrinkingChange = viewModel::setShowWaterDrinking,
+                    onShowWaterSpringsChange = viewModel::setShowWaterSprings,
+                    onShowWaterWellsChange = viewModel::setShowWaterWells,
+                    onSetAllWater = viewModel::setShowAllWater,
                     onShowParkingChange = viewModel::setShowParking,
                     onShowEducationChange = viewModel::setShowEducation,
                     onShowOthersChange = viewModel::setShowOthers,
