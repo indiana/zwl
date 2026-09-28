@@ -15,7 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -28,6 +30,10 @@ fun MapLayersOverlay(
     showShelters: Boolean,
     showFireplaces: Boolean,
     showViewpoints: Boolean,
+    showWaterLaunch: Boolean,
+    showWaterDrinking: Boolean,
+    showWaterSprings: Boolean,
+    showWaterWells: Boolean,
     showParking: Boolean,
     showEducation: Boolean,
     showOthers: Boolean,
@@ -38,6 +44,11 @@ fun MapLayersOverlay(
     onShowSheltersChange: (Boolean) -> Unit,
     onShowFireplacesChange: (Boolean) -> Unit,
     onShowViewpointsChange: (Boolean) -> Unit,
+    onShowWaterLaunchChange: (Boolean) -> Unit,
+    onShowWaterDrinkingChange: (Boolean) -> Unit,
+    onShowWaterSpringsChange: (Boolean) -> Unit,
+    onShowWaterWellsChange: (Boolean) -> Unit,
+    onSetAllWater: (Boolean) -> Unit,
     onShowParkingChange: (Boolean) -> Unit,
     onShowEducationChange: (Boolean) -> Unit,
     onShowOthersChange: (Boolean) -> Unit,
@@ -152,6 +163,61 @@ fun MapLayersOverlay(
                     }
                     item {
                         LayerCheckboxRow(
+                            checked = showWaterLaunch,
+                            color = Color(0xFF0277BD),
+                            label = "Wodowanie sprzętu wodnego",
+                            onCheckedChange = onShowWaterLaunchChange
+                        )
+                    }
+                    item {
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                TriStateCheckbox(
+                                    state = when {
+                                        showWaterDrinking && showWaterSprings && showWaterWells -> ToggleableState.On
+                                        !showWaterDrinking && !showWaterSprings && !showWaterWells -> ToggleableState.Off
+                                        else -> ToggleableState.Indeterminate
+                                    },
+                                    onClick = {
+                                        val allOn = showWaterDrinking && showWaterSprings && showWaterWells
+                                        onSetAllWater(!allOn)
+                                    }
+                                )
+                                Text(
+                                    text = "Woda",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            LayerCheckboxRow(
+                                checked = showWaterDrinking,
+                                color = Color(0xFF1565C0),
+                                label = "Woda pitna",
+                                onCheckedChange = onShowWaterDrinkingChange,
+                                indent = 24.dp
+                            )
+                            LayerCheckboxRow(
+                                checked = showWaterSprings,
+                                color = Color(0xFF00838F),
+                                label = "Źródła",
+                                onCheckedChange = onShowWaterSpringsChange,
+                                indent = 24.dp
+                            )
+                            LayerCheckboxRow(
+                                checked = showWaterWells,
+                                color = Color(0xFF6D4C41),
+                                label = "Studnie",
+                                onCheckedChange = onShowWaterWellsChange,
+                                indent = 24.dp
+                            )
+                        }
+                    }
+                    item {
+                        LayerCheckboxRow(
                             checked = showParking,
                             color = Color(0xFF5D4037),
                             label = "Parkingi",
@@ -185,12 +251,14 @@ private fun LayerCheckboxRow(
     checked: Boolean,
     color: Color,
     label: String,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    indent: Dp = 0.dp
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .padding(start = indent)
             .padding(vertical = 2.dp)
     ) {
         Checkbox(

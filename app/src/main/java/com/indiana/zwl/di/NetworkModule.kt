@@ -7,6 +7,7 @@ import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
 import com.indiana.zwl.shared.data.remote.BdlOgcApi
 import com.indiana.zwl.shared.data.remote.BdlStandDescriptionApi
+import com.indiana.zwl.shared.data.water.WaterSyncManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -61,5 +62,11 @@ object NetworkModule {
         soilCoverUseCase: GetSoilCoverForPointUseCase
     ): GetForestStandForPointUseCase {
         return GetForestStandForPointUseCase(GetForestStandUseCase(ogcApi), soilCoverUseCase)
+    }
+
+    @Provides
+    @Singleton
+    fun provideWaterSyncManager(): WaterSyncManager {
+        return get(WaterSyncManager::class.java)
     }
 }

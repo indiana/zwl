@@ -3,6 +3,7 @@ package com.indiana.zwl.shared.map
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.SavedPoint
+import com.indiana.zwl.domain.model.WaterSource
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.domain.util.uiGroup
@@ -97,6 +98,30 @@ object MapGeoJson {
                 properties = buildJsonObject {
                     put("id", point.id)
                     put("name", point.name)
+                }
+            )
+        }
+        return collection(features)
+    }
+
+    fun waterSourcesToGeoJson(sources: List<WaterSource>): String {
+        val features = sources.map { source ->
+            feature(
+                geometry = GeoJsonGeometry(
+                    type = "Point",
+                    coordinates = buildJsonArray {
+                        add(JsonPrimitive(source.longitude))
+                        add(JsonPrimitive(source.latitude))
+                    }
+                ),
+                properties = buildJsonObject {
+                    put("id", source.id)
+                    put("osmId", source.osmId)
+                    put("type", source.type.name)
+                    put("name", source.name)
+                    put("drinkingWater", source.drinkingWater.name)
+                    put("verified", source.verified)
+                    source.depthMeters?.let { put("depthMeters", it) }
                 }
             )
         }

@@ -7,7 +7,9 @@ import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.usecase.SyncForestBansUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
+import com.indiana.zwl.domain.usecase.SyncWaterSourcesUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
+import com.indiana.zwl.shared.data.water.WaterSyncOutcome
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.delay
@@ -21,10 +23,11 @@ class SyncWorkerTest {
     private val syncZonesUseCase: SyncZonesUseCase = mockk()
     private val syncPoiUseCase: SyncPoiUseCase = mockk()
     private val syncForestBansUseCase: SyncForestBansUseCase = mockk()
+    private val syncWaterSourcesUseCase: SyncWaterSourcesUseCase = mockk()
     private val context: Context = mockk(relaxed = true)
     private val workerParams: WorkerParameters = mockk(relaxed = true)
 
-    private fun createWorker() = SyncWorker(context, workerParams, syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase)
+    private fun createWorker() = SyncWorker(context, workerParams, syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase, syncWaterSourcesUseCase)
 
     @Test
     fun `doWork runs zone and poi sync concurrently`() = runBlocking {
@@ -39,6 +42,10 @@ class SyncWorkerTest {
         coEvery { syncForestBansUseCase() } coAnswers {
             delay(500)
             Result.success(emptyList<ForestBan>())
+        }
+        coEvery { syncWaterSourcesUseCase() } coAnswers {
+            delay(500)
+            Result.success(WaterSyncOutcome.Skipped)
         }
 
         val start = System.nanoTime()
@@ -57,6 +64,7 @@ class SyncWorkerTest {
         coEvery { syncZonesUseCase() } returns Result.success(emptyList<Zone>())
         coEvery { syncPoiUseCase() } returns Result.success(Unit)
         coEvery { syncForestBansUseCase() } returns Result.success(emptyList<ForestBan>())
+        coEvery { syncWaterSourcesUseCase() } returns Result.success(WaterSyncOutcome.Skipped)
 
         assertEquals(WorkResult.success(), createWorker().doWork())
     }
@@ -66,6 +74,7 @@ class SyncWorkerTest {
         coEvery { syncZonesUseCase() } returns Result.failure(Exception("zones sync failed"))
         coEvery { syncPoiUseCase() } returns Result.success(Unit)
         coEvery { syncForestBansUseCase() } returns Result.success(emptyList<ForestBan>())
+        coEvery { syncWaterSourcesUseCase() } returns Result.success(WaterSyncOutcome.Skipped)
 
         assertEquals(WorkResult.retry(), createWorker().doWork())
     }

@@ -53,6 +53,39 @@ struct LayersSettingsView: View {
                         Text("Punkty widokowe i rekreacja")
                     }
                 }
+                Toggle(isOn: $viewModel.showWaterLaunch) {
+                    HStack(spacing: 10) {
+                        Circle().fill(Color(hex: 0x0277BD)).frame(width: 10, height: 10)
+                        Text("Wodowanie sprzętu wodnego")
+                    }
+                }
+                Toggle(isOn: Binding(
+                    get: { viewModel.showWaterDrinking && viewModel.showWaterSprings && viewModel.showWaterWells },
+                    set: { viewModel.setAllWater($0) }
+                )) {
+                    Text("Woda").fontWeight(.semibold)
+                }
+                Toggle(isOn: $viewModel.showWaterDrinking) {
+                    HStack(spacing: 10) {
+                        Circle().fill(Color(hex: 0x1565C0)).frame(width: 10, height: 10)
+                        Text("Woda pitna")
+                    }
+                }
+                .padding(.leading, 20)
+                Toggle(isOn: $viewModel.showWaterSprings) {
+                    HStack(spacing: 10) {
+                        Circle().fill(Color(hex: 0x00838F)).frame(width: 10, height: 10)
+                        Text("Źródła")
+                    }
+                }
+                .padding(.leading, 20)
+                Toggle(isOn: $viewModel.showWaterWells) {
+                    HStack(spacing: 10) {
+                        Circle().fill(Color(hex: 0x6D4C41)).frame(width: 10, height: 10)
+                        Text("Studnie")
+                    }
+                }
+                .padding(.leading, 20)
                 Toggle(isOn: $viewModel.showParking) {
                     HStack(spacing: 10) {
                         Circle().fill(Color(hex: 0x5D4037)).frame(width: 10, height: 10)

@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
+import com.indiana.zwl.domain.repository.WaterSourceRepository
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
@@ -16,14 +17,18 @@ import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.NewSavedPoint
+import com.indiana.zwl.domain.model.WaterSource
+import com.indiana.zwl.shared.data.water.WaterSyncManager
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.shared.data.remote.isTransientRemoteError
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import com.indiana.zwl.domain.util.PoiUiGroup
+import com.indiana.zwl.domain.util.WaterSourceGroup
 import com.indiana.zwl.domain.util.classify
 import com.indiana.zwl.domain.util.uiGroup
+import com.indiana.zwl.domain.util.waterGroup
 import com.indiana.zwl.presentation.map.MapOrientationMode
 import com.indiana.zwl.presentation.map.MapSettingsPrefsKeys
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -38,6 +43,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.combine
@@ -82,6 +88,8 @@ class MainViewModel @Inject constructor(
     private val zoneRepository: ZoneRepository,
     private val poiRepository: PoiRepository,
     private val savedPointRepository: SavedPointRepository,
+    private val waterSourceRepository: WaterSourceRepository,
+    private val waterSyncManager: WaterSyncManager,
     private val locationRepository: LocationRepository,
     private val compassRepository: CompassRepository,
     private val syncZonesUseCase: SyncZonesUseCase,
@@ -225,6 +233,61 @@ class MainViewModel @Inject constructor(
         sharedPrefs.edit().putBoolean("show_forest_bans", show).apply()
     }
 
+    private val waterGroupDefault = sharedPrefs.getBoolean("show_water_sources", true)
+
+    private val _showWaterDrinking = MutableStateFlow(sharedPrefs.getBoolean("show_water_drinking", waterGroupDefault))
+    val showWaterDrinking: StateFlow<Boolean> = _showWaterDrinking
+
+    private val _showWaterSprings = MutableStateFlow(sharedPrefs.getBoolean("show_water_springs", waterGroupDefault))
+    val showWaterSprings: StateFlow<Boolean> = _showWaterSprings
+
+    private val _showWaterWells = MutableStateFlow(sharedPrefs.getBoolean("show_water_wells", waterGroupDefault))
+    val showWaterWells: StateFlow<Boolean> = _showWaterWells
+
+    fun setShowWaterDrinking(show: Boolean) {
+        _showWaterDrinking.value = show
+        sharedPrefs.edit().putBoolean("show_water_drinking", show).apply()
+    }
+
+    fun setShowWaterSprings(show: Boolean) {
+        _showWaterSprings.value = show
+        sharedPrefs.edit().putBoolean("show_water_springs", show).apply()
+    }
+
+    fun setShowWaterWells(show: Boolean) {
+        _showWaterWells.value = show
+        sharedPrefs.edit().putBoolean("show_water_wells", show).apply()
+    }
+
+    fun setShowAllWater(show: Boolean) {
+        setShowWaterDrinking(show)
+        setShowWaterSprings(show)
+        setShowWaterWells(show)
+    }
+
+    val showWaterSources: StateFlow<Boolean> = combine(
+        _showWaterDrinking, _showWaterSprings, _showWaterWells
+    ) { drinking, springs, wells -> drinking || springs || wells }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    private val allWaterSources: StateFlow<List<WaterSource>> = waterSourceRepository.getAll().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val waterSources: StateFlow<List<WaterSource>> = combine(
+        allWaterSources, _showWaterDrinking, _showWaterSprings, _showWaterWells
+    ) { sources, drinking, springs, wells ->
+        sources.filter { source ->
+            when (source.type.waterGroup()) {
+                WaterSourceGroup.DRINKING -> drinking
+                WaterSourceGroup.SPRING -> springs
+                WaterSourceGroup.WELL -> wells
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _showPoiGroups = MutableStateFlow(
         PoiUiGroup.entries.associateWith { sharedPrefs.getBoolean("show_poi_${it.key}", true) }
     )
@@ -243,6 +306,7 @@ class MainViewModel @Inject constructor(
     val showParking: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.PARKING] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val showEducation: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.EDUCATION] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val showOthers: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.OTHER] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showWaterLaunch: StateFlow<Boolean> = _showPoiGroups.map { it[PoiUiGroup.WATER_LAUNCH] == true }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val pois: StateFlow<List<Poi>> = combine(
         poiRepository.getAllPois(),
@@ -263,6 +327,7 @@ class MainViewModel @Inject constructor(
     fun setShowParking(show: Boolean) = setShowPoiGroup(PoiUiGroup.PARKING, show)
     fun setShowEducation(show: Boolean) = setShowPoiGroup(PoiUiGroup.EDUCATION, show)
     fun setShowOthers(show: Boolean) = setShowPoiGroup(PoiUiGroup.OTHER, show)
+    fun setShowWaterLaunch(show: Boolean) = setShowPoiGroup(PoiUiGroup.WATER_LAUNCH, show)
 
     val savedPoints: StateFlow<List<SavedPoint>> = savedPointRepository.getAllPoints().stateIn(
         scope = viewModelScope,
@@ -418,6 +483,15 @@ class MainViewModel @Inject constructor(
 
             viewModelScope.launch(ioDispatcher) {
                 try {
+                    waterSyncManager.ensureBaselineIfEmpty()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    e.printStackTrace()
+                }
+            }
+
+            viewModelScope.launch(ioDispatcher) {
+                try {
                     syncPoiUseCase()
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
@@ -464,6 +538,15 @@ class MainViewModel @Inject constructor(
                     _uiState.value = MainUiState.EmptyDatabaseRequired
                 } else {
                     _uiState.value = MainUiState.Error(e.message ?: "Wystąpił nieoczekiwany błąd podczas inicjalizacji danych.")
+                }
+            }
+
+            viewModelScope.launch(ioDispatcher) {
+                try {
+                    waterSyncManager.refreshIfStale()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    e.printStackTrace()
                 }
             }
         }

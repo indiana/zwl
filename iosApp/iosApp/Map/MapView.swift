@@ -15,12 +15,15 @@ struct MapView: UIViewRepresentable {
     let zonesJson: String
     let bansJson: String
     let poisJson: String
+    let waterJson: String
     let showBans: Bool
     let showAccommodation: Bool
     let showRest: Bool
     let showShelters: Bool
     let showFireplaces: Bool
     let showViewpoints: Bool
+    let showWaterLaunch: Bool
+    let showWaterSources: Bool
     let showParking: Bool
     let showEducation: Bool
     let showOthers: Bool
@@ -42,6 +45,7 @@ struct MapView: UIViewRepresentable {
     let onTapZone: (String?) -> Void
     let onTapBan: (Int64) -> Void
     let onTapPoi: (String) -> Void
+    let onTapWater: (String) -> Void
     let onTapSavedPoint: (Int64) -> Void
     let onTapBackground: () -> Void
     let onVisibleRegionChange: (MapRegion) -> Void
@@ -109,6 +113,7 @@ struct MapView: UIViewRepresentable {
         coordinator.zonesJson = zonesJson
         coordinator.bansJson = bansJson
         coordinator.poisJson = poisJson
+        coordinator.waterJson = waterJson
         coordinator.markJsonDirty()
         coordinator.showBans = showBans
         coordinator.showAccommodation = showAccommodation
@@ -116,6 +121,8 @@ struct MapView: UIViewRepresentable {
         coordinator.showShelters = showShelters
         coordinator.showFireplaces = showFireplaces
         coordinator.showViewpoints = showViewpoints
+        coordinator.showWaterLaunch = showWaterLaunch
+        coordinator.showWaterSources = showWaterSources
         coordinator.showParking = showParking
         coordinator.showEducation = showEducation
         coordinator.showOthers = showOthers
@@ -125,6 +132,7 @@ struct MapView: UIViewRepresentable {
         coordinator.onTapZone = onTapZone
         coordinator.onTapBan = onTapBan
         coordinator.onTapPoi = onTapPoi
+        coordinator.onTapWater = onTapWater
         coordinator.onTapSavedPoint = onTapSavedPoint
         coordinator.onTapBackground = onTapBackground
         coordinator.onVisibleRegionChange = onVisibleRegionChange
@@ -155,12 +163,15 @@ struct MapView: UIViewRepresentable {
         var zonesJson = ""
         var bansJson = ""
         var poisJson = ""
+        var waterJson = ""
         var showBans = true
         var showAccommodation = true
         var showRest = true
         var showShelters = true
         var showFireplaces = true
         var showViewpoints = true
+        var showWaterLaunch = true
+        var showWaterSources = true
         var showParking = true
         var showEducation = true
         var showOthers = true
@@ -229,6 +240,7 @@ struct MapView: UIViewRepresentable {
         var onTapZone: ((String?) -> Void) = { _ in }
         var onTapBan: (Int64) -> Void = { _ in }
         var onTapPoi: (String) -> Void = { _ in }
+        var onTapWater: (String) -> Void = { _ in }
         var onTapSavedPoint: (Int64) -> Void = { _ in }
         var onTapBackground: () -> Void = {}
         var onVisibleRegionChange: (MapRegion) -> Void = { _ in }
@@ -269,9 +281,11 @@ struct MapView: UIViewRepresentable {
         private var zonesByteCount = 0
         private var bansByteCount = 0
         private var poisByteCount = 0
+        private var waterByteCount = 0
         private var zonesDirty = true
         private var bansDirty = true
         private var poisDirty = true
+        private var waterDirty = true
 
         // Saved-point markers (Android own-points magenta parity) — always-on
         // circle layers fed from the shared `savedPointsToGeoJson`.
@@ -296,8 +310,12 @@ struct MapView: UIViewRepresentable {
         private let poiViewpointId = "poi-viewpoint-layer"
         private let poiParkingId = "poi-parking-layer"
         private let poiEducationId = "poi-education-layer"
+        private let poiWaterLaunchId = "poi-water-launch-layer"
+        private let waterLayerId = "water-layer"
         private let vectorZoneSourceId = "vec-zone-source"
         private let vectorBanSourceId = "vec-ban-source"
+        private let vectorWaterSourceId = "vec-water-source"
+        private let vectorWaterLaunchSourceId = "vec-poi-water-launch-source"
         private let vectorShelterSourceId = "vec-poi-shelter-source"
         private let vectorFireplaceSourceId = "vec-poi-fireplace-source"
         private let vectorOtherSourceId = "vec-poi-other-source"
@@ -473,6 +491,34 @@ struct MapView: UIViewRepresentable {
             banLine.lineOpacity = NSExpression(forConstantValue: showBans ? 0.9 : 0.0)
             style.insertLayer(banLine, below: zoneFill)
 
+            let waterSource = MLNShapeSource(identifier: vectorWaterSourceId,
+                                             url: files.waterURL,
+                                             options: nil)
+            style.addSource(waterSource)
+            let waterLayer = MLNCircleStyleLayer(identifier: waterLayerId, source: waterSource)
+            waterLayer.circleColor = NSExpression(mglJSONObject: [
+                "match", ["get", "type"],
+                "DRINKING_WATER", "#1565C0",
+                "WATER_TAP", "#0288D1",
+                "WATER_POINT", "#039BE5",
+                "SPRING", "#00838F",
+                "WELL", "#6D4C41",
+                "FOUNTAIN", "#00ACC1",
+                "#1565C0"
+            ] as [Any])
+            waterLayer.circleOpacity = Self.waterOpacityExpression()
+            waterLayer.circleRadius = NSExpression(mglJSONObject: [
+                "step", ["zoom"], 3,
+                7, 4,
+                9, 5.5,
+                11, 7,
+                13, 11,
+                14, 7
+            ] as [Any])
+            waterLayer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+            waterLayer.circleStrokeWidth = NSExpression(forConstantValue: 1.5)
+            style.addLayer(waterLayer)
+
             // One URL source per POI category; toggling switches paint opacity
             // only (layers stay layout-visible, so baked tiles stay hot).
             let shelterSource = MLNShapeSource(identifier: vectorShelterSourceId,
@@ -539,11 +585,28 @@ struct MapView: UIViewRepresentable {
                                           source: educationSource,
                                           color: UIColor(red: 0.48, green: 0.12, blue: 0.64, alpha: 1.0),
                                           isOpaque: showEducation))
+            let waterLaunchSource = MLNShapeSource(identifier: vectorWaterLaunchSourceId,
+                                                   url: files.waterLaunchURL,
+                                                   options: nil)
+            style.addSource(waterLaunchSource)
+            style.addLayer(poiCircleLayer(identifier: poiWaterLaunchId,
+                                          source: waterLaunchSource,
+                                          color: UIColor(red: 0.01, green: 0.47, blue: 0.74, alpha: 1.0),
+                                          isOpaque: showWaterLaunch))
 
             vectorInstalled = true
             layersReady = true
             // Keep the magenta markers above the overlay after a re-install.
             restackSavedPointLayers(style)
+        }
+
+        private static func waterOpacityExpression() -> NSExpression {
+            NSExpression(mglJSONObject: [
+                "match", ["get", "drinkingWater"],
+                "YES", 0.95,
+                "NO", 0.25,
+                0.6
+            ] as [Any])
         }
 
         private func banFillColor(_ visible: Bool) -> UIColor {
@@ -578,15 +641,16 @@ struct MapView: UIViewRepresentable {
         }
 
         private func removeVectorOverlay(_ style: MLNStyle) {
-            for id in [zoneFillId, zoneLineId, banFillId, banLineId,
+            for id in [zoneFillId, zoneLineId, banFillId, banLineId, waterLayerId,
                        poiShelterId, poiFireplaceId, poiOtherId,
-                       poiAccommodationId, poiRestId, poiViewpointId, poiParkingId, poiEducationId] {
+                       poiAccommodationId, poiRestId, poiViewpointId, poiWaterLaunchId,
+                       poiParkingId, poiEducationId] {
                 removeLayerIfPresent(id, style: style)
             }
-            for id in [vectorZoneSourceId, vectorBanSourceId,
+            for id in [vectorZoneSourceId, vectorBanSourceId, vectorWaterSourceId,
                         vectorShelterSourceId, vectorFireplaceSourceId, vectorOtherSourceId,
                         vectorAccommodationSourceId, vectorRestSourceId, vectorViewpointSourceId,
-                        vectorParkingSourceId, vectorEducationSourceId] {
+                        vectorWaterLaunchSourceId, vectorParkingSourceId, vectorEducationSourceId] {
                 removeSourceIfPresent(id, style: style)
             }
         }
@@ -656,6 +720,7 @@ struct MapView: UIViewRepresentable {
             zonesDirty = true
             bansDirty = true
             poisDirty = true
+            waterDirty = true
         }
 
         func applySourcesIfReady() {
@@ -694,8 +759,9 @@ struct MapView: UIViewRepresentable {
             let zonesCount = byteCount(&zonesDirty, &zonesByteCount, zonesJson)
             let bansCount = byteCount(&bansDirty, &bansByteCount, bansJson)
             let poisCount = byteCount(&poisDirty, &poisByteCount, poisJson)
-            let sig = "\(zonesCount)|\(bansCount)|\(poisCount)|"
-                + "\(showBans ? "1" : "0")\(showAccommodation ? "1" : "0")\(showRest ? "1" : "0")\(showShelters ? "1" : "0")\(showFireplaces ? "1" : "0")\(showViewpoints ? "1" : "0")\(showParking ? "1" : "0")\(showEducation ? "1" : "0")\(showOthers ? "1" : "0")"
+            let waterCount = byteCount(&waterDirty, &waterByteCount, waterJson)
+            let sig = "\(zonesCount)|\(bansCount)|\(poisCount)|\(waterCount)|"
+                + "\(showBans ? "1" : "0")\(showAccommodation ? "1" : "0")\(showRest ? "1" : "0")\(showShelters ? "1" : "0")\(showFireplaces ? "1" : "0")\(showViewpoints ? "1" : "0")\(showWaterLaunch ? "1" : "0")\(showWaterSources ? "1" : "0")\(showParking ? "1" : "0")\(showEducation ? "1" : "0")\(showOthers ? "1" : "0")"
             return StableHash.hash(sig)
         }
 
@@ -705,16 +771,18 @@ struct MapView: UIViewRepresentable {
             zonesDirty = true
             bansDirty = true
             poisDirty = true
-            let jsonSignature = "\(zonesJson.count)|\(bansJson.count)|\(poisJson.count)"
+            waterDirty = true
+            let jsonSignature = "\(zonesJson.count)|\(bansJson.count)|\(poisJson.count)|\(waterJson.count)"
             guard jsonSignature != lastJsonSignature else { return }
             lastJsonSignature = jsonSignature
 
             let zones = zonesJson
             let bans = bansJson
             let pois = poisJson
+            let water = waterJson
             writeTask?.cancel()
             writeTask = Task.detached(priority: .utility) {
-                let files = GeoJsonFileWriter.makeFiles(zones: zones, bans: bans, pois: pois)
+                let files = GeoJsonFileWriter.makeFiles(zones: zones, bans: bans, pois: pois, water: water)
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self.writeTask = nil
@@ -741,7 +809,7 @@ struct MapView: UIViewRepresentable {
         /// pass.
         private func refreshLayerVisibility() {
             guard layersReady, let style = mapView?.style else { return }
-            let signature = "\(showBans)|\(showAccommodation)|\(showRest)|\(showShelters)|\(showFireplaces)|\(showViewpoints)|\(showParking)|\(showEducation)|\(showOthers)"
+            let signature = "\(showBans)|\(showAccommodation)|\(showRest)|\(showShelters)|\(showFireplaces)|\(showViewpoints)|\(showWaterLaunch)|\(showWaterSources)|\(showParking)|\(showEducation)|\(showOthers)"
             guard signature != lastToggleSignature else { return }
             lastToggleSignature = signature
             refreshVectorVisibility(style)
@@ -755,11 +823,18 @@ struct MapView: UIViewRepresentable {
             if let banLine = style.layer(withIdentifier: banLineId) as? MLNLineStyleLayer {
                 banLine.lineOpacity = NSExpression(forConstantValue: showBans ? 0.9 : 0.0)
             }
+            if let waterLayer = style.layer(withIdentifier: waterLayerId) as? MLNCircleStyleLayer {
+                waterLayer.circleOpacity = showWaterSources
+                    ? Self.waterOpacityExpression()
+                    : NSExpression(forConstantValue: 0.0)
+                waterLayer.circleStrokeOpacity = NSExpression(forConstantValue: showWaterSources ? 1.0 : 0.0)
+            }
             for entry in [(poiShelterId, showShelters),
                           (poiFireplaceId, showFireplaces),
                           (poiOtherId, showOthers),
                           (poiAccommodationId, showAccommodation),
                           (poiViewpointId, showViewpoints),
+                          (poiWaterLaunchId, showWaterLaunch),
                           (poiParkingId, showParking),
                           (poiEducationId, showEducation)] {
                 if let layer = style.layer(withIdentifier: entry.0) as? MLNCircleStyleLayer {
@@ -919,11 +994,21 @@ struct MapView: UIViewRepresentable {
             let pois = mapView.visibleFeatures(
                 in: tapRect,
                 styleLayerIdentifiers: [poiShelterId, poiFireplaceId, poiOtherId,
-                                        poiAccommodationId, poiViewpointId, poiParkingId, poiEducationId]
+                                        poiAccommodationId, poiViewpointId, poiWaterLaunchId,
+                                        poiParkingId, poiEducationId]
             )
             if let poiFeature = pois.first {
                 if let name = poiFeature.attribute(forKey: "name") as? String {
                     onTapPoi(name)
+                    return
+                }
+            }
+
+            if showWaterSources {
+                let water = mapView.visibleFeatures(in: tapRect, styleLayerIdentifiers: [waterLayerId])
+                if let waterFeature = water.first,
+                   let osmId = waterFeature.attribute(forKey: "osmId") as? String {
+                    onTapWater(osmId)
                     return
                 }
             }

@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS WaterDataState (
+    id INTEGER NOT NULL PRIMARY KEY CHECK (id = 0),
+    dataVersion INTEGER NOT NULL,
+    lastCheckedAt INTEGER NOT NULL,
+    sha256 TEXT,
+    count INTEGER NOT NULL DEFAULT 0
+);
+
+select:
+SELECT * FROM WaterDataState WHERE id = 0;
+
+upsert:
+INSERT OR REPLACE INTO WaterDataState(id, dataVersion, lastCheckedAt, sha256, count)
+    VALUES (0, ?, ?, ?, ?);
