@@ -28,6 +28,8 @@ fun MapLayersOverlay(
     showShelters: Boolean,
     showFireplaces: Boolean,
     showViewpoints: Boolean,
+    showWaterLaunch: Boolean,
+    showWaterSources: Boolean,
     showParking: Boolean,
     showEducation: Boolean,
     showOthers: Boolean,
@@ -38,6 +40,8 @@ fun MapLayersOverlay(
     onShowSheltersChange: (Boolean) -> Unit,
     onShowFireplacesChange: (Boolean) -> Unit,
     onShowViewpointsChange: (Boolean) -> Unit,
+    onShowWaterLaunchChange: (Boolean) -> Unit,
+    onShowWaterSourcesChange: (Boolean) -> Unit,
     onShowParkingChange: (Boolean) -> Unit,
     onShowEducationChange: (Boolean) -> Unit,
     onShowOthersChange: (Boolean) -> Unit,
@@ -148,6 +152,22 @@ fun MapLayersOverlay(
                             color = Color(0xFF0097A7),
                             label = "Punkty widokowe i rekreacja",
                             onCheckedChange = onShowViewpointsChange
+                        )
+                    }
+                    item {
+                        LayerCheckboxRow(
+                            checked = showWaterLaunch,
+                            color = Color(0xFF0277BD),
+                            label = "Wodowanie sprzętu wodnego",
+                            onCheckedChange = onShowWaterLaunchChange
+                        )
+                    }
+                    item {
+                        LayerCheckboxRow(
+                            checked = showWaterSources,
+                            color = Color(0xFF1565C0),
+                            label = "Woda pitna i źródła",
+                            onCheckedChange = onShowWaterSourcesChange
                         )
                     }
                     item {

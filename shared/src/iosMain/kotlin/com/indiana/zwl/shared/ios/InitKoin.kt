@@ -4,10 +4,12 @@ import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
+import com.indiana.zwl.domain.repository.WaterSourceRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
+import com.indiana.zwl.shared.data.water.WaterSyncManager
 import com.indiana.zwl.shared.di.databaseModule
 import com.indiana.zwl.shared.di.iosModule
 import com.indiana.zwl.shared.di.repositoryModule
@@ -36,6 +38,8 @@ object IosAppBootstrap {
             forestBanRepository = koin.get<ForestBanRepository>(),
             savedPointRepository = koin.get<SavedPointRepository>(),
             offlineAreaRepository = koin.get<OfflineAreaRepository>(),
+            waterSourceRepository = koin.get<WaterSourceRepository>(),
+            waterSyncManager = koin.get<WaterSyncManager>(),
             offlineStoreFactory = koin.get<MbtilesStoreFactory>(),
             offlineAreaFiles = koin.get<OfflineAreaFiles>(),
             arcgisApi = koin.get<BdlArcgisApi>(),

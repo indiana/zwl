@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.ForestStandSummary
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.domain.model.WaterSource
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
@@ -23,6 +24,11 @@ import org.locationtech.jts.geom.GeometryFactory
 import org.locationtech.jts.operation.distance.DistanceOp
 import javax.inject.Inject
 
+data class SelectedWaterSourceDetails(
+    val waterSource: WaterSource,
+    val distanceMeters: Double?
+)
+
 @HiltViewModel
 class ZoneDetailViewModel @Inject constructor(
     private val getFireRiskUseCase: GetFireRiskUseCase,
@@ -37,12 +43,40 @@ class ZoneDetailViewModel @Inject constructor(
     private val _selectedPoiDetails = kotlinx.coroutines.flow.MutableStateFlow<SelectedPoiDetails?>(null)
     val selectedPoiDetails: kotlinx.coroutines.flow.StateFlow<SelectedPoiDetails?> = _selectedPoiDetails
 
+    private val _selectedWaterSourceDetails =
+        kotlinx.coroutines.flow.MutableStateFlow<SelectedWaterSourceDetails?>(null)
+    val selectedWaterSourceDetails: kotlinx.coroutines.flow.StateFlow<SelectedWaterSourceDetails?> =
+        _selectedWaterSourceDetails
+
     fun clearSelectedZone() {
         _selectedZoneDetails.value = null
     }
 
     fun clearSelectedPoi() {
         _selectedPoiDetails.value = null
+    }
+
+    fun clearSelectedWaterSource() {
+        _selectedWaterSourceDetails.value = null
+    }
+
+    fun selectWaterSource(waterSource: WaterSource, userLat: Double?, userLon: Double?) {
+        viewModelScope.launch {
+            _selectedZoneDetails.value = null
+            _selectedPoiDetails.value = null
+            val distance = if (userLat != null && userLon != null) {
+                val results = FloatArray(1)
+                Location.distanceBetween(
+                    userLat, userLon,
+                    waterSource.latitude, waterSource.longitude,
+                    results
+                )
+                results[0].toDouble()
+            } else null
+
+            _selectedWaterSourceDetails.value =
+                SelectedWaterSourceDetails(waterSource = waterSource, distanceMeters = distance)
+        }
     }
 
     fun updateDistanceFromUser(lat: Double, lon: Double) {
@@ -60,6 +94,7 @@ class ZoneDetailViewModel @Inject constructor(
     fun selectPoi(poi: Poi, userLat: Double?, userLon: Double?) {
         viewModelScope.launch {
             _selectedZoneDetails.value = null
+            _selectedWaterSourceDetails.value = null
             val distance = if (userLat != null && userLon != null) {
                 val results = FloatArray(1)
                 Location.distanceBetween(userLat, userLon, poi.latitude, poi.longitude, results)
@@ -75,6 +110,7 @@ class ZoneDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _selectedPoiDetails.value = null
+                _selectedWaterSourceDetails.value = null
 
                 val distance = if (userLat != null && userLon != null) {
                     withContext(Dispatchers.Default) {

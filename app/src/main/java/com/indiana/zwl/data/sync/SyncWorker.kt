@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.indiana.zwl.domain.usecase.SyncForestBansUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
+import com.indiana.zwl.domain.usecase.SyncWaterSourcesUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
@@ -19,19 +20,32 @@ class SyncWorker @AssistedInject constructor(
     @Assisted workerParams: WorkerParameters,
     private val syncZonesUseCase: SyncZonesUseCase,
     private val syncPoiUseCase: SyncPoiUseCase,
-    private val syncForestBansUseCase: SyncForestBansUseCase
+    private val syncForestBansUseCase: SyncForestBansUseCase,
+    private val syncWaterSourcesUseCase: SyncWaterSourcesUseCase
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
         return try {
-            val (zonesResult, poiResult, bansResult) = coroutineScope {
+            var zonesOk = false
+            var poiOk = false
+            var bansOk = false
+
+            coroutineScope {
                 val zonesDeferred = async { syncZonesUseCase() }
                 val poiDeferred = async { syncPoiUseCase() }
                 val bansDeferred = async { syncForestBansUseCase() }
-                Triple(zonesDeferred.await(), poiDeferred.await(), bansDeferred.await())
+                val waterDeferred = async { syncWaterSourcesUseCase() }
+
+                zonesOk = zonesDeferred.await().isSuccess
+                poiOk = poiDeferred.await().isSuccess
+                bansOk = bansDeferred.await().isSuccess
+                val waterResult = waterDeferred.await()
+                if (waterResult.isFailure) {
+                    waterResult.exceptionOrNull()?.printStackTrace()
+                }
             }
 
-            if (zonesResult.isSuccess && poiResult.isSuccess && bansResult.isSuccess) {
+            if (zonesOk && poiOk && bansOk) {
                 Result.success()
             } else {
                 Result.retry()

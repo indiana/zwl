@@ -3,6 +3,8 @@ package com.indiana.zwl.shared.di
 import com.indiana.zwl.shared.data.local.DatabaseDriverFactory
 import com.indiana.zwl.shared.data.offline.IosMbtilesStore
 import com.indiana.zwl.shared.data.remote.HttpClientFactory
+import com.indiana.zwl.shared.data.water.IosWaterBaselineProvider
+import com.indiana.zwl.shared.data.water.WaterBaselineProvider
 import com.indiana.zwl.shared.offline.IosOfflineAreaFiles
 import com.indiana.zwl.shared.offline.MbtilesStoreFactory
 import com.indiana.zwl.shared.offline.OfflineAreaFiles
@@ -14,4 +16,5 @@ fun iosModule(cacheDirectory: String): Module = module {
     single { HttpClientFactory() }
     single<OfflineAreaFiles> { IosOfflineAreaFiles() }
     single<MbtilesStoreFactory> { MbtilesStoreFactory { fileName -> IosMbtilesStore(fileName) } }
+    single<WaterBaselineProvider> { IosWaterBaselineProvider() }
 }

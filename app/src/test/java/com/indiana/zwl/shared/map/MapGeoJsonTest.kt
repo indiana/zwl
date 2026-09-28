@@ -1,7 +1,10 @@
 package com.indiana.zwl.shared.map
 
+import com.indiana.zwl.domain.model.DrinkingWaterStatus
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Poi
+import com.indiana.zwl.domain.model.WaterSource
+import com.indiana.zwl.domain.model.WaterSourceType
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.shared.data.remote.GeoJsonToWkt
 import kotlinx.serialization.json.Json
@@ -98,6 +101,49 @@ class MapGeoJsonTest {
 
         val geometry = features[0].jsonObject["geometry"]!!.jsonObject
         assertEquals("Point", geometry["type"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `waterSourcesToGeoJson produces parseable JSON with osmId type and drinkingWater`() {
+        val sources = listOf(
+            WaterSource(
+                id = 7L,
+                osmId = "n123456",
+                type = WaterSourceType.WELL,
+                name = "Studnia",
+                latitude = 52.5,
+                longitude = 20.5,
+                source = "OSM",
+                drinkingWater = DrinkingWaterStatus.UNKNOWN,
+                verified = false,
+                depthMeters = 30.0,
+                notes = null
+            )
+        )
+
+        val json = MapGeoJson.waterSourcesToGeoJson(sources)
+        val root = Json.parseToJsonElement(json).jsonObject
+
+        assertEquals("FeatureCollection", root["type"]?.jsonPrimitive?.content)
+        val features = root["features"]?.jsonArray ?: throw AssertionError("no features")
+        assertEquals(1, features.size)
+
+        val geometry = features[0].jsonObject["geometry"]!!.jsonObject
+        assertEquals("Point", geometry["type"]?.jsonPrimitive?.content)
+
+        val props = features[0].jsonObject["properties"]!!.jsonObject
+        assertEquals("n123456", props["osmId"]?.jsonPrimitive?.content)
+        assertEquals("WELL", props["type"]?.jsonPrimitive?.content)
+        assertEquals("UNKNOWN", props["drinkingWater"]?.jsonPrimitive?.content)
+        assertEquals(30.0, props["depthMeters"]!!.jsonPrimitive.content.toDouble(), 0.0001)
+    }
+
+    @Test
+    fun `waterSourcesToGeoJson returns an empty collection for no sources`() {
+        val root = Json.parseToJsonElement(MapGeoJson.waterSourcesToGeoJson(emptyList())).jsonObject
+
+        assertEquals("FeatureCollection", root["type"]?.jsonPrimitive?.content)
+        assertEquals(0, root["features"]!!.jsonArray.size)
     }
 
     @Test

@@ -10,7 +10,10 @@ import com.indiana.zwl.domain.model.Poi
  */
 enum class PoiCategory {
     ACCOMMODATION, CAMPING, SHELTER, FIREPLACE, REST,
-    PLAYGROUND, VIEWPOINT, WATER, PARKING, EDUCATION, OTHER
+    PLAYGROUND, VIEWPOINT,
+    /** BDL `PT WODOW` = wodowanie/cumowanie sprzętu wodnego, NIE woda pitna (woda pitna = warstwa `WaterSource`). */
+    WATER,
+    PARKING, EDUCATION, OTHER
 }
 
 /**
@@ -23,6 +26,7 @@ enum class PoiUiGroup(val key: String, val label: String) {
     SHELTER("wiaty", "Wiaty i schronienia"),
     FIREPLACE("ogniska", "Miejsca na ognisko"),
     VIEWPOINT("widoki", "Punkty widokowe i rekreacja"),
+    WATER_LAUNCH("wodowanie", "Wodowanie sprzętu wodnego"),
     PARKING("parkingi", "Parkingi"),
     EDUCATION("edukacja", "Edukacja leśna"),
     OTHER("inne", "Inne")
@@ -58,7 +62,8 @@ fun PoiCategory.uiGroup(): PoiUiGroup = when (this) {
     PoiCategory.REST -> PoiUiGroup.REST
     PoiCategory.SHELTER -> PoiUiGroup.SHELTER
     PoiCategory.FIREPLACE -> PoiUiGroup.FIREPLACE
-    PoiCategory.PLAYGROUND, PoiCategory.VIEWPOINT, PoiCategory.WATER -> PoiUiGroup.VIEWPOINT
+    PoiCategory.PLAYGROUND, PoiCategory.VIEWPOINT -> PoiUiGroup.VIEWPOINT
+    PoiCategory.WATER -> PoiUiGroup.WATER_LAUNCH
     PoiCategory.PARKING -> PoiUiGroup.PARKING
     PoiCategory.EDUCATION -> PoiUiGroup.EDUCATION
     PoiCategory.OTHER -> PoiUiGroup.OTHER

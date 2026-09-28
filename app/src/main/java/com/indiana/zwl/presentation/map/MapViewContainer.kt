@@ -141,12 +141,18 @@ fun MapViewContainer(
     val showParking by viewModel.showParking.collectAsState()
     val showEducation by viewModel.showEducation.collectAsState()
     val showOthers by viewModel.showOthers.collectAsState()
+    val showWaterLaunch by viewModel.showWaterLaunch.collectAsState()
+    val showWaterSources by viewModel.showWaterSources.collectAsState()
+    val waterSources by viewModel.waterSources.collectAsState()
+    val selectedWaterSource by zoneDetailViewModel.selectedWaterSourceDetails.collectAsState()
     val showForestBans by viewModel.showForestBans.collectAsState()
     val forestBans by viewModel.forestBans.collectAsState()
     val savedPoints by viewModel.savedPoints.collectAsState()
     val showOwnPoints by viewModel.showOwnPoints.collectAsState()
     val latestSavedPointList by rememberUpdatedState(savedPoints)
     val latestShowOwnPoints by rememberUpdatedState(showOwnPoints)
+    val latestWaterSources by rememberUpdatedState(waterSources)
+    val latestShowWaterSources by rememberUpdatedState(showWaterSources)
     val pendingPoint by viewModel.pendingPoint.collectAsState()
     val showLayersOverlay by viewModel.showLayersOverlay.collectAsState()
     val focusSavedPoint by viewModel.focusSavedPoint.collectAsState()
@@ -169,6 +175,7 @@ fun MapViewContainer(
     var styleInstance by remember { mutableStateOf<Style?>(null) }
     var banSource by remember { mutableStateOf<GeoJsonSource?>(null) }
     var poiSource by remember { mutableStateOf<GeoJsonSource?>(null) }
+    var waterSource by remember { mutableStateOf<GeoJsonSource?>(null) }
     var userSource by remember { mutableStateOf<GeoJsonSource?>(null) }
 
     var hasCenteredOnStartup by remember { mutableStateOf(false) }
@@ -309,6 +316,68 @@ fun MapViewContainer(
         }
     }
 
+    LaunchedEffect(showWaterSources, waterSources, styleInstance) {
+        val style = styleInstance ?: return@LaunchedEffect
+        if (style.getSource("water-source") == null) {
+            waterSource = null
+        }
+        val hasLayer = style.getLayer("water-layer") != null
+        if (!showWaterSources || waterSources.isEmpty()) {
+            if (hasLayer) {
+                style.removeLayer("water-layer")
+            }
+            return@LaunchedEffect
+        }
+
+        val json = withContext(Dispatchers.Default) { MapGeoJson.waterSourcesToGeoJson(waterSources) }
+        val src = waterSource ?: GeoJsonSource("water-source").also {
+            waterSource = it
+            style.addSource(it)
+        }
+        src.setGeoJson(json)
+        if (!hasLayer) {
+            val anchor = if (style.getLayer("poi-layer") != null) "poi-layer" else "own-points-layer"
+            val layer = CircleLayer("water-layer", "water-source").withProperties(
+                PropertyFactory.circleColor(
+                    Expression.match(
+                        Expression.get("type"),
+                        Expression.literal("#1565C0"),
+                        Expression.stop("DRINKING_WATER", Expression.literal("#1565C0")),
+                        Expression.stop("WATER_TAP", Expression.literal("#0288D1")),
+                        Expression.stop("WATER_POINT", Expression.literal("#039BE5")),
+                        Expression.stop("SPRING", Expression.literal("#00838F")),
+                        Expression.stop("WELL", Expression.literal("#6D4C41")),
+                        Expression.stop("FOUNTAIN", Expression.literal("#00ACC1"))
+                    )
+                ),
+                PropertyFactory.circleOpacity(
+                    Expression.match(
+                        Expression.get("drinkingWater"),
+                        Expression.literal(0.6f),
+                        Expression.stop("YES", Expression.literal(0.95f)),
+                        Expression.stop("NO", Expression.literal(0.25f))
+                    )
+                ),
+                PropertyFactory.circleRadius(
+                    Expression.step(
+                        Expression.zoom(),
+                        Expression.literal(3f),
+                        Expression.literal(11.0),
+                        Expression.literal(5f),
+                        Expression.literal(13.0),
+                        Expression.literal(7f),
+                        Expression.literal(14.0),
+                        Expression.literal(8f)
+                    )
+                ),
+                PropertyFactory.circleStrokeWidth(1.5f),
+                PropertyFactory.circleStrokeColor("#FFFFFF")
+            )
+            layer.setMinZoom(11f)
+            style.addLayerBelow(layer, anchor)
+        }
+    }
+
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, rememberedMapView) {
@@ -430,12 +499,14 @@ fun MapViewContainer(
     // The map menu dropdown and AlertDialogs handle back on their own; this
     // covers the full-screen overlays and the bottom detail card.
     BackHandler(
-        enabled = showOfflineAreas || showLayersOverlay || selectedPoi != null || isSettingsOpen
+        enabled = showOfflineAreas || showLayersOverlay || selectedPoi != null ||
+            selectedWaterSource != null || isSettingsOpen
     ) {
         when {
             showOfflineAreas -> mapViewModel.closeOfflineAreas()
             showLayersOverlay -> viewModel.closeLayersOverlay()
             selectedPoi != null -> zoneDetailViewModel.clearSelectedPoi()
+            selectedWaterSource != null -> zoneDetailViewModel.clearSelectedWaterSource()
             isSettingsOpen -> isSettingsOpen = false
         }
     }
@@ -538,6 +609,7 @@ fun MapViewContainer(
                                                 Expression.stop("wiaty", Expression.literal("#4E342E")),
                                                 Expression.stop("ogniska", Expression.literal("#E65100")),
                                                 Expression.stop("widoki", Expression.literal("#0097A7")),
+                                                Expression.stop("wodowanie", Expression.literal("#0277BD")),
                                                 Expression.stop("parkingi", Expression.literal("#5D4037")),
                                                 Expression.stop("edukacja", Expression.literal("#7B1FA2")),
                                                 Expression.stop("inne", Expression.literal("#1976D2"))
@@ -647,6 +719,31 @@ fun MapViewContainer(
                                         }
                                     }
 
+                                    if (latestShowWaterSources && style.getLayer("water-layer") != null) {
+                                        val waterScreenPoint = map.projection.toScreenLocation(point)
+                                        val hitWater = map.queryRenderedFeatures(
+                                            android.graphics.RectF(
+                                                waterScreenPoint.x - 24f, waterScreenPoint.y - 24f,
+                                                waterScreenPoint.x + 24f, waterScreenPoint.y + 24f
+                                            ),
+                                            "water-layer"
+                                        )
+                                        val waterOsmId = hitWater.firstOrNull()
+                                            ?.properties()?.get("osmId")?.asString
+                                        val waterSourceHit = latestWaterSources.firstOrNull { it.osmId == waterOsmId }
+                                        if (waterSourceHit != null) {
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                val successState = uiState as? MainUiState.Success
+                                                zoneDetailViewModel.selectWaterSource(
+                                                    waterSourceHit,
+                                                    successState?.latitude,
+                                                    successState?.longitude
+                                                )
+                                            }
+                                            return@addOnMapClickListener true
+                                        }
+                                    }
+
                                     val hitZoneId = geometryCache.findZoneIdAt(clickedPoint)
                                     if (hitZoneId != null) {
                                         val zone = zones.firstOrNull { it.id == hitZoneId }
@@ -708,6 +805,7 @@ fun MapViewContainer(
                                         Expression.stop("wiaty", Expression.literal("#4E342E")),
                                         Expression.stop("ogniska", Expression.literal("#E65100")),
                                         Expression.stop("widoki", Expression.literal("#0097A7")),
+                                        Expression.stop("wodowanie", Expression.literal("#0277BD")),
                                         Expression.stop("parkingi", Expression.literal("#5D4037")),
                                         Expression.stop("edukacja", Expression.literal("#7B1FA2")),
                                         Expression.stop("inne", Expression.literal("#1976D2"))
@@ -1073,6 +1171,21 @@ fun MapViewContainer(
                 }
             }
 
+            AnimatedVisibility(
+                visible = selectedWaterSource != null,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { height -> height / 2 }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { height -> height / 2 }),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                selectedWaterSource?.let { details ->
+                    WaterSourceDetailsCard(
+                        details = details,
+                        onClose = { zoneDetailViewModel.clearSelectedWaterSource() },
+                        modifier = Modifier.padding(bottom = 88.dp)
+                    )
+                }
+            }
+
             if (showLayersOverlay) {
                 MapLayersOverlay(
                     showOwnPoints = showOwnPoints,
@@ -1082,6 +1195,8 @@ fun MapViewContainer(
                     showShelters = showShelters,
                     showFireplaces = showFireplaces,
                     showViewpoints = showViewpoints,
+                    showWaterLaunch = showWaterLaunch,
+                    showWaterSources = showWaterSources,
                     showParking = showParking,
                     showEducation = showEducation,
                     showOthers = showOthers,
@@ -1092,6 +1207,8 @@ fun MapViewContainer(
                     onShowSheltersChange = viewModel::setShowShelters,
                     onShowFireplacesChange = viewModel::setShowFireplaces,
                     onShowViewpointsChange = viewModel::setShowViewpoints,
+                    onShowWaterLaunchChange = viewModel::setShowWaterLaunch,
+                    onShowWaterSourcesChange = viewModel::setShowWaterSources,
                     onShowParkingChange = viewModel::setShowParking,
                     onShowEducationChange = viewModel::setShowEducation,
                     onShowOthersChange = viewModel::setShowOthers,
