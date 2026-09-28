@@ -54,6 +54,7 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var zonesGeoJson: String = ""
     @Published var bansGeoJson: String = ""
     @Published var poisGeoJson: String = ""
+    @Published var waterGeoJson: String = ""
 
     // Layer toggles (persisted across launches like Android's
     // SharedPreferences `zwl_map_settings`; they reset to defaults only on
@@ -84,6 +85,12 @@ final class MainViewModel: NSObject, ObservableObject {
     }
     @Published var showEducation: Bool = true {
         didSet { UserDefaults.standard.set(showEducation, forKey: Self.keyShowEducation) }
+    }
+    @Published var showWaterLaunch: Bool = true {
+        didSet { UserDefaults.standard.set(showWaterLaunch, forKey: Self.keyShowWaterLaunch) }
+    }
+    @Published var showWaterSources: Bool = true {
+        didSet { UserDefaults.standard.set(showWaterSources, forKey: Self.keyShowWaterSources) }
     }
 
     /// Whether the map follows the user's live location (`MLNMapView`
@@ -124,6 +131,8 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var selectedBan: ForestBan?
     @Published var selectedPoi: Poi?
     @Published var selectedPoiDistanceMeters: Double?
+    @Published var selectedWaterSource: WaterSource?
+    @Published var selectedWaterSourceDistanceMeters: Double?
 
     // Saved points (Android parity: magenta markers, long-press to save,
     // shared via `zwl://point` deep links).
@@ -232,6 +241,8 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyShowViewpoints = "mapSettings.showViewpoints"
     private static let keyShowParking = "mapSettings.showParking"
     private static let keyShowEducation = "mapSettings.showEducation"
+    private static let keyShowWaterLaunch = "mapSettings.showWaterLaunch"
+    private static let keyShowWaterSources = "mapSettings.showWaterSources"
     private static let keyHeadingUp = "mapSettings.headingUp"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
@@ -254,6 +265,8 @@ final class MainViewModel: NSObject, ObservableObject {
         showViewpoints = defaults.object(forKey: Self.keyShowViewpoints) as? Bool ?? true
         showParking = defaults.object(forKey: Self.keyShowParking) as? Bool ?? true
         showEducation = defaults.object(forKey: Self.keyShowEducation) as? Bool ?? true
+        showWaterLaunch = defaults.object(forKey: Self.keyShowWaterLaunch) as? Bool ?? true
+        showWaterSources = defaults.object(forKey: Self.keyShowWaterSources) as? Bool ?? true
         headingUp = defaults.object(forKey: Self.keyHeadingUp) as? Bool ?? false
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
@@ -283,6 +296,7 @@ final class MainViewModel: NSObject, ObservableObject {
                 await self.computeLocationStatus()
                 self.phase = .ready
                 self.requestLocationIfNeeded()
+                Task { [weak self] in await self?.ensureWaterBaselineAndRefresh() }
             } catch {
                 self.phase = .error("Błąd inicjalizacji aplikacji: \(error.localizedDescription)")
             }
@@ -304,10 +318,18 @@ final class MainViewModel: NSObject, ObservableObject {
             }
             await self.computeLocationStatus()
             self.phase = .ready
+            Task { [weak self] in await self?.ensureWaterBaselineAndRefresh() }
         }
     }
 
+    func ensureWaterBaselineAndRefresh() async {
+        _ = try? await app.ensureWaterBaseline().boolValue
+        _ = try? await app.refreshWaterSourcesIfStale(now: Self.currentTimeMillis()).boolValue
+        await refreshMapData()
+    }
+
     func refreshMapData() async {
+        waterGeoJson = (try? await app.waterSourcesGeoJson()) ?? ""
         guard let zones = try? await app.zonesGeoJson(),
               let bans = try? await app.bansGeoJson(),
               let pois = try? await app.poisGeoJson() else { return }
@@ -424,6 +446,7 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedZone = zone
         selectedBan = nil
         selectedPoi = nil
+        selectedWaterSource = nil
         selectedZoneDistanceMeters = nil
         selectedZoneFireRiskLevel = nil
         isLoadingZoneFireRisk = false
@@ -586,17 +609,33 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedBan = app.cachedBans().first { $0.remoteId == remoteId }
         selectedZone = nil
         selectedPoi = nil
+        selectedWaterSource = nil
     }
 
     func selectPoi(named name: String) {
         selectedPoi = app.cachedPois().first { $0.name == name }
         selectedZone = nil
         selectedBan = nil
+        selectedWaterSource = nil
         selectedPoiDistanceMeters = nil
         if let poi = selectedPoi, let userLat = userLatitude, let userLon = userLongitude {
             let userLoc = CLLocation(latitude: userLat, longitude: userLon)
             let poiLoc = CLLocation(latitude: poi.latitude, longitude: poi.longitude)
             selectedPoiDistanceMeters = userLoc.distance(from: poiLoc)
+        }
+    }
+
+    func selectWaterSource(osmId: String) {
+        selectedWaterSource = app.cachedWaterSources().first { $0.osmId == osmId }
+        selectedZone = nil
+        selectedBan = nil
+        selectedPoi = nil
+        selectedPoiDistanceMeters = nil
+        selectedWaterSourceDistanceMeters = nil
+        if let water = selectedWaterSource, let userLat = userLatitude, let userLon = userLongitude {
+            let userLoc = CLLocation(latitude: userLat, longitude: userLon)
+            let waterLoc = CLLocation(latitude: water.latitude, longitude: water.longitude)
+            selectedWaterSourceDistanceMeters = userLoc.distance(from: waterLoc)
         }
     }
 
@@ -610,6 +649,8 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedBan = nil
         selectedPoi = nil
         selectedPoiDistanceMeters = nil
+        selectedWaterSource = nil
+        selectedWaterSourceDistanceMeters = nil
     }
 
     // MARK: - Saved points

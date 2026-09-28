@@ -53,6 +53,18 @@ struct LayersSettingsView: View {
                         Text("Punkty widokowe i rekreacja")
                     }
                 }
+                Toggle(isOn: $viewModel.showWaterLaunch) {
+                    HStack(spacing: 10) {
+                        Circle().fill(Color(hex: 0x0277BD)).frame(width: 10, height: 10)
+                        Text("Wodowanie sprzętu wodnego")
+                    }
+                }
+                Toggle(isOn: $viewModel.showWaterSources) {
+                    HStack(spacing: 10) {
+                        Circle().fill(Color(hex: 0x1565C0)).frame(width: 10, height: 10)
+                        Text("Woda pitna i źródła")
+                    }
+                }
                 Toggle(isOn: $viewModel.showParking) {
                     HStack(spacing: 10) {
                         Circle().fill(Color(hex: 0x5D4037)).frame(width: 10, height: 10)

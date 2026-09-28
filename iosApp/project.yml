@@ -29,6 +29,10 @@ targets:
     platform: iOS
     sources:
       - path: iosApp
+        excludes:
+          - "Resources/**"
+      - path: iosApp/Resources
+        buildPhase: resources
     dependencies:
       - package: MapLibre
     info:

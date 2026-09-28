@@ -10,36 +10,44 @@ enum GeoJsonFileWriter {
     struct Files {
         let zonesURL: URL
         let bansURL: URL
+        let waterURL: URL
         let accommodationURL: URL
         let restURL: URL
         let shelterURL: URL
         let fireplaceURL: URL
         let viewpointURL: URL
+        let waterLaunchURL: URL
         let parkingURL: URL
         let educationURL: URL
         let otherURL: URL
     }
 
-    /// Writes `zones`/`bans` verbatim and splits `pois` by `categoryKey` into
-    /// three files (shelter / fireplace / other), so each layer can be toggled
-    /// by `isVisible` alone. Returns nil if any input is not a valid
-    /// FeatureCollection or a file write fails.
+    /// Writes `zones`/`bans`/`water` verbatim and splits `pois` by
+    /// `categoryKey` into files, so each layer can be toggled by `isVisible`
+    /// alone. Returns nil if any input is not a valid FeatureCollection or a
+    /// file write fails.
     static func makeFiles(zones zonesJson: String,
                           bans bansJson: String,
-                          pois poisJson: String) -> Files? {
+                          pois poisJson: String,
+                          water waterJson: String) -> Files? {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory
         let zonesURL = dir.appendingPathComponent("zwl-zones.json")
         let bansURL = dir.appendingPathComponent("zwl-bans.json")
+        let waterURL = dir.appendingPathComponent("zwl-water.json")
 
         guard let zonesData = zonesJson.data(using: .utf8),
               let zonesObject = try? JSONSerialization.jsonObject(with: zonesData) as? [String: Any],
-              let zoneFeatures = zonesObject["features"] as? [[String: Any]],
+              zonesObject["features"] != nil,
               (try? zonesData.write(to: zonesURL)) != nil,
               let bansData = bansJson.data(using: .utf8),
               let bansObject = try? JSONSerialization.jsonObject(with: bansData) as? [String: Any],
-              let banFeatures = bansObject["features"] as? [[String: Any]],
+              bansObject["features"] != nil,
               (try? bansData.write(to: bansURL)) != nil,
+              let waterData = waterJson.data(using: .utf8),
+              let waterObject = try? JSONSerialization.jsonObject(with: waterData) as? [String: Any],
+              (waterObject["features"] as? [[String: Any]]) != nil,
+              (try? waterData.write(to: waterURL)) != nil,
               let poisData = poisJson.data(using: .utf8),
               let poisObject = try? JSONSerialization.jsonObject(with: poisData) as? [String: Any],
               let poiFeatures = poisObject["features"] as? [[String: Any]] else {
@@ -51,6 +59,7 @@ enum GeoJsonFileWriter {
         var shelter: [[String: Any]] = []
         var fireplace: [[String: Any]] = []
         var viewpoint: [[String: Any]] = []
+        var waterLaunch: [[String: Any]] = []
         var parking: [[String: Any]] = []
         var education: [[String: Any]] = []
         var other: [[String: Any]] = []
@@ -62,6 +71,7 @@ enum GeoJsonFileWriter {
             case "wiaty": shelter.append(feature)
             case "ogniska": fireplace.append(feature)
             case "widoki": viewpoint.append(feature)
+            case "wodowanie": waterLaunch.append(feature)
             case "parkingi": parking.append(feature)
             case "edukacja": education.append(feature)
             default: other.append(feature)
@@ -73,6 +83,7 @@ enum GeoJsonFileWriter {
         let shelterURL = dir.appendingPathComponent("zwl-pois-wiaty.json")
         let fireplaceURL = dir.appendingPathComponent("zwl-pois-ogniska.json")
         let viewpointURL = dir.appendingPathComponent("zwl-pois-widoki.json")
+        let waterLaunchURL = dir.appendingPathComponent("zwl-pois-wodowanie.json")
         let parkingURL = dir.appendingPathComponent("zwl-pois-parkingi.json")
         let educationURL = dir.appendingPathComponent("zwl-pois-edukacja.json")
         let otherURL = dir.appendingPathComponent("zwl-pois-inne.json")
@@ -81,6 +92,7 @@ enum GeoJsonFileWriter {
               write(features: shelter, to: shelterURL),
               write(features: fireplace, to: fireplaceURL),
               write(features: viewpoint, to: viewpointURL),
+              write(features: waterLaunch, to: waterLaunchURL),
               write(features: parking, to: parkingURL),
               write(features: education, to: educationURL),
               write(features: other, to: otherURL) else {
@@ -89,11 +101,13 @@ enum GeoJsonFileWriter {
 
         return Files(zonesURL: zonesURL,
                      bansURL: bansURL,
+                     waterURL: waterURL,
                      accommodationURL: accommodationURL,
                      restURL: restURL,
                      shelterURL: shelterURL,
                      fireplaceURL: fireplaceURL,
                      viewpointURL: viewpointURL,
+                     waterLaunchURL: waterLaunchURL,
                      parkingURL: parkingURL,
                      educationURL: educationURL,
                      otherURL: otherURL)
