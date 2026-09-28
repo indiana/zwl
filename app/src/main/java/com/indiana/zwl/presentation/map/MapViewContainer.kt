@@ -373,7 +373,6 @@ fun MapViewContainer(
                 PropertyFactory.circleStrokeWidth(1.5f),
                 PropertyFactory.circleStrokeColor("#FFFFFF")
             )
-            layer.setMinZoom(11f)
             style.addLayerBelow(layer, anchor)
         }
     }

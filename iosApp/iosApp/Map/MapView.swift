@@ -517,7 +517,6 @@ struct MapView: UIViewRepresentable {
             ] as [Any])
             waterLayer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
             waterLayer.circleStrokeWidth = NSExpression(forConstantValue: 1.5)
-            waterLayer.minimumZoomLevel = 11
             style.addLayer(waterLayer)
 
             // One URL source per POI category; toggling switches paint opacity
