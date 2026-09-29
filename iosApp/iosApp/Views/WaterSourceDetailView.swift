@@ -19,6 +19,38 @@ struct WaterSourceDetailView: View {
                     infoSubcard(title: "GŁĘBOKOŚĆ", value: "\(Int(depth)) m")
                 }
 
+                if let pump = waterSource.pump {
+                    infoSubcard(title: "POMPA", value: Self.pumpLabel(pump))
+                }
+
+                if let raw = waterSource.drinkingWaterRaw, let label = Self.drinkingWaterRawLabel(raw) {
+                    infoSubcard(title: "SZCZEGÓŁY WODY", value: label)
+                }
+
+                if let seasonal = waterSource.seasonal {
+                    infoSubcard(title: "SEZONOWOŚĆ", value: Self.seasonalLabel(seasonal))
+                }
+
+                if let intermittent = waterSource.intermittent {
+                    infoSubcard(title: "DOSTĘPNOŚĆ", value: Self.intermittentLabel(intermittent))
+                }
+
+                if let fee = waterSource.fee {
+                    infoSubcard(title: "OPŁATA", value: Self.feeLabel(fee))
+                }
+
+                if let openingHours = waterSource.openingHours {
+                    infoSubcard(title: "GODZINY OTWARCIA", value: openingHours)
+                }
+
+                if let operatorName = waterSource.operator_ {
+                    infoSubcard(title: "OPERATOR", value: operatorName)
+                }
+
+                if let description = waterSource.description_ {
+                    infoSubcard(title: "OPIS", value: description)
+                }
+
                 infoSubcard(title: "ODLEGŁOŚĆ OD TWOJEJ POZYCJI", value: distanceText)
 
                 attributionSubcard
@@ -102,7 +134,53 @@ struct WaterSourceDetailView: View {
         case "SPRING": return "Źródło"
         case "WELL": return "Studnia"
         case "FOUNTAIN": return "Fontanna"
+        case "WATER_ON_SITE": return "Woda na miejscu (biwak/wiata)"
+        case "REFILL": return "Punkt napełniania butelek"
         default: return "Źródło wody"
+        }
+    }
+
+    private static func pumpLabel(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "manual": return "Pompa ręczna"
+        case "no": return "Otwarty szyb (własna lina)"
+        case "powered": return "Pompa mechaniczna"
+        default: return raw
+        }
+    }
+
+    private static func drinkingWaterRawLabel(_ raw: String) -> String? {
+        switch raw.lowercased() {
+        case "boil": return "Woda pitna po przegotowaniu"
+        case "treated": return "Woda uzdatniona"
+        case "untreated": return "Woda nieuzdatniona"
+        case "mineral": return "Woda mineralna"
+        case "yes", "true", "1", "no", "false", "0": return nil
+        default: return raw
+        }
+    }
+
+    private static func seasonalLabel(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "yes", "true", "1": return "Dostępne sezonowo"
+        case "no", "false", "0": return "Dostępne całorocznie"
+        default: return raw
+        }
+    }
+
+    private static func intermittentLabel(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "yes", "true", "1": return "Okresowo (może nie działać)"
+        case "no", "false", "0": return "Stale"
+        default: return raw
+        }
+    }
+
+    private static func feeLabel(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "yes", "true", "1": return "Płatne"
+        case "no", "false", "0": return "Bezpłatne"
+        default: return raw
         }
     }
 

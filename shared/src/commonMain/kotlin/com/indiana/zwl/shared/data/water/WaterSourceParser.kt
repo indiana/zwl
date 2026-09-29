@@ -53,7 +53,17 @@ object WaterSourceParser {
             drinkingWater = drinkingWater,
             verified = props["verified"].asBooleanOrNull() ?: false,
             depthMeters = props["depthMeters"].asDoubleOrNull(),
-            notes = props["notes"].asStringOrNull()
+            notes = props["notes"].asStringOrNull(),
+            pump = props["pump"].asNonBlankStringOrNull(),
+            drinkingWaterRaw = props["drinkingWaterRaw"].asNonBlankStringOrNull(),
+            seasonal = props["seasonal"].asNonBlankStringOrNull(),
+            intermittent = props["intermittent"].asNonBlankStringOrNull(),
+            fountain = props["fountain"].asNonBlankStringOrNull(),
+            fee = props["fee"].asNonBlankStringOrNull(),
+            openingHours = props["openingHours"].asNonBlankStringOrNull(),
+            operator = props["operator"].asNonBlankStringOrNull(),
+            description = props["description"].asNonBlankStringOrNull(),
+            bottle = props["bottle"].asNonBlankStringOrNull()
         )
     }
 }
@@ -63,6 +73,9 @@ private fun JsonElement?.asStringOrNull(): String? {
     if (primitive is JsonNull) return null
     return primitive.content
 }
+
+private fun JsonElement?.asNonBlankStringOrNull(): String? =
+    asStringOrNull()?.takeIf { it.isNotBlank() }
 
 private fun JsonElement?.asDoubleOrNull(): Double? {
     val primitive = this as? JsonPrimitive ?: return null

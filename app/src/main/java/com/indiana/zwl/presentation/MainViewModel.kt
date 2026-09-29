@@ -244,6 +244,9 @@ class MainViewModel @Inject constructor(
     private val _showWaterWells = MutableStateFlow(sharedPrefs.getBoolean("show_water_wells", waterGroupDefault))
     val showWaterWells: StateFlow<Boolean> = _showWaterWells
 
+    private val _showWaterRefill = MutableStateFlow(sharedPrefs.getBoolean("show_water_refill", waterGroupDefault))
+    val showWaterRefill: StateFlow<Boolean> = _showWaterRefill
+
     fun setShowWaterDrinking(show: Boolean) {
         _showWaterDrinking.value = show
         sharedPrefs.edit().putBoolean("show_water_drinking", show).apply()
@@ -259,15 +262,21 @@ class MainViewModel @Inject constructor(
         sharedPrefs.edit().putBoolean("show_water_wells", show).apply()
     }
 
+    fun setShowWaterRefill(show: Boolean) {
+        _showWaterRefill.value = show
+        sharedPrefs.edit().putBoolean("show_water_refill", show).apply()
+    }
+
     fun setShowAllWater(show: Boolean) {
         setShowWaterDrinking(show)
         setShowWaterSprings(show)
         setShowWaterWells(show)
+        setShowWaterRefill(show)
     }
 
     val showWaterSources: StateFlow<Boolean> = combine(
-        _showWaterDrinking, _showWaterSprings, _showWaterWells
-    ) { drinking, springs, wells -> drinking || springs || wells }
+        _showWaterDrinking, _showWaterSprings, _showWaterWells, _showWaterRefill
+    ) { drinking, springs, wells, refill -> drinking || springs || wells || refill }
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     private val allWaterSources: StateFlow<List<WaterSource>> = waterSourceRepository.getAll().stateIn(
@@ -277,13 +286,14 @@ class MainViewModel @Inject constructor(
     )
 
     val waterSources: StateFlow<List<WaterSource>> = combine(
-        allWaterSources, _showWaterDrinking, _showWaterSprings, _showWaterWells
-    ) { sources, drinking, springs, wells ->
+        allWaterSources, _showWaterDrinking, _showWaterSprings, _showWaterWells, _showWaterRefill
+    ) { sources, drinking, springs, wells, refill ->
         sources.filter { source ->
             when (source.type.waterGroup()) {
                 WaterSourceGroup.DRINKING -> drinking
                 WaterSourceGroup.SPRING -> springs
                 WaterSourceGroup.WELL -> wells
+                WaterSourceGroup.REFILL -> refill
             }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

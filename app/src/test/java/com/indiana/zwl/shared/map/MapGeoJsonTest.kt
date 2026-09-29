@@ -139,6 +139,47 @@ class MapGeoJsonTest {
     }
 
     @Test
+    fun `waterSourcesToGeoJson keeps refill and water on site types`() {
+        val sources = listOf(
+            WaterSource(
+                id = 1L,
+                osmId = "n1",
+                type = WaterSourceType.WATER_ON_SITE,
+                name = "",
+                latitude = 52.0,
+                longitude = 19.0,
+                source = "OSM",
+                drinkingWater = DrinkingWaterStatus.YES,
+                verified = false
+            ),
+            WaterSource(
+                id = 2L,
+                osmId = "n2",
+                type = WaterSourceType.REFILL,
+                name = "",
+                latitude = 52.1,
+                longitude = 19.1,
+                source = "OSM",
+                drinkingWater = DrinkingWaterStatus.UNKNOWN,
+                verified = false
+            )
+        )
+
+        val features = Json.parseToJsonElement(MapGeoJson.waterSourcesToGeoJson(sources))
+            .jsonObject["features"]!!.jsonArray
+
+        assertEquals(2, features.size)
+        assertEquals(
+            "WATER_ON_SITE",
+            features[0].jsonObject["properties"]!!.jsonObject["type"]?.jsonPrimitive?.content
+        )
+        assertEquals(
+            "REFILL",
+            features[1].jsonObject["properties"]!!.jsonObject["type"]?.jsonPrimitive?.content
+        )
+    }
+
+    @Test
     fun `waterSourcesToGeoJson returns an empty collection for no sources`() {
         val root = Json.parseToJsonElement(MapGeoJson.waterSourcesToGeoJson(emptyList())).jsonObject
 

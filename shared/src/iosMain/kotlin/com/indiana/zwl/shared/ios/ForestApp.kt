@@ -232,13 +232,15 @@ class ForestApp(
     suspend fun waterSourcesGeoJson(
         includeDrinking: Boolean,
         includeSprings: Boolean,
-        includeWells: Boolean
+        includeWells: Boolean,
+        includeRefill: Boolean
     ): String = withContext(Dispatchers.Default) {
         val filtered = cachedWaterSources.filter { source ->
             when (source.type.waterGroup()) {
                 WaterSourceGroup.DRINKING -> includeDrinking
                 WaterSourceGroup.SPRING -> includeSprings
                 WaterSourceGroup.WELL -> includeWells
+                WaterSourceGroup.REFILL -> includeRefill
             }
         }
         MapGeoJson.waterSourcesToGeoJson(filtered)

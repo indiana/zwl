@@ -86,6 +86,48 @@ fun WaterSourceDetailsCard(
                     )
                 }
 
+                source.pump?.let { pump ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    InfoBlock(title = "POMPA", value = pumpLabel(pump))
+                }
+
+                source.drinkingWaterRaw?.let { raw ->
+                    drinkingWaterRawLabel(raw)?.let { label ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        InfoBlock(title = "SZCZEGÓŁY WODY", value = label)
+                    }
+                }
+
+                source.seasonal?.let { seasonal ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    InfoBlock(title = "SEZONOWOŚĆ", value = seasonalLabel(seasonal))
+                }
+
+                source.intermittent?.let { intermittent ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    InfoBlock(title = "DOSTĘPNOŚĆ", value = intermittentLabel(intermittent))
+                }
+
+                source.fee?.let { fee ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    InfoBlock(title = "OPŁATA", value = feeLabel(fee))
+                }
+
+                source.openingHours?.let { openingHours ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    InfoBlock(title = "GODZINY OTWARCIA", value = openingHours)
+                }
+
+                source.operator?.let { operator ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    InfoBlock(title = "OPERATOR", value = operator)
+                }
+
+                source.description?.let { description ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    InfoBlock(title = "OPIS", value = description)
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 InfoBlock(
@@ -174,12 +216,48 @@ internal fun waterSourceTypeLabel(type: WaterSourceType): String = when (type) {
     WaterSourceType.SPRING -> "Źródło"
     WaterSourceType.WELL -> "Studnia"
     WaterSourceType.FOUNTAIN -> "Fontanna"
+    WaterSourceType.WATER_ON_SITE -> "Woda na miejscu (biwak/wiata)"
+    WaterSourceType.REFILL -> "Punkt napełniania butelek"
 }
 
 internal fun drinkingWaterLabel(status: DrinkingWaterStatus): String = when (status) {
     DrinkingWaterStatus.YES -> "Pitna (potwierdzona)"
     DrinkingWaterStatus.NO -> "Niepitna"
     DrinkingWaterStatus.UNKNOWN -> "Nieznany"
+}
+
+internal fun pumpLabel(raw: String): String = when (raw.lowercase()) {
+    "manual" -> "Pompa ręczna"
+    "no" -> "Otwarty szyb (własna lina)"
+    "powered" -> "Pompa mechaniczna"
+    else -> raw
+}
+
+internal fun drinkingWaterRawLabel(raw: String): String? = when (raw.lowercase()) {
+    "boil" -> "Woda pitna po przegotowaniu"
+    "treated" -> "Woda uzdatniona"
+    "untreated" -> "Woda nieuzdatniona"
+    "mineral" -> "Woda mineralna"
+    "yes", "true", "1", "no", "false", "0" -> null
+    else -> raw
+}
+
+internal fun seasonalLabel(raw: String): String = when (raw.lowercase()) {
+    "yes", "true", "1" -> "Dostępne sezonowo"
+    "no", "false", "0" -> "Dostępne całorocznie"
+    else -> raw
+}
+
+internal fun intermittentLabel(raw: String): String = when (raw.lowercase()) {
+    "yes", "true", "1" -> "Okresowo (może nie działać)"
+    "no", "false", "0" -> "Stale"
+    else -> raw
+}
+
+internal fun feeLabel(raw: String): String = when (raw.lowercase()) {
+    "yes", "true", "1" -> "Płatne"
+    "no", "false", "0" -> "Bezpłatne"
+    else -> raw
 }
 
 private fun formatDistance(meters: Double): String {

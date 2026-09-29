@@ -9,7 +9,17 @@ CREATE TABLE IF NOT EXISTS WaterSource (
     drinkingWater TEXT NOT NULL,
     verified INTEGER NOT NULL DEFAULT 0,
     depthMeters REAL,
-    notes TEXT
+    notes TEXT,
+    pump TEXT,
+    drinkingWaterRaw TEXT,
+    seasonal TEXT,
+    intermittent TEXT,
+    fountain TEXT,
+    fee TEXT,
+    openingHours TEXT,
+    operator TEXT,
+    description TEXT,
+    bottle TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS WaterSource_osmId ON WaterSource(osmId);
@@ -21,8 +31,11 @@ count:
 SELECT count(*) FROM WaterSource;
 
 insertAll:
-INSERT OR REPLACE INTO WaterSource(osmId, type, name, latitude, longitude, source, drinkingWater, verified, depthMeters, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO WaterSource(
+    osmId, type, name, latitude, longitude, source, drinkingWater, verified, depthMeters, notes,
+    pump, drinkingWaterRaw, seasonal, intermittent, fountain, fee, openingHours, operator, description, bottle
+)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteAll:
 DELETE FROM WaterSource;

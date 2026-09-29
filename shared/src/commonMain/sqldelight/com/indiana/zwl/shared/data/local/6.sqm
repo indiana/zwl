@@ -1,0 +1,10 @@
+ALTER TABLE WaterSource ADD COLUMN pump TEXT;
+ALTER TABLE WaterSource ADD COLUMN drinkingWaterRaw TEXT;
+ALTER TABLE WaterSource ADD COLUMN seasonal TEXT;
+ALTER TABLE WaterSource ADD COLUMN intermittent TEXT;
+ALTER TABLE WaterSource ADD COLUMN fountain TEXT;
+ALTER TABLE WaterSource ADD COLUMN fee TEXT;
+ALTER TABLE WaterSource ADD COLUMN openingHours TEXT;
+ALTER TABLE WaterSource ADD COLUMN operator TEXT;
+ALTER TABLE WaterSource ADD COLUMN description TEXT;
+ALTER TABLE WaterSource ADD COLUMN bottle TEXT;
