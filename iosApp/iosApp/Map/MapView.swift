@@ -8,6 +8,8 @@ import shared
 struct OfflineTileArea {
     let id: Int64
     let path: String
+    let minZoom: Int32
+    let maxZoom: Int32
 }
 
 struct MapView: UIViewRepresentable {
@@ -685,7 +687,11 @@ struct MapView: UIViewRepresentable {
                 let source = MLNRasterTileSource(
                     identifier: "osm-offline-\(index)",
                     tileURLTemplates: ["mbtiles://file://\(area.path)"],
-                    options: [.tileSize: 256]
+                    options: [
+                        .tileSize: 256,
+                        .minimumZoomLevel: NSNumber(value: area.minZoom),
+                        .maximumZoomLevel: NSNumber(value: area.maxZoom)
+                    ]
                 )
                 style.addSource(source)
                 let layer = MLNRasterStyleLayer(identifier: "osm-offline-layer-\(index)", source: source)
