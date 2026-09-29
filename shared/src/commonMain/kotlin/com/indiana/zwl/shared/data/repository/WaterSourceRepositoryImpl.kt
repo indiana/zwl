@@ -53,8 +53,8 @@ class WaterSourceRepositoryImpl(
                     fountain = source.fountain,
                     fee = source.fee,
                     openingHours = source.openingHours,
-                    operator_ = source.operator,
-                    description = source.description,
+                    operator_ = source.operatorName,
+                    description = source.waterDescription,
                     bottle = source.bottle
                 )
             }
@@ -119,8 +119,8 @@ class WaterSourceRepositoryImpl(
             fountain = fountain,
             fee = fee,
             openingHours = openingHours,
-            operator = operator_,
-            description = description,
+            operatorName = operator_,
+            waterDescription = description,
             bottle = bottle
         )
     }

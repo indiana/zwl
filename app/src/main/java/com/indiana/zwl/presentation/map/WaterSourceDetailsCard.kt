@@ -130,12 +130,12 @@ fun WaterSourceDetailsCard(
                     InfoBlock(title = "GODZINY OTWARCIA", value = openingHours)
                 }
 
-                source.operator?.let { operator ->
+                source.operatorName?.let { operator ->
                     Spacer(modifier = Modifier.height(8.dp))
                     InfoBlock(title = "OPERATOR", value = operator)
                 }
 
-                source.description?.let { description ->
+                source.waterDescription?.let { description ->
                     Spacer(modifier = Modifier.height(8.dp))
                     InfoBlock(title = "OPIS", value = description)
                 }

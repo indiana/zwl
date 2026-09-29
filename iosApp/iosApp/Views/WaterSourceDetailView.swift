@@ -51,11 +51,11 @@ struct WaterSourceDetailView: View {
                     infoSubcard(title: "GODZINY OTWARCIA", value: openingHours)
                 }
 
-                if let operatorName = waterSource.operator_ {
+                if let operatorName = waterSource.operatorName {
                     infoSubcard(title: "OPERATOR", value: operatorName)
                 }
 
-                if let description = waterSource.description_ {
+                if let description = waterSource.waterDescription {
                     infoSubcard(title: "OPIS", value: description)
                 }
 

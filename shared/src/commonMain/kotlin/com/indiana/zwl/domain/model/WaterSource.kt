@@ -25,8 +25,8 @@ data class WaterSource(
     val fountain: String? = null,
     val fee: String? = null,
     val openingHours: String? = null,
-    val operator: String? = null,
-    val description: String? = null,
+    val operatorName: String? = null,
+    val waterDescription: String? = null,
     val bottle: String? = null
 )
 

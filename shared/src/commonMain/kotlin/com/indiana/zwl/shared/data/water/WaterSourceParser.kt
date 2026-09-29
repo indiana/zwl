@@ -61,8 +61,8 @@ object WaterSourceParser {
             fountain = props["fountain"].asNonBlankStringOrNull(),
             fee = props["fee"].asNonBlankStringOrNull(),
             openingHours = props["openingHours"].asNonBlankStringOrNull(),
-            operator = props["operator"].asNonBlankStringOrNull(),
-            description = props["description"].asNonBlankStringOrNull(),
+            operatorName = props["operator"].asNonBlankStringOrNull(),
+            waterDescription = props["description"].asNonBlankStringOrNull(),
             bottle = props["bottle"].asNonBlankStringOrNull()
         )
     }
