@@ -23,6 +23,14 @@ struct WaterSourceDetailView: View {
                     infoSubcard(title: "POMPA", value: Self.pumpLabel(pump))
                 }
 
+                if let fountain = waterSource.fountain {
+                    infoSubcard(title: "RODZAJ PUNKTU", value: Self.fountainLabel(fountain))
+                }
+
+                if let bottle = waterSource.bottle, let label = Self.bottleLabel(bottle) {
+                    infoSubcard(title: "NAPEŁNIANIE BUTELKI", value: label)
+                }
+
                 if let raw = waterSource.drinkingWaterRaw, let label = Self.drinkingWaterRawLabel(raw) {
                     infoSubcard(title: "SZCZEGÓŁY WODY", value: label)
                 }
@@ -141,10 +149,12 @@ struct WaterSourceDetailView: View {
     }
 
     private static func pumpLabel(_ raw: String) -> String {
-        switch raw.lowercased() {
-        case "manual": return "Pompa ręczna"
+        switch firstToken(raw) {
+        case "manual", "hand_pump": return "Pompa ręczna"
         case "no": return "Otwarty szyb (własna lina)"
         case "powered": return "Pompa mechaniczna"
+        case "automatic": return "Pompa automatyczna"
+        case "yes": return "Pompa (rodzaj nieznany)"
         default: return raw
         }
     }
@@ -155,17 +165,74 @@ struct WaterSourceDetailView: View {
         case "treated": return "Woda uzdatniona"
         case "untreated": return "Woda nieuzdatniona"
         case "mineral": return "Woda mineralna"
-        case "yes", "true", "1", "no", "false", "0": return nil
+        case "seasonal": return "Dostępna sezonowo"
+        case "conditional": return "Dostępna warunkowo"
+        case "manantial": return "Źródło"
+        case "bubbler": return "Poidełko"
+        case "fountain": return "Fontanna"
+        case "yes", "true", "1", "no", "false", "0", "unknown", "fixme": return nil
         default: return raw
         }
     }
 
     private static func seasonalLabel(_ raw: String) -> String {
+        translateTokens(raw) { token in
+            switch token {
+            case "yes", "true", "1": return "sezonowo"
+            case "no", "false", "0": return "całorocznie"
+            case "spring": return "wiosna"
+            case "summer": return "lato"
+            case "autumn": return "jesień"
+            case "winter": return "zima"
+            case "wet_season": return "pora deszczowa"
+            case "dry_season": return "pora sucha"
+            default: return token
+            }
+        }
+    }
+
+    private static func fountainLabel(_ raw: String) -> String {
+        translateTokens(raw) { token in
+            switch token {
+            case "bubbler": return "poidełko"
+            case "drinking": return "fontanna pitna"
+            case "bottle_refill": return "napełnianie butelek"
+            case "water_tap", "tap": return "kran"
+            case "nozzle": return "dysza"
+            case "stone_block": return "blok kamienny"
+            case "water_dispenser": return "dozownik wody"
+            case "decorative": return "dekoracyjna"
+            case "yes": return "fontanna"
+            default: return token
+            }
+        }
+    }
+
+    private static func bottleLabel(_ raw: String) -> String? {
         switch raw.lowercased() {
-        case "yes", "true", "1": return "Dostępne sezonowo"
-        case "no", "false", "0": return "Dostępne całorocznie"
+        case "yes": return "Można napełnić butelkę"
+        case "designated": return "Wyznaczone do napełniania"
+        case "limited": return "Ograniczona możliwość"
+        case "no", "false", "0": return nil
         default: return raw
         }
+    }
+
+    private static func firstToken(_ raw: String) -> String {
+        let token = raw.lowercased()
+            .components(separatedBy: CharacterSet(charactersIn: ";, "))
+            .first { !$0.isEmpty }
+        return token?.trimmingCharacters(in: .whitespaces) ?? ""
+    }
+
+    private static func translateTokens(_ raw: String, _ translate: (String) -> String) -> String {
+        let parts = raw.lowercased()
+            .components(separatedBy: CharacterSet(charactersIn: ";,"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        if parts.isEmpty { return raw }
+        let joined = parts.map(translate).joined(separator: ", ")
+        return joined.prefix(1).uppercased() + String(joined.dropFirst())
     }
 
     private static func intermittentLabel(_ raw: String) -> String {
