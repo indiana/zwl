@@ -62,7 +62,7 @@ struct LayersSettingsView: View {
                 Toggle(isOn: Binding(
                     get: {
                         viewModel.showWaterDrinking && viewModel.showWaterSprings
-                            && viewModel.showWaterWells && viewModel.showWaterRefill
+                            && viewModel.showWaterWells
                     },
                     set: { viewModel.setAllWater($0) }
                 )) {
@@ -86,13 +86,6 @@ struct LayersSettingsView: View {
                     HStack(spacing: 10) {
                         Circle().fill(Color(hex: 0x6D4C41)).frame(width: 10, height: 10)
                         Text("Studnie")
-                    }
-                }
-                .padding(.leading, 20)
-                Toggle(isOn: $viewModel.showWaterRefill) {
-                    HStack(spacing: 10) {
-                        Circle().fill(Color(hex: 0x2E7D32)).frame(width: 10, height: 10)
-                        Text("Napełnianie (refill)")
                     }
                 }
                 .padding(.leading, 20)

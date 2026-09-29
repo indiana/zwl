@@ -146,7 +146,6 @@ fun MapViewContainer(
     val showWaterDrinking by viewModel.showWaterDrinking.collectAsState()
     val showWaterSprings by viewModel.showWaterSprings.collectAsState()
     val showWaterWells by viewModel.showWaterWells.collectAsState()
-    val showWaterRefill by viewModel.showWaterRefill.collectAsState()
     val waterSources by viewModel.waterSources.collectAsState()
     val selectedWaterSource by zoneDetailViewModel.selectedWaterSourceDetails.collectAsState()
     val showForestBans by viewModel.showForestBans.collectAsState()
@@ -352,8 +351,7 @@ fun MapViewContainer(
                         Expression.stop("SPRING", Expression.literal("#00838F")),
                         Expression.stop("WELL", Expression.literal("#6D4C41")),
                         Expression.stop("FOUNTAIN", Expression.literal("#00ACC1")),
-                        Expression.stop("WATER_ON_SITE", Expression.literal("#1565C0")),
-                        Expression.stop("REFILL", Expression.literal("#2E7D32"))
+                        Expression.stop("WATER_ON_SITE", Expression.literal("#1565C0"))
                     )
                 ),
                 PropertyFactory.circleOpacity(
@@ -1204,7 +1202,6 @@ fun MapViewContainer(
                     showWaterDrinking = showWaterDrinking,
                     showWaterSprings = showWaterSprings,
                     showWaterWells = showWaterWells,
-                    showWaterRefill = showWaterRefill,
                     showParking = showParking,
                     showEducation = showEducation,
                     showOthers = showOthers,
@@ -1219,7 +1216,6 @@ fun MapViewContainer(
                     onShowWaterDrinkingChange = viewModel::setShowWaterDrinking,
                     onShowWaterSpringsChange = viewModel::setShowWaterSprings,
                     onShowWaterWellsChange = viewModel::setShowWaterWells,
-                    onShowWaterRefillChange = viewModel::setShowWaterRefill,
                     onSetAllWater = viewModel::setShowAllWater,
                     onShowParkingChange = viewModel::setShowParking,
                     onShowEducationChange = viewModel::setShowEducation,

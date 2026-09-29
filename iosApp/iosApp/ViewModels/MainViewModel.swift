@@ -107,22 +107,14 @@ final class MainViewModel: NSObject, ObservableObject {
             scheduleWaterGeoJsonRefresh()
         }
     }
-    @Published var showWaterRefill: Bool = true {
-        didSet {
-            UserDefaults.standard.set(showWaterRefill, forKey: Self.keyShowWaterRefill)
-            scheduleWaterGeoJsonRefresh()
-        }
-    }
-
     var showWaterSources: Bool {
-        showWaterDrinking || showWaterSprings || showWaterWells || showWaterRefill
+        showWaterDrinking || showWaterSprings || showWaterWells
     }
 
     func setAllWater(_ show: Bool) {
         showWaterDrinking = show
         showWaterSprings = show
         showWaterWells = show
-        showWaterRefill = show
     }
 
     private func scheduleWaterGeoJsonRefresh() {
@@ -131,8 +123,7 @@ final class MainViewModel: NSObject, ObservableObject {
             self.waterGeoJson = (try? await self.app.waterSourcesGeoJson(
                 includeDrinking: self.showWaterDrinking,
                 includeSprings: self.showWaterSprings,
-                includeWells: self.showWaterWells,
-                includeRefill: self.showWaterRefill)) ?? ""
+                includeWells: self.showWaterWells)) ?? ""
         }
     }
 
@@ -289,7 +280,6 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyShowWaterDrinking = "mapSettings.showWaterDrinking"
     private static let keyShowWaterSprings = "mapSettings.showWaterSprings"
     private static let keyShowWaterWells = "mapSettings.showWaterWells"
-    private static let keyShowWaterRefill = "mapSettings.showWaterRefill"
     private static let keyHeadingUp = "mapSettings.headingUp"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
@@ -317,7 +307,6 @@ final class MainViewModel: NSObject, ObservableObject {
         showWaterDrinking = defaults.object(forKey: Self.keyShowWaterDrinking) as? Bool ?? legacyWater
         showWaterSprings = defaults.object(forKey: Self.keyShowWaterSprings) as? Bool ?? legacyWater
         showWaterWells = defaults.object(forKey: Self.keyShowWaterWells) as? Bool ?? legacyWater
-        showWaterRefill = defaults.object(forKey: Self.keyShowWaterRefill) as? Bool ?? legacyWater
         headingUp = defaults.object(forKey: Self.keyHeadingUp) as? Bool ?? false
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
@@ -383,8 +372,7 @@ final class MainViewModel: NSObject, ObservableObject {
         waterGeoJson = (try? await app.waterSourcesGeoJson(
             includeDrinking: showWaterDrinking,
             includeSprings: showWaterSprings,
-            includeWells: showWaterWells,
-            includeRefill: showWaterRefill)) ?? ""
+            includeWells: showWaterWells)) ?? ""
         guard let zones = try? await app.zonesGeoJson(),
               let bans = try? await app.bansGeoJson(),
               let pois = try? await app.poisGeoJson() else { return }

@@ -15,6 +15,6 @@ class WaterSourceClassificationTest {
         assertEquals(WaterSourceGroup.DRINKING, WaterSourceType.WATER_ON_SITE.waterGroup())
         assertEquals(WaterSourceGroup.SPRING, WaterSourceType.SPRING.waterGroup())
         assertEquals(WaterSourceGroup.WELL, WaterSourceType.WELL.waterGroup())
-        assertEquals(WaterSourceGroup.REFILL, WaterSourceType.REFILL.waterGroup())
+        assertEquals(WaterSourceGroup.DRINKING, WaterSourceType.REFILL.waterGroup())
     }
 }

@@ -34,7 +34,6 @@ fun MapLayersOverlay(
     showWaterDrinking: Boolean,
     showWaterSprings: Boolean,
     showWaterWells: Boolean,
-    showWaterRefill: Boolean,
     showParking: Boolean,
     showEducation: Boolean,
     showOthers: Boolean,
@@ -49,7 +48,6 @@ fun MapLayersOverlay(
     onShowWaterDrinkingChange: (Boolean) -> Unit,
     onShowWaterSpringsChange: (Boolean) -> Unit,
     onShowWaterWellsChange: (Boolean) -> Unit,
-    onShowWaterRefillChange: (Boolean) -> Unit,
     onSetAllWater: (Boolean) -> Unit,
     onShowParkingChange: (Boolean) -> Unit,
     onShowEducationChange: (Boolean) -> Unit,
@@ -179,12 +177,12 @@ fun MapLayersOverlay(
                             ) {
                                 TriStateCheckbox(
                                     state = when {
-                                        showWaterDrinking && showWaterSprings && showWaterWells && showWaterRefill -> ToggleableState.On
-                                        !showWaterDrinking && !showWaterSprings && !showWaterWells && !showWaterRefill -> ToggleableState.Off
+                                        showWaterDrinking && showWaterSprings && showWaterWells -> ToggleableState.On
+                                        !showWaterDrinking && !showWaterSprings && !showWaterWells -> ToggleableState.Off
                                         else -> ToggleableState.Indeterminate
                                     },
                                     onClick = {
-                                        val allOn = showWaterDrinking && showWaterSprings && showWaterWells && showWaterRefill
+                                        val allOn = showWaterDrinking && showWaterSprings && showWaterWells
                                         onSetAllWater(!allOn)
                                     }
                                 )
@@ -214,13 +212,6 @@ fun MapLayersOverlay(
                                 color = Color(0xFF6D4C41),
                                 label = "Studnie",
                                 onCheckedChange = onShowWaterWellsChange,
-                                indent = 24.dp
-                            )
-                            LayerCheckboxRow(
-                                checked = showWaterRefill,
-                                color = Color(0xFF2E7D32),
-                                label = "Napełnianie (refill)",
-                                onCheckedChange = onShowWaterRefillChange,
                                 indent = 24.dp
                             )
                         }

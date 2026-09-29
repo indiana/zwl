@@ -505,7 +505,6 @@ struct MapView: UIViewRepresentable {
                 "WELL", "#6D4C41",
                 "FOUNTAIN", "#00ACC1",
                 "WATER_ON_SITE", "#1565C0",
-                "REFILL", "#2E7D32",
                 "#1565C0"
             ] as [Any])
             waterLayer.circleOpacity = Self.waterOpacityExpression()
