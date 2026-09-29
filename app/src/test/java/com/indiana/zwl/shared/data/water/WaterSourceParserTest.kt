@@ -86,8 +86,8 @@ class WaterSourceParserTest {
         assertEquals("no", first.intermittent)
         assertEquals("no", first.fee)
         assertEquals("24/7", first.openingHours)
-        assertEquals("Gmina", first.operator)
-        assertEquals("Kran", first.description)
+        assertEquals("Gmina", first.operatorName)
+        assertEquals("Kran", first.waterDescription)
         assertEquals("yes", first.bottle)
         assertEquals("bubbler", parsed[1].fountain)
         assertEquals(null, parsed[1].pump)
@@ -105,7 +105,7 @@ class WaterSourceParserTest {
         val parsed = WaterSourceParser.parse(json).single()
 
         assertEquals(null, parsed.pump)
-        assertEquals(null, parsed.operator)
+        assertEquals(null, parsed.operatorName)
     }
 
     @Test
