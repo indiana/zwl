@@ -107,8 +107,9 @@ final class MainViewModel: NSObject, ObservableObject {
             scheduleWaterGeoJsonRefresh()
         }
     }
-
-    var showWaterSources: Bool { showWaterDrinking || showWaterSprings || showWaterWells }
+    var showWaterSources: Bool {
+        showWaterDrinking || showWaterSprings || showWaterWells
+    }
 
     func setAllWater(_ show: Bool) {
         showWaterDrinking = show
@@ -896,7 +897,12 @@ final class MainViewModel: NSObject, ObservableObject {
     func reloadOfflineAreas() async {
         let records = (try? await app.offlineAreas()) ?? []
         let sources = records.map {
-            OfflineTileArea(id: $0.id, path: app.offlineAreaFilePath(fileName: $0.fileName))
+            OfflineTileArea(
+                id: $0.id,
+                path: app.offlineAreaFilePath(fileName: $0.fileName),
+                minZoom: $0.minZoom,
+                maxZoom: $0.maxZoom
+            )
         }
         offlineAreaRecords = records
         offlineTileSources = sources

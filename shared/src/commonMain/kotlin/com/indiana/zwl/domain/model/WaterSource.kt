@@ -1,6 +1,8 @@
 package com.indiana.zwl.domain.model
 
-enum class WaterSourceType { DRINKING_WATER, WATER_TAP, WATER_POINT, SPRING, WELL, FOUNTAIN }
+enum class WaterSourceType {
+    DRINKING_WATER, WATER_TAP, WATER_POINT, SPRING, WELL, FOUNTAIN, WATER_ON_SITE, REFILL
+}
 
 enum class DrinkingWaterStatus { YES, NO, UNKNOWN }
 
@@ -15,7 +17,17 @@ data class WaterSource(
     val drinkingWater: DrinkingWaterStatus,
     val verified: Boolean,
     val depthMeters: Double? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val pump: String? = null,
+    val drinkingWaterRaw: String? = null,
+    val seasonal: String? = null,
+    val intermittent: String? = null,
+    val fountain: String? = null,
+    val fee: String? = null,
+    val openingHours: String? = null,
+    val operatorName: String? = null,
+    val waterDescription: String? = null,
+    val bottle: String? = null
 )
 
 data class WaterDataState(

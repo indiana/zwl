@@ -13,6 +13,7 @@ class WaterSourceParserTest {
         type: String = "SPRING",
         drinkingWater: String? = null,
         depthMeters: String? = null,
+        extraProperties: String? = null,
         geometryType: String = "Point",
         coordinates: String = "[19.0,52.0]"
     ): String {
@@ -20,6 +21,7 @@ class WaterSourceParserTest {
             append("\"osmId\":\"$osmId\",\"type\":\"$type\"")
             drinkingWater?.let { append(",\"drinkingWater\":\"$it\"") }
             depthMeters?.let { append(",\"depthMeters\":$it") }
+            extraProperties?.let { append(",$it") }
         }
         return "{\"type\":\"Feature\",\"properties\":{$props},\"geometry\":{\"type\":\"$geometryType\",\"coordinates\":$coordinates}}"
     }
@@ -35,7 +37,9 @@ class WaterSourceParserTest {
             feature(osmId = "n3", type = "WATER_POINT"),
             feature(osmId = "n4", type = "SPRING"),
             feature(osmId = "n5", type = "WELL"),
-            feature(osmId = "n6", type = "FOUNTAIN")
+            feature(osmId = "n6", type = "FOUNTAIN"),
+            feature(osmId = "n7", type = "WATER_ON_SITE"),
+            feature(osmId = "n8", type = "REFILL")
         )
 
         val types = WaterSourceParser.parse(json).map { it.type }
@@ -47,10 +51,61 @@ class WaterSourceParserTest {
                 WaterSourceType.WATER_POINT,
                 WaterSourceType.SPRING,
                 WaterSourceType.WELL,
-                WaterSourceType.FOUNTAIN
+                WaterSourceType.FOUNTAIN,
+                WaterSourceType.WATER_ON_SITE,
+                WaterSourceType.REFILL
             ),
             types
         )
+    }
+
+    @Test
+    fun `parses optional enrichment properties`() {
+        val json = collection(
+            feature(
+                type = "DRINKING_WATER",
+                extraProperties = "\"pump\":\"manual\",\"drinkingWaterRaw\":\"treated\"," +
+                    "\"seasonal\":\"yes\",\"intermittent\":\"no\",\"fee\":\"no\"," +
+                    "\"openingHours\":\"24/7\",\"operator\":\"Gmina\",\"description\":\"Kran\"," +
+                    "\"bottle\":\"yes\""
+            ),
+            feature(
+                osmId = "n2",
+                type = "FOUNTAIN",
+                drinkingWater = "YES",
+                extraProperties = "\"fountain\":\"bubbler\""
+            )
+        )
+
+        val parsed = WaterSourceParser.parse(json)
+
+        val first = parsed.first()
+        assertEquals("manual", first.pump)
+        assertEquals("treated", first.drinkingWaterRaw)
+        assertEquals("yes", first.seasonal)
+        assertEquals("no", first.intermittent)
+        assertEquals("no", first.fee)
+        assertEquals("24/7", first.openingHours)
+        assertEquals("Gmina", first.operatorName)
+        assertEquals("Kran", first.waterDescription)
+        assertEquals("yes", first.bottle)
+        assertEquals("bubbler", parsed[1].fountain)
+        assertEquals(null, parsed[1].pump)
+    }
+
+    @Test
+    fun `treats blank and null enrichment properties as absent`() {
+        val json = collection(
+            feature(
+                type = "REFILL",
+                extraProperties = "\"pump\":\"\",\"operator\":null"
+            )
+        )
+
+        val parsed = WaterSourceParser.parse(json).single()
+
+        assertEquals(null, parsed.pump)
+        assertEquals(null, parsed.operatorName)
     }
 
     @Test

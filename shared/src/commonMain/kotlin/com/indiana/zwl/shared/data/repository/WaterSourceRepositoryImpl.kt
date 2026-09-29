@@ -45,7 +45,17 @@ class WaterSourceRepositoryImpl(
                     drinkingWater = source.drinkingWater.name,
                     verified = if (source.verified) 1L else 0L,
                     depthMeters = source.depthMeters,
-                    notes = source.notes
+                    notes = source.notes,
+                    pump = source.pump,
+                    drinkingWaterRaw = source.drinkingWaterRaw,
+                    seasonal = source.seasonal,
+                    intermittent = source.intermittent,
+                    fountain = source.fountain,
+                    fee = source.fee,
+                    openingHours = source.openingHours,
+                    operator_ = source.operatorName,
+                    description = source.waterDescription,
+                    bottle = source.bottle
                 )
             }
         }
@@ -101,7 +111,17 @@ class WaterSourceRepositoryImpl(
                 ?: DrinkingWaterStatus.UNKNOWN,
             verified = verified != 0L,
             depthMeters = depthMeters,
-            notes = notes
+            notes = notes,
+            pump = pump,
+            drinkingWaterRaw = drinkingWaterRaw,
+            seasonal = seasonal,
+            intermittent = intermittent,
+            fountain = fountain,
+            fee = fee,
+            openingHours = openingHours,
+            operatorName = operator_,
+            waterDescription = description,
+            bottle = bottle
         )
     }
 }

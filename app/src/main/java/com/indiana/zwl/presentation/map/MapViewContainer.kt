@@ -61,6 +61,7 @@ import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.RasterLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.style.sources.RasterSource
+import org.maplibre.android.style.sources.TileSet
 import java.io.File
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -350,7 +351,8 @@ fun MapViewContainer(
                         Expression.stop("WATER_POINT", Expression.literal("#039BE5")),
                         Expression.stop("SPRING", Expression.literal("#00838F")),
                         Expression.stop("WELL", Expression.literal("#6D4C41")),
-                        Expression.stop("FOUNTAIN", Expression.literal("#00ACC1"))
+                        Expression.stop("FOUNTAIN", Expression.literal("#00ACC1")),
+                        Expression.stop("WATER_ON_SITE", Expression.literal("#1565C0"))
                     )
                 ),
                 PropertyFactory.circleOpacity(
@@ -532,7 +534,11 @@ fun MapViewContainer(
             if (!File(path).isFile) return@forEachIndexed
             val sourceId = "osm-offline-$index"
             val layerId = "osm-offline-layer-$index"
-            style.addSource(RasterSource(sourceId, "mbtiles://file://$path", 256))
+            val tileSet = TileSet(path, "mbtiles://file://$path").apply {
+                minZoom = area.minZoom.toFloat()
+                maxZoom = area.maxZoom.toFloat()
+            }
+            style.addSource(RasterSource(sourceId, tileSet, 256))
             style.addLayerBelow(RasterLayer(layerId, sourceId), "osm")
         }
     }

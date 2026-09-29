@@ -60,7 +60,10 @@ struct LayersSettingsView: View {
                     }
                 }
                 Toggle(isOn: Binding(
-                    get: { viewModel.showWaterDrinking && viewModel.showWaterSprings && viewModel.showWaterWells },
+                    get: {
+                        viewModel.showWaterDrinking && viewModel.showWaterSprings
+                            && viewModel.showWaterWells
+                    },
                     set: { viewModel.setAllWater($0) }
                 )) {
                     Text("Woda").fontWeight(.semibold)

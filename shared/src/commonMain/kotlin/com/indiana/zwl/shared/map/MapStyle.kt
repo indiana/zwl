@@ -23,8 +23,7 @@ object MapStyle {
                 "id": "osm",
                 "type": "raster",
                 "source": "osm",
-                "minzoom": 0,
-                "maxzoom": 19
+                "minzoom": 0
             }
         ]
     }
