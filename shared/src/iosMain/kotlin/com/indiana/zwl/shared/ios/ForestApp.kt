@@ -9,6 +9,7 @@ import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.SoilCover
+import com.indiana.zwl.domain.model.WaterDataState
 import com.indiana.zwl.domain.model.WaterSource
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ForestBanRepository
@@ -245,6 +246,8 @@ class ForestApp(
     }
 
     fun cachedWaterSources(): List<WaterSource> = cachedWaterSources
+
+    suspend fun waterDataState(): WaterDataState? = waterSourceRepository.getDataState()
 
     suspend fun syncZones(): Boolean = withContext(Dispatchers.Default) {
         try {

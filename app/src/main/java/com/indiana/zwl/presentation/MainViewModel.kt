@@ -17,6 +17,7 @@ import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.NewSavedPoint
+import com.indiana.zwl.domain.model.WaterDataState
 import com.indiana.zwl.domain.model.WaterSource
 import com.indiana.zwl.shared.data.water.WaterSyncManager
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
@@ -288,6 +289,15 @@ class MainViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _waterDataState = MutableStateFlow<WaterDataState?>(null)
+    val waterDataState: StateFlow<WaterDataState?> = _waterDataState.asStateFlow()
+
+    fun refreshWaterDataState() {
+        viewModelScope.launch {
+            _waterDataState.value = waterSourceRepository.getDataState()
+        }
+    }
+
     private val _showPoiGroups = MutableStateFlow(
         PoiUiGroup.entries.associateWith { sharedPrefs.getBoolean("show_poi_${it.key}", true) }
     )
@@ -451,6 +461,7 @@ class MainViewModel @Inject constructor(
 
     init {
         loadZonesAndInitializeEngine()
+        refreshWaterDataState()
     }
 
     fun setLocationPermissionGranted(granted: Boolean) {
@@ -484,6 +495,7 @@ class MainViewModel @Inject constructor(
             viewModelScope.launch(ioDispatcher) {
                 try {
                     waterSyncManager.ensureBaselineIfEmpty()
+                    refreshWaterDataState()
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     e.printStackTrace()
@@ -544,6 +556,7 @@ class MainViewModel @Inject constructor(
             viewModelScope.launch(ioDispatcher) {
                 try {
                     waterSyncManager.refreshIfStale()
+                    refreshWaterDataState()
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     e.printStackTrace()

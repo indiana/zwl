@@ -55,6 +55,7 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var bansGeoJson: String = ""
     @Published var poisGeoJson: String = ""
     @Published var waterGeoJson: String = ""
+    @Published var waterDataState: WaterDataState?
 
     // Layer toggles (persisted across launches like Android's
     // SharedPreferences `zwl_map_settings`; they reset to defaults only on
@@ -373,6 +374,7 @@ final class MainViewModel: NSObject, ObservableObject {
             includeDrinking: showWaterDrinking,
             includeSprings: showWaterSprings,
             includeWells: showWaterWells)) ?? ""
+        waterDataState = (try? await app.waterDataState()) ?? nil
         guard let zones = try? await app.zonesGeoJson(),
               let bans = try? await app.bansGeoJson(),
               let pois = try? await app.poisGeoJson() else { return }
