@@ -1,8 +1,10 @@
 import SwiftUI
+import shared
 
 /// "O aplikacji" (Android `AboutScreen` parity): legal disclaimer, data
 /// sources with tappable links, privacy note and the app version footer.
 struct AboutView: View {
+    let waterDataState: WaterDataState?
     @Environment(\.dismiss) private var dismiss
 
     private let bdlPortalUrl = URL(string: "https://www.bdl.lasy.gov.pl/portal/")!
@@ -35,6 +37,19 @@ struct AboutView: View {
                         .foregroundColor(.secondary)
                 } header: {
                     sectionHeader("Źródła danych rządowych", systemImage: "globe")
+                }
+
+                Section {
+                    Text("Punkty wody pitnej, źródeł, studni i napełniania butelek pochodzą z OpenStreetMap i odświeżają się automatycznie.")
+                        .font(.system(size: 13))
+                    dataRow("Wersja danych", waterDataState.map { waterVersionLabel($0.dataVersion) } ?? "—")
+                    dataRow("Data pobrania", waterDataState.map { waterFetchedAtLabel($0.lastCheckedAt) } ?? "zestaw wbudowany")
+                    dataRow("Liczba punktów", waterDataState.map { String($0.count) } ?? "—")
+                    Text(WaterAttribution.shared.OSM)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                } header: {
+                    sectionHeader("Dane źródeł wody (OSM)", systemImage: "drop")
                 }
 
                 Section {
@@ -100,6 +115,32 @@ struct AboutView: View {
 
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    }
+
+    private func dataRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 13, weight: .medium))
+        }
+    }
+
+    private func waterVersionLabel(_ version: Int64) -> String {
+        guard version > 0 else { return "—" }
+        let year = version / 10000
+        let month = (version / 100) % 100
+        let day = version % 100
+        return String(format: "%04d-%02d-%02d", year, month, day)
+    }
+
+    private func waterFetchedAtLabel(_ millis: Int64) -> String {
+        guard millis > 0 else { return "zestaw wbudowany" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000.0))
     }
 
     private func sectionHeader(_ title: String, systemImage: String) -> some View {

@@ -114,7 +114,7 @@ struct MainView: View {
             OfflineAreasView(viewModel: viewModel)
         }
         .fullScreenCover(isPresented: $showAbout) {
-            AboutView()
+            AboutView(waterDataState: viewModel.waterDataState)
         }
         .alert("Obszar za duży", isPresented: Binding(
             get: { viewModel.downloadBlockedMessage != nil },
