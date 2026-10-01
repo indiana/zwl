@@ -2,6 +2,8 @@ package com.indiana.zwl.shared.di
 
 import com.indiana.zwl.shared.data.local.DatabaseDriverFactory
 import com.indiana.zwl.shared.data.remote.HttpClientFactory
+import com.indiana.zwl.shared.data.water.AndroidWaterBaselineProvider
+import com.indiana.zwl.shared.data.water.WaterBaselineProvider
 import com.indiana.zwl.shared.offline.AndroidOfflineAreaFiles
 import com.indiana.zwl.shared.offline.OfflineAreaFiles
 import org.koin.android.ext.koin.androidContext
@@ -11,4 +13,5 @@ val androidModule = module {
     single { DatabaseDriverFactory(androidContext()) }
     single { HttpClientFactory(androidContext()) }
     single<OfflineAreaFiles> { AndroidOfflineAreaFiles(androidContext()) }
+    single<WaterBaselineProvider> { AndroidWaterBaselineProvider(androidContext()) }
 }

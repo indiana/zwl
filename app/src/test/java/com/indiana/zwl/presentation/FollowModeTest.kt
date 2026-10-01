@@ -10,6 +10,8 @@ import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
+import com.indiana.zwl.domain.repository.WaterSourceRepository
+import com.indiana.zwl.shared.data.water.WaterSyncManager
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestBansUseCase
@@ -41,6 +43,8 @@ class FollowModeTest {
     private val zoneRepository: ZoneRepository = mockk()
     private val poiRepository: PoiRepository = mockk(relaxed = true)
     private val savedPointRepository: SavedPointRepository = mockk(relaxed = true)
+    private val waterSourceRepository: WaterSourceRepository = mockk(relaxed = true)
+    private val waterSyncManager: WaterSyncManager = mockk(relaxed = true)
     private val locationRepository: LocationRepository = mockk(relaxed = true)
     private val compassRepository: CompassRepository = mockk(relaxed = true)
     private val syncZonesUseCase: SyncZonesUseCase = mockk()
@@ -73,7 +77,8 @@ class FollowModeTest {
     }
 
     private fun createViewModel() = MainViewModel(
-        zoneRepository, poiRepository, savedPointRepository, locationRepository, compassRepository,
+        zoneRepository, poiRepository, savedPointRepository, waterSourceRepository, waterSyncManager,
+        locationRepository, compassRepository,
         syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
         getForestBansUseCase, getFireRiskUseCase,
         getZonesUseCase, spatialEngine, mainDispatcherRule.testDispatcher, context

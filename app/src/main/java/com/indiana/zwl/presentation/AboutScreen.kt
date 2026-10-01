@@ -52,9 +52,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.BuildConfig
 import com.indiana.zwl.R
+import com.indiana.zwl.domain.model.WaterDataState
 import com.indiana.zwl.presentation.theme.DarkForestBackground
 import com.indiana.zwl.presentation.theme.ForestGreenAccent
 import com.indiana.zwl.presentation.theme.ForestGreenText
+import com.indiana.zwl.shared.data.water.WaterAttribution
 
 private const val BDL_PORTAL_URL = "https://www.bdl.lasy.gov.pl/portal/"
 private const val IBL_FIRE_URL = "https://bazapozarow.ibles.pl/"
@@ -67,6 +69,7 @@ private const val INSTAGRAM_URL = "https://instagram.com/legalny.bushcraft"
 @Composable
 fun AboutScreen(
     onClose: () -> Unit,
+    waterDataState: WaterDataState? = null,
     modifier: Modifier = Modifier
 ) {
     val isLandscape =
@@ -201,6 +204,50 @@ fun AboutScreen(
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 17.sp
+                    )
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Public,
+                            contentDescription = null,
+                            tint = ForestGreenAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Dane źródeł wody (OSM)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Text(
+                        text = "Punkty wody pitnej, źródeł, studni i napełniania butelek pochodzą z OpenStreetMap i odświeżają się automatycznie.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 19.sp
+                    )
+
+                    DataRow(label = "Wersja danych", value = waterVersionLabel(waterDataState?.dataVersion))
+                    DataRow(label = "Data pobrania", value = waterFetchedAtLabel(waterDataState?.lastCheckedAt))
+                    DataRow(label = "Liczba punktów", value = waterDataState?.count?.toString() ?: "—")
+
+                    Text(
+                        text = WaterAttribution.OSM,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -376,4 +423,39 @@ private fun SourceLinkRow(label: String, url: String) {
             modifier = Modifier.clickable { openNadlesnictwoWebsite(context, url) }
         )
     }
+}
+
+@Composable
+private fun DataRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+private fun waterVersionLabel(version: Long?): String {
+    if (version == null || version <= 0L) return "—"
+    val year = version / 10000
+    val month = (version / 100) % 100
+    val day = version % 100
+    return String.format(java.util.Locale.US, "%04d-%02d-%02d", year, month, day)
+}
+
+private fun waterFetchedAtLabel(millis: Long?): String {
+    if (millis == null || millis <= 0L) return "zestaw wbudowany"
+    return java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date(millis))
 }

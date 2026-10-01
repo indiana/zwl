@@ -4,6 +4,7 @@ import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
+import com.indiana.zwl.domain.repository.WaterSourceRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import dagger.Module
 import dagger.Provides
@@ -44,5 +45,11 @@ object RepositoryModule {
     @Singleton
     fun provideOfflineAreaRepository(): OfflineAreaRepository {
         return get(OfflineAreaRepository::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideWaterSourceRepository(): WaterSourceRepository {
+        return get(WaterSourceRepository::class.java)
     }
 }

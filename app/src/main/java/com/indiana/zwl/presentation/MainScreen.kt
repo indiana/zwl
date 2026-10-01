@@ -236,6 +236,7 @@ fun MainScreen(
             val savedPoints by viewModel.savedPoints.collectAsStateWithLifecycle()
             val showSavedPointList by viewModel.showSavedPointList.collectAsStateWithLifecycle()
             val selectedSavedPointInfo by viewModel.selectedSavedPointInfo.collectAsStateWithLifecycle()
+            val waterDataState by viewModel.waterDataState.collectAsStateWithLifecycle()
             val savedPointDetailViewModel: SavedPointDetailViewModel = hiltViewModel()
             val selectedSavedPointDetails by savedPointDetailViewModel.details.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
@@ -459,7 +460,10 @@ fun MainScreen(
                                 )
 
                                 if (showAbout) {
-                                    AboutScreen(onClose = { showAbout = false })
+                                    AboutScreen(
+                                        waterDataState = waterDataState,
+                                        onClose = { showAbout = false }
+                                    )
                                 }
 
                                 if (showSavedPointList) {

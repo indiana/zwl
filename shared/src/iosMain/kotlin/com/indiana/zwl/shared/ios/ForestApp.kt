@@ -9,17 +9,22 @@ import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.model.SoilCover
+import com.indiana.zwl.domain.model.WaterDataState
+import com.indiana.zwl.domain.model.WaterSource
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.repository.ForestBanRepository
 import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
+import com.indiana.zwl.domain.repository.WaterSourceRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
 import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.domain.util.NadlesnictwoUrls
+import com.indiana.zwl.domain.util.WaterSourceGroup
+import com.indiana.zwl.domain.util.waterGroup
 import com.indiana.zwl.shared.data.offline.KtorIosTileFetcher
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
@@ -28,6 +33,7 @@ import com.indiana.zwl.shared.data.remote.ForestBanSyncParser
 import com.indiana.zwl.shared.data.remote.PoiSyncParser
 import com.indiana.zwl.shared.data.remote.ZoneSyncParser
 import com.indiana.zwl.shared.data.remote.model.GeoJsonCollection
+import com.indiana.zwl.shared.data.water.WaterSyncManager
 import com.indiana.zwl.shared.map.MapGeoJson
 import com.indiana.zwl.shared.offline.MbtilesStoreFactory
 import com.indiana.zwl.shared.offline.OfflineAreaDownloadCoordinator
@@ -69,6 +75,8 @@ class ForestApp(
     private val forestBanRepository: ForestBanRepository,
     private val savedPointRepository: SavedPointRepository,
     private val offlineAreaRepository: OfflineAreaRepository,
+    private val waterSourceRepository: WaterSourceRepository,
+    private val waterSyncManager: WaterSyncManager,
     private val offlineStoreFactory: MbtilesStoreFactory,
     private val offlineAreaFiles: OfflineAreaFiles,
     private val arcgisApi: BdlArcgisApi,
@@ -95,6 +103,8 @@ class ForestApp(
     private var cachedPois: List<Poi> = emptyList()
 
     private var cachedBans: List<ForestBan> = emptyList()
+
+    private var cachedWaterSources: List<WaterSource> = emptyList()
 
     companion object {
         private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
@@ -173,6 +183,8 @@ class ForestApp(
             ok = false
         }
 
+        ensureWaterBaseline()
+
         refreshSpatialIndexes()
         return ok
     }
@@ -187,6 +199,7 @@ class ForestApp(
             val zonesOk = syncZones()
             val bansOk = syncBans()
             val poisOk = syncPois()
+            ensureWaterBaseline()
             refreshSpatialIndexes()
             zonesOk && bansOk && poisOk
         } ?: false
@@ -198,9 +211,43 @@ class ForestApp(
         cachedZones = zones
         cachedBans = bans
         cachedPois = poiRepository.getAllPois().first()
+        cachedWaterSources = waterSourceRepository.getAllOnce()
         zoneEngine.initialize(zones)
         banEngine.initializeBans(bans)
     }
+
+    suspend fun ensureWaterBaseline(): Boolean = withContext(Dispatchers.Default) {
+        val loaded = waterSyncManager.ensureBaselineIfEmpty().isSuccess
+        cachedWaterSources = waterSourceRepository.getAllOnce()
+        loaded
+    }
+
+    suspend fun refreshWaterSourcesIfStale(now: Long): Boolean = withContext(Dispatchers.Default) {
+        val result = waterSyncManager.refreshIfStale()
+        if (result.isSuccess) {
+            cachedWaterSources = waterSourceRepository.getAllOnce()
+        }
+        result.isSuccess
+    }
+
+    suspend fun waterSourcesGeoJson(
+        includeDrinking: Boolean,
+        includeSprings: Boolean,
+        includeWells: Boolean
+    ): String = withContext(Dispatchers.Default) {
+        val filtered = cachedWaterSources.filter { source ->
+            when (source.type.waterGroup()) {
+                WaterSourceGroup.DRINKING -> includeDrinking
+                WaterSourceGroup.SPRING -> includeSprings
+                WaterSourceGroup.WELL -> includeWells
+            }
+        }
+        MapGeoJson.waterSourcesToGeoJson(filtered)
+    }
+
+    fun cachedWaterSources(): List<WaterSource> = cachedWaterSources
+
+    suspend fun waterDataState(): WaterDataState? = waterSourceRepository.getDataState()
 
     suspend fun syncZones(): Boolean = withContext(Dispatchers.Default) {
         try {

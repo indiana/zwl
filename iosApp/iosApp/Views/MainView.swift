@@ -77,6 +77,13 @@ struct MainView: View {
                     .presentationDetents([.medium])
             }
         }
+        .sheet(isPresented: isWaterSourceSheetPresented) {
+            if let waterSource = viewModel.selectedWaterSource {
+                WaterSourceDetailView(waterSource: waterSource,
+                                      distanceMeters: viewModel.selectedWaterSourceDistanceMeters)
+                    .presentationDetents([.medium, .large])
+            }
+        }
         .sheet(isPresented: isPendingPointSheetPresented) {
             if let point = viewModel.pendingPoint {
                 PointDetailView(
@@ -107,7 +114,7 @@ struct MainView: View {
             OfflineAreasView(viewModel: viewModel)
         }
         .fullScreenCover(isPresented: $showAbout) {
-            AboutView()
+            AboutView(waterDataState: viewModel.waterDataState)
         }
         .alert("Obszar za duży", isPresented: Binding(
             get: { viewModel.downloadBlockedMessage != nil },
@@ -221,12 +228,15 @@ struct MainView: View {
             zonesJson: viewModel.zonesGeoJson,
             bansJson: viewModel.bansGeoJson,
             poisJson: viewModel.poisGeoJson,
+            waterJson: viewModel.waterGeoJson,
             showBans: viewModel.showBans,
             showAccommodation: viewModel.showAccommodation,
             showRest: viewModel.showRest,
             showShelters: viewModel.showShelters,
             showFireplaces: viewModel.showFireplaces,
             showViewpoints: viewModel.showViewpoints,
+            showWaterLaunch: viewModel.showWaterLaunch,
+            showWaterSources: viewModel.showWaterSources,
             showParking: viewModel.showParking,
             showEducation: viewModel.showEducation,
             showOthers: viewModel.showOthers,
@@ -248,6 +258,7 @@ recenterSignal: viewModel.recenterSignal,
             onTapZone: { viewModel.selectZone(named: $0) },
             onTapBan: { viewModel.selectBan(byRemoteId: $0) },
             onTapPoi: { viewModel.selectPoi(named: $0) },
+            onTapWater: { viewModel.selectWaterSource(osmId: $0) },
             onTapSavedPoint: { viewModel.openSavedPointProperties(id: $0) },
             onTapBackground: { viewModel.clearSelection() },
             onVisibleRegionChange: { viewModel.visibleRegion = $0 },
@@ -424,6 +435,11 @@ recenterSignal: viewModel.recenterSignal,
 
     private var isPoiSheetPresented: Binding<Bool> {
         Binding(get: { viewModel.selectedPoi != nil },
+                set: { if !$0 { viewModel.clearSelection() } })
+    }
+
+    private var isWaterSourceSheetPresented: Binding<Bool> {
+        Binding(get: { viewModel.selectedWaterSource != nil },
                 set: { if !$0 { viewModel.clearSelection() } })
     }
 
