@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.indiana.zwl.domain.model.DownloadedArea
 import com.indiana.zwl.domain.repository.OfflineAreaRepository
+import com.indiana.zwl.domain.usecase.ZoneBounds
 import com.indiana.zwl.presentation.DownloadEvent
 import com.indiana.zwl.shared.offline.MbtilesStoreFactory
 import com.indiana.zwl.shared.offline.OfflineAreaDownloadCoordinator
@@ -51,6 +52,15 @@ class MapViewModel @Inject constructor(
     // Tap on a managed area -> fly the map camera to its bbox.
     private val _flyToArea = MutableSharedFlow<DownloadedArea>(extraBufferCapacity = 1)
     val flyToArea: SharedFlow<DownloadedArea> = _flyToArea.asSharedFlow()
+
+    // Tap on a search hit -> fly the map camera to the zone's bbox.
+    private val _flyToZone = MutableSharedFlow<ZoneBounds>(extraBufferCapacity = 1)
+    val flyToZone: SharedFlow<ZoneBounds> = _flyToZone.asSharedFlow()
+
+    // "Szukaj strefy" full-screen overlay (same lifetime rules as
+    // `showOfflineAreas` below — must survive switching the bottom tab).
+    private val _showZoneSearch = MutableStateFlow(false)
+    val showZoneSearch: StateFlow<Boolean> = _showZoneSearch.asStateFlow()
 
     // Non-null -> UI shows a modal explanation why the download cannot start
     // (size above the absolute safety ceiling). Toasts are too easy to miss.
@@ -290,6 +300,18 @@ class MapViewModel @Inject constructor(
 
     fun focusArea(area: DownloadedArea) {
         _flyToArea.tryEmit(area)
+    }
+
+    fun openZoneSearch() {
+        _showZoneSearch.value = true
+    }
+
+    fun closeZoneSearch() {
+        _showZoneSearch.value = false
+    }
+
+    fun focusZone(bounds: ZoneBounds) {
+        _flyToZone.tryEmit(bounds)
     }
 
     fun offlineFilePath(fileName: String): String = offlineAreaFiles.filePath(fileName)

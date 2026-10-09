@@ -98,6 +98,12 @@ struct MainView: View {
         .fullScreenCover(isPresented: isSavedPointListPresented) {
             SavedPointListView(viewModel: viewModel)
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { viewModel.showZoneSearch },
+            set: { if !$0 { viewModel.closeZoneSearch() } }
+        )) {
+            ZoneSearchView(viewModel: viewModel)
+        }
         .sheet(isPresented: isSavedPointPropertiesPresented) {
             if let point = viewModel.selectedSavedPoint {
                 SavedPointPropertiesView(point: point, viewModel: viewModel)
@@ -344,6 +350,16 @@ recenterSignal: viewModel.recenterSignal,
                 viewModel.openSavedPointList()
             }) {
                 Label("Zapisane punkty", systemImage: "bookmark")
+            }
+            .font(.system(size: 15))
+
+            Divider()
+
+            Button(action: {
+                isSettingsOpen = false
+                viewModel.openZoneSearch()
+            }) {
+                Label("Szukaj strefy", systemImage: "magnifyingglass")
             }
             .font(.system(size: 15))
 

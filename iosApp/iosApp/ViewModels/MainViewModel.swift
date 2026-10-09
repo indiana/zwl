@@ -264,6 +264,22 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var focusAreaSignal = 0
     private(set) var focusAreaRegion: MapRegion?
 
+    // Zone search ("Szukaj strefy") overlay. The heavy geometry pass
+    // (WKT -> bbox + distance) runs off-main only when the overlay opens or
+    // the user moved >100 m; keystrokes only rerun the cheap string filter.
+    @Published var showZoneSearch = false
+    @Published var zoneSearchQuery = ""
+    @Published var zoneSearchSortMode: ZoneSortMode = .alphabetical
+    @Published var zoneSearchResults: [ZoneSearchResult] = []
+    private var zoneSearchPrepared: [PreparedZone] = []
+    // Generation guard: a newer prepare pass cancels an older in-flight one.
+    private var zoneSearchGeneration = 0
+    // Location that the last prepare pass consumed (100 m rebuild threshold).
+    private var zoneSearchPreparedCoordinate: CLLocationCoordinate2D?
+    private let zoneSearchUseCase = SearchZonesUseCase()
+
+    var zoneSearchHasLocation: Bool { userCoordinate != nil }
+
     let app: ForestApp
     private let locationManager = CLLocationManager()
     private let pathMonitor = NWPathMonitor()
@@ -720,9 +736,11 @@ final class MainViewModel: NSObject, ObservableObject {
         setPendingPoint(latitude: latitude, longitude: longitude, name: name ?? "", source: .link)
     }
 
-    /// Pasted coordinates (Android `openPointFromPaste` parity).
+    /// Pasted coordinates (Android `openPointFromPaste` parity). Centers the
+    /// camera on the pasted point right after parsing, then opens the card.
     func openPointFromPaste(latitude: Double, longitude: Double) {
         setPendingPoint(latitude: latitude, longitude: longitude, name: "", source: .paste)
+        centerCamera(latitude: latitude, longitude: longitude)
     }
 
     /// Fills the pending-point card and asynchronously computes its zone status
@@ -789,8 +807,13 @@ final class MainViewModel: NSObject, ObservableObject {
     /// next GPS fix (Android parity: it doesn't follow). Re-enable follow via
     /// the settings toggle or a fresh app kill.
     func selectSavedPoint(_ point: SavedPoint) {
-        centerSavedPointLatitude = point.latitude
-        centerSavedPointLongitude = point.longitude
+        centerCamera(latitude: point.latitude, longitude: point.longitude)
+    }
+
+    /// Asks the map to center on a coordinate (zoom 15) by bumping the signal.
+    private func centerCamera(latitude: Double, longitude: Double) {
+        centerSavedPointLatitude = latitude
+        centerSavedPointLongitude = longitude
         centerSavedPointSignal += 1
         setFollowsUser(false)
     }
@@ -999,6 +1022,92 @@ final class MainViewModel: NSObject, ObservableObject {
         closeOfflineAreas()
     }
 
+    // MARK: - Zone search ("Szukaj strefy")
+
+    func openZoneSearch() {
+        zoneSearchQuery = ""
+        zoneSearchSortMode = .alphabetical
+        showZoneSearch = true
+        rebuildZoneSearchPrepared()
+        runZoneSearch()
+    }
+
+    func closeZoneSearch() { showZoneSearch = false }
+
+    func setZoneSearchQuery(_ query: String) {
+        zoneSearchQuery = query
+        runZoneSearch()
+    }
+
+    func setZoneSearchSort(_ mode: ZoneSortMode) {
+        zoneSearchSortMode = mode
+        runZoneSearch()
+    }
+
+    /// Tap on a search hit: dismiss the list and fly the camera to the zone's
+    /// bounding box (reuses the offline-area focus channel).
+    func focusZone(_ bounds: ZoneBounds) {
+        focusAreaRegion = MapRegion(latSouth: bounds.south,
+                                    latNorth: bounds.north,
+                                    lonWest: bounds.west,
+                                    lonEast: bounds.east)
+        focusAreaSignal += 1
+        closeZoneSearch()
+    }
+
+    /// Re-parses zone geometry + distances on a background task. Called when
+    /// the overlay opens and (from didUpdateLocations) after the user moved
+    /// >100 m — never on keystrokes.
+    private func rebuildZoneSearchPrepared() {
+        zoneSearchGeneration += 1
+        let generation = zoneSearchGeneration
+        let zones = app.cachedZones()
+        let location: ZoneSearchLocation? = {
+            guard let lat = userLatitude, let lon = userLongitude else { return nil }
+            return ZoneSearchLocation(lat: lat, lon: lon)
+        }()
+        zoneSearchPreparedCoordinate = userCoordinate
+        Task.detached(priority: .userInitiated) {
+            let prepared = SearchZonesUseCase().prepare(zones: zones, location: location)
+            await MainActor.run {
+                guard generation == self.zoneSearchGeneration else { return }
+                self.zoneSearchPrepared = prepared
+                self.runZoneSearch()
+            }
+        }
+    }
+
+    private func runZoneSearch() {
+        guard showZoneSearch else {
+            if !zoneSearchResults.isEmpty { zoneSearchResults = [] }
+            return
+        }
+        zoneSearchResults = zoneSearchUseCase.search(
+            prepared: zoneSearchPrepared,
+            query: zoneSearchQuery,
+            sortMode: zoneSearchSortMode
+        )
+    }
+
+    /// Location hook (called from didUpdateLocations): rebuilds the prepared
+    /// zone geometry only after the device moved 100 m since the last pass.
+    func zoneSearchMaybeRebuildForLocation() {
+        guard showZoneSearch else { return }
+        guard let coordinate = userCoordinate else {
+            if zoneSearchPreparedCoordinate != nil {
+                zoneSearchPreparedCoordinate = nil
+                rebuildZoneSearchPrepared()
+            }
+            return
+        }
+        if let previous = zoneSearchPreparedCoordinate {
+            let moved = CLLocation(latitude: previous.latitude, longitude: previous.longitude)
+                .distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
+            if moved < 100 { return }
+        }
+        rebuildZoneSearchPrepared()
+    }
+
     func downloadVisibleArea() {
         guard let region = visibleRegion else { return }
         downloadArea(region: region)
@@ -1172,6 +1281,7 @@ extension MainViewModel: CLLocationManagerDelegate {
         }
         lastPublishedLocation = loc
         userCoordinate = loc.coordinate
+        zoneSearchMaybeRebuildForLocation()
         Task { await self.computeLocationStatus() }
         // Refresh the fire risk only while it's unresolved: each fix used to
         // spawn a redundant Task that immediately returned.

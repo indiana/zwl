@@ -84,6 +84,11 @@ data class PendingPoint(
     val ban: ForestBan? = null
 )
 
+data class FocusCoordinate(
+    val lat: Double,
+    val lng: Double
+)
+
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val zoneRepository: ZoneRepository,
@@ -369,6 +374,9 @@ class MainViewModel @Inject constructor(
     private val _focusSavedPoint = MutableStateFlow<SavedPoint?>(null)
     val focusSavedPoint: StateFlow<SavedPoint?> = _focusSavedPoint.asStateFlow()
 
+    private val _focusCoordinate = MutableStateFlow<FocusCoordinate?>(null)
+    val focusCoordinate: StateFlow<FocusCoordinate?> = _focusCoordinate.asStateFlow()
+
     private val _selectedSavedPointInfo = MutableStateFlow<SavedPoint?>(null)
     val selectedSavedPointInfo: StateFlow<SavedPoint?> = _selectedSavedPointInfo.asStateFlow()
 
@@ -393,6 +401,16 @@ class MainViewModel @Inject constructor(
 
     fun openPointFromPaste(lat: Double, lng: Double) {
         setPendingPoint(PendingPoint(lat = lat, lng = lng, name = null, source = PointSource.PASTE))
+        focusCoordinate(lat, lng)
+    }
+
+    private fun focusCoordinate(lat: Double, lng: Double) {
+        _focusCoordinate.value = FocusCoordinate(lat, lng)
+        setFollowsUser(false)
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(100)
+            _focusCoordinate.value = null
+        }
     }
 
     private fun setPendingPoint(point: PendingPoint) {

@@ -89,6 +89,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Map
@@ -124,6 +125,7 @@ fun MapViewContainer(
     viewModel: MainViewModel,
     zoneDetailViewModel: ZoneDetailViewModel,
     mapViewModel: MapViewModel,
+    zoneSearchViewModel: ZoneSearchViewModel,
     zones: List<Zone>,
     isActive: Boolean,
     onOpenAbout: () -> Unit
@@ -160,6 +162,7 @@ fun MapViewContainer(
     val pendingPoint by viewModel.pendingPoint.collectAsState()
     val showLayersOverlay by viewModel.showLayersOverlay.collectAsState()
     val focusSavedPoint by viewModel.focusSavedPoint.collectAsState()
+    val focusCoordinate by viewModel.focusCoordinate.collectAsState()
     val orientationMode by viewModel.orientationMode.collectAsState()
     val headingUp = orientationMode == MapOrientationMode.HEADING_UP
     val followsUser by viewModel.followsUser.collectAsState()
@@ -496,18 +499,31 @@ fun MapViewContainer(
 
     val offlineAreas by mapViewModel.offlineAreas.collectAsState()
     val showOfflineAreas by mapViewModel.showOfflineAreas.collectAsState()
+    val showZoneSearch by mapViewModel.showZoneSearch.collectAsState()
+    val zoneSearchResults by zoneSearchViewModel.results.collectAsState()
+    val zoneSearchQuery by zoneSearchViewModel.query.collectAsState()
+    val zoneSearchSortMode by zoneSearchViewModel.sortMode.collectAsState()
+    val zoneSearchHasLocation by zoneSearchViewModel.hasLocation.collectAsState()
     val downloadBlockedMessage by mapViewModel.downloadBlockedMessage.collectAsState()
     val downloadConfirmMessage by mapViewModel.downloadConfirmMessage.collectAsState()
+
+    LaunchedEffect(zones) {
+        zoneSearchViewModel.setZones(zones)
+    }
+    LaunchedEffect(userLat, userLon) {
+        zoneSearchViewModel.updateUserLocation(userLat, userLon)
+    }
 
     // System back closes the topmost map overlay instead of finishing the app.
     // The map menu dropdown and AlertDialogs handle back on their own; this
     // covers the full-screen overlays and the bottom detail card.
     BackHandler(
-        enabled = showOfflineAreas || showLayersOverlay || selectedPoi != null ||
+        enabled = showOfflineAreas || showZoneSearch || showLayersOverlay || selectedPoi != null ||
             selectedWaterSource != null || isSettingsOpen
     ) {
         when {
             showOfflineAreas -> mapViewModel.closeOfflineAreas()
+            showZoneSearch -> mapViewModel.closeZoneSearch()
             showLayersOverlay -> viewModel.closeLayersOverlay()
             selectedPoi != null -> zoneDetailViewModel.clearSelectedPoi()
             selectedWaterSource != null -> zoneDetailViewModel.clearSelectedWaterSource()
@@ -549,6 +565,18 @@ fun MapViewContainer(
             val map = mapboxMapInstance ?: return@collect
             viewModel.setFollowsUser(false)
             val bounds = LatLngBounds.from(area.latNorth, area.lonEast, area.latSouth, area.lonWest)
+            map.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100), 800)
+        }
+    }
+
+    // Tap on a zone search hit -> animate the camera to the zone's bounding box.
+    LaunchedEffect(Unit) {
+        mapViewModel.flyToZone.collect { zoneBounds ->
+            val map = mapboxMapInstance ?: return@collect
+            viewModel.setFollowsUser(false)
+            val bounds = LatLngBounds.from(
+                zoneBounds.north, zoneBounds.east, zoneBounds.south, zoneBounds.west
+            )
             map.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100), 800)
         }
     }
@@ -874,6 +902,16 @@ fun MapViewContainer(
                     .build()
             }
 
+            LaunchedEffect(focusCoordinate, mapboxMapInstance) {
+                val focus = focusCoordinate ?: return@LaunchedEffect
+                val map = mapboxMapInstance ?: return@LaunchedEffect
+                map.cameraPosition = CameraPosition.Builder()
+                    .target(LatLng(focus.lat, focus.lng))
+                    .zoom(15.0)
+                    .bearing(if (headingUp) map.cameraPosition?.bearing ?: 0.0 else 0.0)
+                    .build()
+            }
+
             val openSavedPoints: () -> Unit = {
                 isSettingsOpen = false
                 viewModel.openSavedPointList()
@@ -917,6 +955,10 @@ fun MapViewContainer(
             val openOfflineAreas: () -> Unit = {
                 isSettingsOpen = false
                 mapViewModel.openOfflineAreas()
+            }
+            val openZoneSearch: () -> Unit = {
+                isSettingsOpen = false
+                mapViewModel.openZoneSearch()
             }
             val openAbout: () -> Unit = {
                 isSettingsOpen = false
@@ -1027,6 +1069,7 @@ fun MapViewContainer(
                                         isOnline = isOnlineState,
                                         isDownloadingArea = isDownloadingArea,
                                         onOpenSavedPoints = openSavedPoints,
+                                        onOpenZoneSearch = openZoneSearch,
                                         onOpenLayers = openLayers,
                                         onDownloadArea = downloadArea,
                                         onOpenOfflineAreas = openOfflineAreas,
@@ -1067,6 +1110,7 @@ fun MapViewContainer(
                             isOnline = isOnlineState,
                             isDownloadingArea = isDownloadingArea,
                             onOpenSavedPoints = openSavedPoints,
+                            onOpenZoneSearch = openZoneSearch,
                             onOpenLayers = openLayers,
                             onDownloadArea = downloadArea,
                             onOpenOfflineAreas = openOfflineAreas,
@@ -1115,6 +1159,22 @@ fun MapViewContainer(
                     onDeleteAll = mapViewModel::deleteAllAreas,
                     onRenameArea = mapViewModel::renameArea,
                     onRefreshArea = mapViewModel::refreshArea
+                )
+            }
+
+            if (showZoneSearch) {
+                ZoneSearchScreen(
+                    results = zoneSearchResults,
+                    query = zoneSearchQuery,
+                    sortMode = zoneSearchSortMode,
+                    hasLocation = zoneSearchHasLocation,
+                    onQueryChange = zoneSearchViewModel::setQuery,
+                    onSortModeChange = zoneSearchViewModel::setSortMode,
+                    onDismiss = mapViewModel::closeZoneSearch,
+                    onZoneTap = { result ->
+                        mapViewModel.closeZoneSearch()
+                        mapViewModel.focusZone(result.bounds)
+                    }
                 )
             }
 
@@ -1237,6 +1297,7 @@ private fun SettingsMenuContent(
     isOnline: Boolean,
     isDownloadingArea: Boolean,
     onOpenSavedPoints: () -> Unit,
+    onOpenZoneSearch: () -> Unit,
     onOpenLayers: () -> Unit,
     onDownloadArea: () -> Unit,
     onOpenOfflineAreas: () -> Unit,
@@ -1262,6 +1323,28 @@ private fun SettingsMenuContent(
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Zapisane punkty",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+
+        Button(
+            onClick = onOpenZoneSearch,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Szukaj strefy",
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSecondaryContainer

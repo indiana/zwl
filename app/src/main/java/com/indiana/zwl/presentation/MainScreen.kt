@@ -52,7 +52,8 @@ import androidx.compose.material.icons.filled.Map
 fun MainScreen(
     viewModel: MainViewModel,
     zoneDetailViewModel: ZoneDetailViewModel,
-    mapViewModel: com.indiana.zwl.presentation.map.MapViewModel
+    mapViewModel: com.indiana.zwl.presentation.map.MapViewModel,
+    zoneSearchViewModel: com.indiana.zwl.presentation.map.ZoneSearchViewModel
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -454,6 +455,7 @@ fun MainScreen(
                                     viewModel = viewModel,
                                     zoneDetailViewModel = zoneDetailViewModel,
                                     mapViewModel = mapViewModel,
+                                    zoneSearchViewModel = zoneSearchViewModel,
                                     zones = viewModel.zones,
                                     isActive = true,
                                     onOpenAbout = { showAbout = true }
