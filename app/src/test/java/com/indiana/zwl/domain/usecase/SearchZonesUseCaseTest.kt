@@ -40,11 +40,11 @@ class SearchZonesUseCaseTest {
 
         val results = useCase.search(prepared, "SPYCH", ZoneSortMode.ALPHABETICAL)
         assertEquals(1, results.size)
-        assertEquals("Nadleśnictwo Spychowo", results[0].zone.forestDistrict)
+        assertEquals("Nadleśnictwo Spychowo", results[0].zoneInfo.forestDistrict)
 
         val diacriticQuery = useCase.search(prepared, "działd", ZoneSortMode.ALPHABETICAL)
         assertEquals(1, diacriticQuery.size)
-        assertEquals("Nadleśnictwo Działdowo", diacriticQuery[0].zone.forestDistrict)
+        assertEquals("Nadleśnictwo Działdowo", diacriticQuery[0].zoneInfo.forestDistrict)
 
         val typoTolerant = useCase.search(prepared, "dziald", ZoneSortMode.ALPHABETICAL)
         assertEquals(1, typoTolerant.size)
@@ -74,7 +74,7 @@ class SearchZonesUseCaseTest {
         assertEquals(1, results.size)
         val spans = results[0].matchSpans
         assertEquals(1, spans.size)
-        val name = results[0].zone.forestDistrict
+        val name = results[0].zoneInfo.forestDistrict
         assertEquals("Spych", name.substring(spans[0].start, spans[0].end))
     }
 
@@ -83,7 +83,7 @@ class SearchZonesUseCaseTest {
         val prepared = useCase.prepare(listOf(spychowo), null, null)
         val results = useCase.search(prepared, "nadleśnictwo spych", ZoneSortMode.ALPHABETICAL)
 
-        val name = results[0].zone.forestDistrict
+        val name = results[0].zoneInfo.forestDistrict
         val slices = results[0].matchSpans.map { name.substring(it.start, it.end) }
         assertTrue(slices.contains("Nadleśnictwo"))
         assertTrue(slices.contains("Spych"))
@@ -97,8 +97,8 @@ class SearchZonesUseCaseTest {
         val results = useCase.search(prepared, "", ZoneSortMode.ALPHABETICAL)
 
         // "Działdowo" -> "dzialdowo" sorts before "Spychowo" -> "spychowo"
-        assertEquals("Nadleśnictwo Działdowo", results[0].zone.forestDistrict)
-        assertEquals("Nadleśnictwo Spychowo", results[1].zone.forestDistrict)
+        assertEquals("Nadleśnictwo Działdowo", results[0].zoneInfo.forestDistrict)
+        assertEquals("Nadleśnictwo Spychowo", results[1].zoneInfo.forestDistrict)
     }
 
     @Test
@@ -109,7 +109,7 @@ class SearchZonesUseCaseTest {
         // User next to Działdowo (west of the polygon) — Działdowo must win.
         val prepared = useCase.prepare(listOf(spychowo, dzialdowo), 53.25, 20.28)
         val results = useCase.search(prepared, "", ZoneSortMode.DISTANCE)
-        assertEquals("Nadleśnictwo Działdowo", results[0].zone.forestDistrict)
+        assertEquals("Nadleśnictwo Działdowo", results[0].zoneInfo.forestDistrict)
         assertTrue(results[0].distanceMeters!! < results[1].distanceMeters!!)
     }
 
@@ -138,7 +138,7 @@ class SearchZonesUseCaseTest {
         val broken = Zone(id = 3, forestDistrict = "Nadleśnictwo Uszkodzone", geometryWkt = "NOT A WKT")
         val prepared = useCase.prepare(listOf(spychowo, broken), null, null)
         assertEquals(1, prepared.size)
-        assertEquals(1L, prepared[0].zone.id)
+        assertEquals(1L, prepared[0].zoneInfo.id)
     }
 
     @Test
@@ -160,7 +160,7 @@ class SearchZonesUseCaseTest {
     fun distancesAreOrderedFromUserPosition() {
         val prepared = useCase.prepare(listOf(spychowo, dzialdowo), 53.62, 21.30)
         val results = useCase.search(prepared, "", ZoneSortMode.DISTANCE)
-        assertEquals("Nadleśnictwo Spychowo", results[0].zone.forestDistrict)
+        assertEquals("Nadleśnictwo Spychowo", results[0].zoneInfo.forestDistrict)
         assertTrue(results[0].distanceMeters!! < results[1].distanceMeters!!)
     }
 }

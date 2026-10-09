@@ -120,7 +120,7 @@ struct ZoneSearchView: View {
         if viewModel.zoneSearchResults.isEmpty {
             emptyState
         } else {
-            List(viewModel.zoneSearchResults, id: \.zone.id) { result in
+            List(viewModel.zoneSearchResults, id: \.zoneInfo.id) { result in
                 row(for: result)
             }
             .listStyle(.plain)
@@ -129,7 +129,7 @@ struct ZoneSearchView: View {
 
     private func row(for result: ZoneSearchResult) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            highlightedName(result.zone.forestDistrict, spans: result.matchSpans)
+            highlightedName(result.zoneInfo.forestDistrict, spans: result.matchSpans)
                 .font(.system(size: 16, weight: .semibold))
             if let distance = result.distanceMeters {
                 Text("Odległość: \(Formatters.distanceText(distance.doubleValue))")

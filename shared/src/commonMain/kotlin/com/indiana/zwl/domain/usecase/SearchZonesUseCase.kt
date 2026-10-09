@@ -43,7 +43,7 @@ enum class ZoneSortMode {
  * user location changes — not on every keystroke.
  */
 data class PreparedZone(
-    val zone: Zone,
+    val zoneInfo: Zone,
     val bounds: ZoneBounds,
     val distanceMeters: Double?
 )
@@ -53,7 +53,7 @@ data class ZoneMatchSpan(val start: Int, val end: Int)
 
 /** A single search hit ready for display. */
 data class ZoneSearchResult(
-    val zone: Zone,
+    val zoneInfo: Zone,
     val bounds: ZoneBounds,
     val distanceMeters: Double?,
     val matchSpans: List<ZoneMatchSpan>
@@ -114,7 +114,7 @@ class SearchZonesUseCase {
             } ?: return@mapNotNull null
             val envelope = geometry.getEnvelopeInternal()
             PreparedZone(
-                zone = zone,
+                zoneInfo = zone,
                 bounds = ZoneBounds(
                     south = envelope.getMinY(),
                     west = envelope.getMinX(),
@@ -142,11 +142,11 @@ class SearchZonesUseCase {
     ): List<ZoneSearchResult> {
         val tokens = tokenize(query)
         val results = prepared.mapNotNull { item ->
-            val name = item.zone.forestDistrict
+            val name = item.zoneInfo.forestDistrict
             val normalizedName = normalize(name)
             if (tokens.any { !normalizedName.contains(it) }) return@mapNotNull null
             ZoneSearchResult(
-                zone = item.zone,
+                zoneInfo = item.zoneInfo,
                 bounds = item.bounds,
                 distanceMeters = item.distanceMeters,
                 matchSpans = if (normalizedName.length == name.length) {
@@ -161,13 +161,13 @@ class SearchZonesUseCase {
         }
         return when (sortMode) {
             ZoneSortMode.ALPHABETICAL -> results.sortedWith(
-                compareBy({ normalize(it.zone.forestDistrict) }, { it.zone.forestDistrict })
+                compareBy({ normalize(it.zoneInfo.forestDistrict) }, { it.zoneInfo.forestDistrict })
             )
             // Without a location every distance is null and the name comparator
             // keeps the list stable (alphabetical).
             ZoneSortMode.DISTANCE -> results.sortedWith(
                 compareBy<ZoneSearchResult, Double?>(nullsLast()) { it.distanceMeters }
-                    .thenBy { normalize(it.zone.forestDistrict) }
+                    .thenBy { normalize(it.zoneInfo.forestDistrict) }
             )
         }
     }

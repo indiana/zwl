@@ -175,7 +175,7 @@ fun ZoneSearchScreen(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            items(results, key = { it.zone.id }) { result ->
+                            items(results, key = { it.zoneInfo.id }) { result ->
                                 ZoneSearchRow(result = result, onTap = { onZoneTap(result) })
                             }
                         }
@@ -204,7 +204,7 @@ private fun ZoneSearchRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = highlightedName(result.zone.forestDistrict, result.matchSpans),
+                    text = highlightedName(result.zoneInfo.forestDistrict, result.matchSpans),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
