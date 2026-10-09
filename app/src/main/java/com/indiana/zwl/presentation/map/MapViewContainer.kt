@@ -159,6 +159,11 @@ fun MapViewContainer(
     val latestShowOwnPoints by rememberUpdatedState(showOwnPoints)
     val latestWaterSources by rememberUpdatedState(waterSources)
     val latestShowWaterSources by rememberUpdatedState(showWaterSources)
+    // `zones` is a plain parameter (MainViewModel.zones is a var, not a
+    // StateFlow), so the AndroidView factory captures its value from the first
+    // composition. Without this, a map created before zones finish loading
+    // keeps an empty list and zone taps silently do nothing.
+    val latestZones by rememberUpdatedState(zones)
     val pendingPoint by viewModel.pendingPoint.collectAsState()
     val showLayersOverlay by viewModel.showLayersOverlay.collectAsState()
     val focusSavedPoint by viewModel.focusSavedPoint.collectAsState()
@@ -269,7 +274,11 @@ fun MapViewContainer(
                 banSource?.setGeoJson(json)
             }
             if (!hasLayers) {
-                val anchor = if (style.getLayer("zones-fill") != null) "zones-fill" else "own-points-layer"
+                val anchor = when {
+                    style.getLayer("zones-fill") != null -> "zones-fill"
+                    style.getLayer("poi-layer") != null -> "poi-layer"
+                    else -> "own-points-layer"
+                }
                 style.addLayerBelow(
                     FillLayer("bans-fill", "bans-source").withProperties(
                         PropertyFactory.fillColor("#D32F2F"),
@@ -312,14 +321,18 @@ fun MapViewContainer(
             (style.getSource("zones-source") as? GeoJsonSource)?.setGeoJson(json)
         } else {
             style.addSource(GeoJsonSource("zones-source").apply { setGeoJson(json) })
+            // Anchor zones directly below the POI layer so points stay above
+            // the zone fills (bans then go below zones via the same anchor
+            // chain). Falls back to own-points if the POI layer is absent.
+            val zoneAnchor = if (style.getLayer("poi-layer") != null) "poi-layer" else "own-points-layer"
             style.addLayerBelow(FillLayer("zones-fill", "zones-source").withProperties(
                 PropertyFactory.fillColor("#1B5E20"),
                 PropertyFactory.fillOpacity(0.35f)
-            ), "own-points-layer")
+            ), zoneAnchor)
             style.addLayerBelow(LineLayer("zones-line", "zones-source").withProperties(
                 PropertyFactory.lineColor("#FF1B5E20"),
                 PropertyFactory.lineWidth(2f)
-            ), "own-points-layer")
+            ), zoneAnchor)
         }
     }
 
@@ -782,7 +795,7 @@ fun MapViewContainer(
 
                                     val hitZoneId = geometryCache.findZoneIdAt(clickedPoint)
                                     if (hitZoneId != null) {
-                                        val zone = zones.firstOrNull { it.id == hitZoneId }
+                                        val zone = latestZones.firstOrNull { it.id == hitZoneId }
                                         val jtsPoly = zone?.let { geometryCache.parse(it.geometryWkt)?.jtsPolygons?.firstOrNull() }
                                         if (zone != null && jtsPoly != null) {
                                             android.os.Handler(android.os.Looper.getMainLooper()).post {
