@@ -406,6 +406,10 @@ class ForestApp(
         savedPointRepository.delete(id)
     }
 
+    suspend fun deleteSavedPoints(ids: List<Long>) = withContext(Dispatchers.Default) {
+        savedPointRepository.deleteByIds(ids)
+    }
+
     suspend fun savedPointsGeoJson(): String =
         withContext(Dispatchers.Default) {
             MapGeoJson.savedPointsToGeoJson(savedPointRepository.getAllPoints().first())

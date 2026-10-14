@@ -11,10 +11,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,13 +38,22 @@ fun SavedPointListOverlay(
     onClose: () -> Unit,
     onSelect: (SavedPoint) -> Unit,
     onOpenProperties: (SavedPoint) -> Unit,
-    onPasteCoordinates: (Double, Double) -> Unit
+    onPasteCoordinates: (Double, Double) -> Unit,
+    onDeletePoints: (Set<Long>) -> Unit
 ) {
     val isLandscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     var pasteDialogVisible by remember { mutableStateOf(false) }
     var pasteInput by remember { mutableStateOf("") }
     var pasteError by remember { mutableStateOf(false) }
+    var selectionMode by rememberSaveable { mutableStateOf(false) }
+    var selectedIds by rememberSaveable(
+        stateSaver = listSaver(
+            save = { it.toList() },
+            restore = { it.toSet() }
+        )
+    ) { mutableStateOf(emptySet<Long>()) }
+    var deleteDialogVisible by rememberSaveable { mutableStateOf(false) }
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -64,23 +76,62 @@ fun SavedPointListOverlay(
                     ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.size(if (isLandscape) 36.dp else 48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Wstecz",
-                        modifier = Modifier.size(if (isLandscape) 20.dp else 24.dp)
+                if (selectionMode) {
+                    TextButton(
+                        onClick = {
+                            selectionMode = false
+                            selectedIds = emptySet()
+                        }
+                    ) {
+                        Text("Anuluj")
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${selectedIds.size} zaznaczonych",
+                        fontSize = if (isLandscape) 14.sp else 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(
+                        onClick = { deleteDialogVisible = true },
+                        enabled = selectedIds.isNotEmpty()
+                    ) {
+                        Text(
+                            text = "Usuń",
+                            fontWeight = FontWeight.Bold,
+                            color = if (selectedIds.isNotEmpty()) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(if (isLandscape) 36.dp else 48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Wstecz",
+                            modifier = Modifier.size(if (isLandscape) 20.dp else 24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Zapisane punkty",
+                        fontSize = if (isLandscape) 15.sp else 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    if (points.isNotEmpty()) {
+                        TextButton(onClick = { selectionMode = true }) {
+                            Text("Zaznacz", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Zapisane punkty",
-                    fontSize = if (isLandscape) 15.sp else 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
             }
             HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f), thickness = 1.dp)
 
@@ -92,6 +143,33 @@ fun SavedPointListOverlay(
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text("Otwórz punkt ze współrzędnych", fontWeight = FontWeight.SemiBold)
+            }
+
+            if (selectionMode && points.isNotEmpty()) {
+                val allSelected = selectedIds.size == points.size
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TriStateCheckbox(
+                        state = when {
+                            allSelected -> ToggleableState.On
+                            selectedIds.isEmpty() -> ToggleableState.Off
+                            else -> ToggleableState.Indeterminate
+                        },
+                        onClick = {
+                            selectedIds = if (allSelected) emptySet() else points.map { it.id }.toSet()
+                        }
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Zaznacz wszystkie",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
 
             if (points.isEmpty()) {
@@ -112,12 +190,19 @@ fun SavedPointListOverlay(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)
                 ) {
                     items(points, key = { it.id }) { point ->
+                        val selected = point.id in selectedIds
+                        val toggle: () -> Unit = {
+                            selectedIds = if (selected) selectedIds - point.id
+                            else selectedIds + point.id
+                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .combinedClickable(
-                                    onClick = { onSelect(point) },
-                                    onLongClick = { onOpenProperties(point) }
+                                    onClick = { if (selectionMode) toggle() else onSelect(point) },
+                                    onLongClick = {
+                                        if (selectionMode) toggle() else onOpenProperties(point)
+                                    }
                                 )
                                 .padding(horizontal = 20.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -141,6 +226,15 @@ fun SavedPointListOverlay(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                            if (selectionMode) {
+                                Checkbox(
+                                    checked = selected,
+                                    onCheckedChange = { checked ->
+                                        selectedIds = if (checked) selectedIds + point.id
+                                        else selectedIds - point.id
+                                    }
+                                )
+                            }
                         }
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 20.dp),
@@ -152,6 +246,41 @@ fun SavedPointListOverlay(
             }
         }
         }
+    }
+
+    if (deleteDialogVisible) {
+        val count = selectedIds.size
+        val allSelected = points.isNotEmpty() && count == points.size
+        val pointsWord = if (count % 10 in 2..4 && count % 100 !in 12..14) "punkty" else "punktów"
+        val message = when {
+            allSelected -> "Usunięte zostaną wszystkie punkty ($count). Tej operacji nie można cofnąć."
+            count == 1 -> "Usunięty zostanie 1 punkt. Tej operacji nie można cofnąć."
+            count % 10 in 2..4 && count % 100 !in 12..14 ->
+                "Usunięte zostaną $count $pointsWord. Tej operacji nie można cofnąć."
+            else -> "Usunięte zostanie $count $pointsWord. Tej operacji nie można cofnąć."
+        }
+        AlertDialog(
+            onDismissRequest = { deleteDialogVisible = false },
+            title = { Text("Usunąć zapisane punkty?") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deleteDialogVisible = false
+                        onDeletePoints(selectedIds)
+                        selectionMode = false
+                        selectedIds = emptySet()
+                    }
+                ) {
+                    Text("Usuń", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteDialogVisible = false }) {
+                    Text("Anuluj")
+                }
+            }
+        )
     }
 
     if (pasteDialogVisible) {

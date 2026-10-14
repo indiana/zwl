@@ -494,6 +494,9 @@ fun MainScreen(
                                         onPasteCoordinates = { lat, lng ->
                                             viewModel.openPointFromPaste(lat, lng)
                                             viewModel.closeSavedPointList()
+                                        },
+                                        onDeletePoints = { ids ->
+                                            viewModel.deleteSavedPoints(ids)
                                         }
                                     )
                                 }
