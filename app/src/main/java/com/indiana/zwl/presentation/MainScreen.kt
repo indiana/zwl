@@ -251,6 +251,8 @@ fun MainScreen(
             val waterDataState by viewModel.waterDataState.collectAsStateWithLifecycle()
             val savedPointDetailViewModel: SavedPointDetailViewModel = hiltViewModel()
             val selectedSavedPointDetails by savedPointDetailViewModel.details.collectAsStateWithLifecycle()
+            val pendingPointDetailViewModel: PendingPointDetailViewModel = hiltViewModel()
+            val pendingPointDetails by pendingPointDetailViewModel.details.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
             var showAbout by rememberSaveable { mutableStateOf(false) }
             // Which tab a zone/ban detail was opened from — the detail only shows
@@ -305,6 +307,14 @@ fun MainScreen(
                     // A pending point (map long-press OR a zwl://point deep link)
                     // belongs to the map tab: make sure it is visible.
                     if (pendingPoint != null) selectedTab = 1
+                }
+                LaunchedEffect(pendingPoint?.lat, pendingPoint?.lng) {
+                    val point = pendingPoint
+                    if (point != null) {
+                        pendingPointDetailViewModel.load(point)
+                    } else {
+                        pendingPointDetailViewModel.clear()
+                    }
                 }
                 Scaffold(
                     bottomBar = {
@@ -518,7 +528,13 @@ fun MainScreen(
                                 pendingPoint?.let { point ->
                                     PointDetailCard(
                                         point = point,
-                                        onSave = { name -> viewModel.savePendingPoint(name) },
+                                        details = pendingPointDetails,
+                                        onSave = { name ->
+                                            viewModel.savePendingPoint(
+                                                name,
+                                                pendingPointDetailViewModel.latestDetails()
+                                            )
+                                        },
                                         onShare = { sharePoint(context, point.lat, point.lng, null) },
                                         onClose = { viewModel.clearPendingPoint() },
                                         modifier = Modifier.align(Alignment.BottomCenter)

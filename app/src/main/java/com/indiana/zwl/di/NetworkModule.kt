@@ -1,8 +1,10 @@
 package com.indiana.zwl.di
 
+import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
+import com.indiana.zwl.domain.usecase.LoadPointDetailsUseCase
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
 import com.indiana.zwl.shared.data.remote.BdlOgcApi
@@ -62,6 +64,21 @@ object NetworkModule {
         soilCoverUseCase: GetSoilCoverForPointUseCase
     ): GetForestStandForPointUseCase {
         return GetForestStandForPointUseCase(GetForestStandUseCase(ogcApi), soilCoverUseCase)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGetFireRiskUseCase(fireApi: BdlFireApi): GetFireRiskUseCase {
+        return GetFireRiskUseCase(fireApi)
+    }
+
+    @Provides
+    @Singleton
+    fun provideLoadPointDetailsUseCase(
+        getFireRiskUseCase: GetFireRiskUseCase,
+        getForestStandForPointUseCase: GetForestStandForPointUseCase
+    ): LoadPointDetailsUseCase {
+        return LoadPointDetailsUseCase(getFireRiskUseCase, getForestStandForPointUseCase)
     }
 
     @Provides

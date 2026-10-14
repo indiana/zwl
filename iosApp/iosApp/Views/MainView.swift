@@ -100,6 +100,11 @@ struct MainView: View {
             if let point = viewModel.pendingPoint {
                 PointDetailView(
                     point: point,
+                    app: viewModel.app,
+                    fireRiskLevel: viewModel.pendingPointFireRiskLevel,
+                    isLoadingFireRisk: viewModel.isLoadingPendingPointFireRisk,
+                    forestStand: viewModel.pendingPointForestStand,
+                    isLoadingForestStand: viewModel.isLoadingPendingPointForestStand,
                     onSave: { name in viewModel.savePendingPoint(name: name) },
                     shareLink: pendingPointShareLink,
                     onClose: { viewModel.clearPendingPoint() }

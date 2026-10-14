@@ -6,9 +6,11 @@ import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.WaterSourceRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
+import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
+import com.indiana.zwl.domain.usecase.LoadPointDetailsUseCase
 import com.indiana.zwl.shared.data.local.DatabaseDriverFactory
 import com.indiana.zwl.shared.data.local.SharedDatabase
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
@@ -34,9 +36,11 @@ val sharedModule = module {
     single { BdlFireApi(get()) }
     single { BdlOgcApi(get()) }
     single { BdlStandDescriptionApi(get()) }
+    single { GetFireRiskUseCase(get()) }
     single { GetForestStandUseCase(get()) }
     single { GetSoilCoverForPointUseCase(get()) }
     single { GetForestStandForPointUseCase(get(), get()) }
+    single { LoadPointDetailsUseCase(get(), get()) }
     single { Json { ignoreUnknownKeys = true; isLenient = true } }
     single { WaterDataApi(get()) }
     single { WaterSyncManager(get(), get(), get(), get()) }

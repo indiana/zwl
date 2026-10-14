@@ -18,9 +18,12 @@ import com.indiana.zwl.domain.repository.PoiRepository
 import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.WaterSourceRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
+import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
+import com.indiana.zwl.domain.usecase.LoadPointDetailsUseCase
+import com.indiana.zwl.domain.usecase.PointDetails
 import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.domain.util.NadlesnictwoUrls
 import com.indiana.zwl.domain.util.WaterSourceGroup
@@ -108,7 +111,6 @@ class ForestApp(
 
     companion object {
         private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
-        private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
         private const val INIT_TIMEOUT_MS = 30_000L
     }
 
@@ -344,11 +346,12 @@ class ForestApp(
 
     /**
      * Fire-risk code at the given coordinates, used for both the in-zone
-     * banner and the zone-detail card. On success a live 0..3 code is
+     * banner and the zone-detail card. A live 0..3 code found at the point is
      * persisted against [forestDistrict] (cache is preserved across zone
-     * re-syncs); on any remote failure a <24h cached level is served as an
-     * archived code (+10), otherwise -2 ("brak danych"). [now] comes from
-     * Swift since Kotlin/Native has no wall clock.
+     * re-syncs); on a transient remote failure a <24h cached level is served
+     * as an archived code (+10), otherwise -1 ("brak połączenia"); a
+     * non-transient failure / empty response yields -2 ("brak danych"). [now]
+     * comes from Swift since Kotlin/Native has no wall clock.
      */
     suspend fun zoneFireRisk(
         forestDistrict: String?,
@@ -356,29 +359,19 @@ class ForestApp(
         longitude: Double,
         now: Long
     ): Int = withContext(Dispatchers.Default) {
-        try {
-            val response = fireApi.getFireHazard(geometry = "$longitude,$latitude")
-            val code = response.features?.firstOrNull()?.properties?.kodInt ?: -1
-            if (forestDistrict != null && code in 0..3) {
-                zoneRepository.updateFireRisk(forestDistrict, code, now)
+        val code = getFireRiskUseCase(
+            latitude,
+            longitude,
+            now,
+            cached = {
+                val cached = forestDistrict?.let { zoneRepository.getByForestDistrict(it) }
+                GetFireRiskUseCase.Cached(cached?.fireRiskLevel, cached?.fireRiskTimestamp)
             }
-            code
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            val cached = forestDistrict?.let { zoneRepository.getByForestDistrict(it) }
-            resolveCachedFireRisk(cached?.fireRiskLevel, cached?.fireRiskTimestamp, now)
+        )
+        if (forestDistrict != null && code in 0..3) {
+            zoneRepository.updateFireRisk(forestDistrict, code, now)
         }
-    }
-
-    private fun resolveCachedFireRisk(level: Int?, timestamp: Long?, now: Long): Int {
-        return if (level != null && level in 0..3 &&
-            timestamp != null && now - timestamp < FIRE_RISK_CACHE_MAX_AGE_MS
-        ) {
-            level + 10
-        } else {
-            -2
-        }
+        code
     }
 
     suspend fun zonesGeoJson(): String =
@@ -465,6 +458,12 @@ class ForestApp(
         )
     }
 
+    private val getFireRiskUseCase by lazy { GetFireRiskUseCase(fireApi) }
+
+    private val loadPointDetailsUseCase by lazy {
+        LoadPointDetailsUseCase(getFireRiskUseCase, forestStandForPointUseCase)
+    }
+
     private val soilCoverForPointUseCase by lazy {
         GetSoilCoverForPointUseCase(BdlStandDescriptionApi(httpClient))
     }
@@ -472,27 +471,38 @@ class ForestApp(
     // MARK: Saved-point detail data (zone-detail parity on Android)
 
     /**
-     * Fire-risk code for a saved point, Android `ZoneDetailViewModel` parity:
-     * fresh point query on success (persisted to the point row), on failure a
-     * 24h-fresh cached level is served as an archived code (+10), otherwise
-     * -2 ("brak danych"). `now` comes from the platform (Swift) since
-     * Kotlin/Native has no System.currentTimeMillis.
+     * Fire-risk code for a saved point: a live 0..3 code found at the point is
+     * persisted to the point row (fresh query on next open); on a transient
+     * remote failure a 24h-fresh cached level is served as an archived code
+     * (+10), otherwise -1 ("brak połączenia"); a non-transient failure / empty
+     * response yields -2 ("brak danych"). `now` comes from the platform (Swift)
+     * since Kotlin/Native has no System.currentTimeMillis.
      */
     suspend fun savedPointFireRisk(point: SavedPoint, now: Long): Int = withContext(Dispatchers.Default) {
-        try {
-            val response = fireApi.getFireHazard(geometry = "${point.longitude},${point.latitude}")
-            val code = response.features?.firstOrNull()?.properties?.kodInt ?: -2
-            if (code in 0..3) {
-                savedPointRepository.updateFireRisk(point.id, code, now)
+        val code = getFireRiskUseCase(
+            point.latitude,
+            point.longitude,
+            now,
+            cached = {
+                val fresh = savedPointRepository.getAllPoints().first().firstOrNull { it.id == point.id }
+                GetFireRiskUseCase.Cached(fresh?.fireRiskLevel, fresh?.fireRiskTimestamp)
             }
-            code
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            val fresh = savedPointRepository.getAllPoints().first().firstOrNull { it.id == point.id }
-            resolveCachedFireRisk(fresh?.fireRiskLevel, fresh?.fireRiskTimestamp, now)
+        )
+        if (code in 0..3) {
+            savedPointRepository.updateFireRisk(point.id, code, now)
         }
+        code
     }
+
+    /**
+     * Fire-risk code + BDL forest stand (SILP soil/ground cover merged) for an
+     * arbitrary coordinate — the pending-point card's data. No persistence
+     * (Android `LoadPointDetailsUseCase` parity).
+     */
+    suspend fun pointDetails(latitude: Double, longitude: Double, now: Long): PointDetails =
+        withContext(Dispatchers.Default) {
+            loadPointDetailsUseCase(latitude, longitude, now)
+        }
 
     suspend fun getForestStandForPoint(latitude: Double, longitude: Double): ForestStandSummary? =
         withContext(Dispatchers.Default) {
@@ -544,6 +554,11 @@ class ForestApp(
         val timestamp = point.forestStandTimestamp ?: return true
         return now - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
     }
+
+    suspend fun updateSavedPointFireRisk(id: Long, level: Int, timestamp: Long) =
+        withContext(Dispatchers.Default) {
+            savedPointRepository.updateFireRisk(id, level, timestamp)
+        }
 
     suspend fun updateSavedPointForestStand(id: Long, summary: ForestStandSummary, timestamp: Long) {
         try {

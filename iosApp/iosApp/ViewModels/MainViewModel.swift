@@ -234,6 +234,18 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var selectedSavedPointForestStand: ForestStandSummary?
     @Published var isLoadingSavedPointForestStand = false
 
+    // Pending (unsaved) point data: eager fire risk + BDL forest stand fetched
+    // on creation (Android `PendingPointDetailViewModel` parity). Nothing is
+    // persisted until the user saves.
+    @Published var pendingPointFireRiskLevel: Int?
+    @Published var isLoadingPendingPointFireRisk = false
+    @Published var pendingPointForestStand: ForestStandSummary?
+    @Published var isLoadingPendingPointForestStand = false
+    // The in-flight pending-point extras fetch; a new point cancels it.
+    private var pendingPointExtrasTask: Task<Void, Never>?
+    // Last completed pending-point fetch — seeded into the new row on save.
+    private var lastPendingPointDetails: PointDetails?
+
     // Offline download
     @Published var isDownloading = false
     @Published var downloadProgress: Float = 0
@@ -751,36 +763,102 @@ final class MainViewModel: NSObject, ObservableObject {
         centerCamera(latitude: latitude, longitude: longitude)
     }
 
-    /// Fills the pending-point card and asynchronously computes its zone status
-    /// / forest ban off the shared spatial engine (Android parity). These
-    /// events are rare (a tap / link), so no `@Published` throttling needed —
-    /// but the Kotlin callbacks still hop through `Task { @MainActor }`.
+    /// Fills the pending-point card, asynchronously computes its zone status /
+    /// forest ban off the shared spatial engine and eagerly loads its fire risk
+    /// + BDL forest stand (Android parity). These events are rare (a tap /
+    /// link), so no `@Published` throttling needed — but the Kotlin callbacks
+    /// still hop through `Task { @MainActor }`.
     private func setPendingPoint(latitude: Double, longitude: Double, name: String, source: PendingPoint.Source) {
-        pendingPoint = PendingPoint(source: source, name: name, latitude: latitude, longitude: longitude)
+        let point = PendingPoint(source: source, name: name, latitude: latitude, longitude: longitude)
+        pendingPoint = point
+        loadPendingPointExtras(for: point)
         Task { @MainActor [weak self] in
             guard let self = self else { return }
             let status = try? await self.app.checkLocation(latitude: latitude, longitude: longitude)
             let ban = try? await self.app.checkForestBan(latitude: latitude, longitude: longitude)
+            guard self.pendingPoint?.id == point.id else { return }
             self.pendingPoint?.status = status
             self.pendingPoint?.ban = ban
         }
     }
 
+    /// Eager fire risk + BDL forest stand for the pending point (Android
+    /// `PendingPointDetailViewModel` parity). A newer point cancels the fetch;
+    /// stale results are dropped via the `pendingPoint.id` guard.
+    private func loadPendingPointExtras(for point: PendingPoint) {
+        pendingPointExtrasTask?.cancel()
+        lastPendingPointDetails = nil
+        pendingPointFireRiskLevel = nil
+        isLoadingPendingPointFireRisk = true
+        pendingPointForestStand = nil
+        isLoadingPendingPointForestStand = true
+        let pointId = point.id
+        pendingPointExtrasTask = Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let details = try? await self.app.pointDetails(
+                latitude: point.latitude,
+                longitude: point.longitude,
+                now: Self.currentTimeMillis()
+            )
+            guard self.pendingPoint?.id == pointId else { return }
+            self.lastPendingPointDetails = details
+            self.pendingPointFireRiskLevel = details.map { Int($0.fireRiskLevel) }
+            self.pendingPointForestStand = details?.forestStand
+            self.isLoadingPendingPointFireRisk = false
+            self.isLoadingPendingPointForestStand = false
+        }
+    }
+
     func savePendingPoint(name: String) {
         guard var point = pendingPoint else { return }
+        // Only seed a completed fetch; a fetch still in flight leaves the
+        // saved point to load its data on first open (no blocking).
+        let ready = !isLoadingPendingPointFireRisk && !isLoadingPendingPointForestStand
+        let details = ready ? lastPendingPointDetails : nil
         point.name = name
         pendingPoint = point
         let trimmed = name.isEmpty ? "Zapisany punkt" : name
+        let now = Self.currentTimeMillis()
+        pendingPointExtrasTask?.cancel()
+        pendingPointExtrasTask = nil
         Task { @MainActor [weak self] in
             guard let self = self else { return }
-            _ = try? await self.app.savePoint(name: trimmed, latitude: point.latitude, longitude: point.longitude)
+            if let savedId = try? await self.app.savePoint(
+                name: trimmed, latitude: point.latitude, longitude: point.longitude
+            ) {
+                let id = savedId.int64Value
+                if let details = details {
+                    if details.fireRiskLevel >= 0 && details.fireRiskLevel <= 3 {
+                        try? await self.app.updateSavedPointFireRisk(
+                            id: id, level: details.fireRiskLevel, timestamp: now
+                        )
+                    }
+                    if let stand = details.forestStand {
+                        try? await self.app.updateSavedPointForestStand(
+                            id: id, summary: stand, timestamp: now
+                        )
+                    }
+                }
+            }
             self.pendingPoint = nil
+            self.clearPendingPointExtras()
             await self.loadSavedPointData()
         }
     }
 
     func clearPendingPoint() {
         pendingPoint = nil
+        clearPendingPointExtras()
+    }
+
+    private func clearPendingPointExtras() {
+        pendingPointExtrasTask?.cancel()
+        pendingPointExtrasTask = nil
+        lastPendingPointDetails = nil
+        pendingPointFireRiskLevel = nil
+        isLoadingPendingPointFireRisk = false
+        pendingPointForestStand = nil
+        isLoadingPendingPointForestStand = false
     }
 
     func loadSavedPointData() async {

@@ -8,7 +8,6 @@ import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
-import com.indiana.zwl.shared.data.remote.isTransientRemoteError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -59,23 +58,19 @@ class SavedPointDetailViewModel @Inject constructor(
             try {
                 loadCachedForestStandIntoState(point)
 
-                val fireRiskResult = getFireRiskUseCase(point.latitude, point.longitude)
-                val riskCode = if (fireRiskResult.isSuccess) {
-                    val code = fireRiskResult.getOrDefault(-1)
-                    if (code in 0..3) {
-                        val timestamp = System.currentTimeMillis()
-                        withContext(Dispatchers.IO) {
-                            savedPointRepository.updateFireRisk(point.id, code, timestamp)
-                        }
-                    }
-                    code
-                } else {
-                    val exception = fireRiskResult.exceptionOrNull()
-                    if (isNetworkException(exception)) {
+                val riskCode = getFireRiskUseCase(
+                    point.latitude,
+                    point.longitude,
+                    System.currentTimeMillis(),
+                    cached = {
                         val fresh = withContext(Dispatchers.IO) { freshPoint(point.id) }
-                        resolveCachedFireRisk(fresh?.fireRiskLevel, fresh?.fireRiskTimestamp)
-                    } else {
-                        -1
+                        GetFireRiskUseCase.Cached(fresh?.fireRiskLevel, fresh?.fireRiskTimestamp)
+                    }
+                )
+                if (riskCode in 0..3) {
+                    val timestamp = System.currentTimeMillis()
+                    withContext(Dispatchers.IO) {
+                        savedPointRepository.updateFireRisk(point.id, riskCode, timestamp)
                     }
                 }
 
@@ -174,21 +169,7 @@ class SavedPointDetailViewModel @Inject constructor(
         return System.currentTimeMillis() - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
     }
 
-    private fun resolveCachedFireRisk(level: Int?, timestamp: Long?): Int {
-        val now = System.currentTimeMillis()
-        return if (level != null && level in 0..3 &&
-            timestamp != null && now - timestamp < FIRE_RISK_CACHE_MAX_AGE_MS
-        ) {
-            level + 10
-        } else {
-            -2
-        }
-    }
-
-    private fun isNetworkException(e: Throwable?): Boolean = isTransientRemoteError(e)
-
     companion object {
-        private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
         private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
     }
 }
