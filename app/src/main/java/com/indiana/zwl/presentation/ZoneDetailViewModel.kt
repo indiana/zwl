@@ -12,7 +12,6 @@ import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
 import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
-import com.indiana.zwl.shared.data.remote.isTransientRemoteError
 import kotlinx.serialization.json.Json
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -145,23 +144,21 @@ class ZoneDetailViewModel @Inject constructor(
                     )
                 }
 
-                val fireRiskResult = getFireRiskUseCase(clickLat, clickLon)
-                val riskCode = if (fireRiskResult.isSuccess) {
-                    val code = fireRiskResult.getOrDefault(-1)
-                    if (code in 0..3) {
-                        val timestamp = System.currentTimeMillis()
-                        withContext(Dispatchers.IO) {
-                            zoneRepository.updateFireRisk(zone.forestDistrict, code, timestamp)
+                val riskCode = getFireRiskUseCase(
+                    clickLat,
+                    clickLon,
+                    System.currentTimeMillis(),
+                    cached = {
+                        val freshZone = withContext(Dispatchers.IO) {
+                            zoneRepository.getByForestDistrict(zone.forestDistrict)
                         }
+                        GetFireRiskUseCase.Cached(freshZone?.fireRiskLevel, freshZone?.fireRiskTimestamp)
                     }
-                    code
-                } else {
-                    val exception = fireRiskResult.exceptionOrNull()
-                    if (isNetworkException(exception)) {
-                        val freshZone = withContext(Dispatchers.IO) { zoneRepository.getByForestDistrict(zone.forestDistrict) }
-                        resolveCachedFireRisk(freshZone?.fireRiskLevel, freshZone?.fireRiskTimestamp)
-                    } else {
-                        -1
+                )
+                if (riskCode in 0..3) {
+                    val timestamp = System.currentTimeMillis()
+                    withContext(Dispatchers.IO) {
+                        zoneRepository.updateFireRisk(zone.forestDistrict, riskCode, timestamp)
                     }
                 }
 
@@ -275,21 +272,7 @@ class ZoneDetailViewModel @Inject constructor(
         return System.currentTimeMillis() - timestamp > FOREST_STAND_CACHE_MAX_AGE_MS
     }
 
-    private fun resolveCachedFireRisk(level: Int?, timestamp: Long?): Int {
-        val now = System.currentTimeMillis()
-        return if (level != null && level in 0..3 &&
-            timestamp != null && now - timestamp < FIRE_RISK_CACHE_MAX_AGE_MS
-        ) {
-            level + 10
-        } else {
-            -2
-        }
-    }
-
-    private fun isNetworkException(e: Throwable?): Boolean = isTransientRemoteError(e)
-
     companion object {
-        private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
         private const val FOREST_STAND_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
     }
 }

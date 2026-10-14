@@ -15,11 +15,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.presentation.FireRiskCard
+import com.indiana.zwl.presentation.ForestStandCard
 import com.indiana.zwl.presentation.PendingPoint
+import com.indiana.zwl.presentation.PendingPointDetailsState
 
 @Composable
 fun PointDetailCard(
     point: PendingPoint,
+    details: PendingPointDetailsState?,
     onSave: (String) -> Unit,
     onShare: () -> Unit,
     onClose: () -> Unit,
@@ -39,116 +43,136 @@ fun PointDetailCard(
         shape = RoundedCornerShape(16.dp)
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            // Whole card scrolls within the host's available height so it cannot
-            // be clipped from the top in landscape / short windows.
             val maxContentHeight = (maxHeight - 32.dp).let { if (it < 0.dp) 0.dp else it }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
                     .heightIn(max = maxContentHeight)
-                    .verticalScroll(rememberScrollState())
             ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Wybrany punkt",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                IconButton(onClick = onClose) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = "✕",
-                        fontSize = 20.sp,
+                        text = "Wybrany punkt",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    IconButton(onClick = onClose) {
+                        Text(
+                            text = "✕",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "WSPÓŁRZĘDNE",
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = String.format(java.util.Locale.US, "%.6f, %.6f", point.lat, point.lng),
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    point.status?.let { status ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "STREFA",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = statusText(status),
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    point.ban?.let { ban ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "ZAKAZ WSTĘPU",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = banReason(ban),
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    if (details != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        FireRiskCard(
+                            fireRiskLevel = details.fireRiskLevel,
+                            isLoadingFireRisk = details.isLoadingFireRisk
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ForestStandCard(
+                            forestStand = details.forestStand,
+                            isLoadingForestStand = details.isLoadingForestStand
+                        )
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
 
-            Text(
-                text = "WSPÓŁRZĘDNE",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = String.format(java.util.Locale.US, "%.6f, %.6f", point.lat, point.lng),
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            point.status?.let { status ->
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "STREFA",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = statusText(status),
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
 
-            point.ban?.let { ban ->
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nazwa punktu") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "ZAKAZ WSTĘPU",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = banReason(ban),
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Nazwa punktu") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { onSave(name) },
-                    modifier = Modifier.weight(1f),
-                    enabled = name.isNotBlank(),
-                    shape = RoundedCornerShape(8.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Zapisz", fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = { onSave(name) },
+                        modifier = Modifier.weight(1f),
+                        enabled = name.isNotBlank(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Zapisz", fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = onShare,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Podziel się", fontWeight = FontWeight.Bold)
+                    }
                 }
-                OutlinedButton(
-                    onClick = onShare,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Podziel się", fontWeight = FontWeight.Bold)
-                }
-            }
             }
         }
     }
