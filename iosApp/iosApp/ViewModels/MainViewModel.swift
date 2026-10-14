@@ -895,7 +895,22 @@ final class MainViewModel: NSObject, ObservableObject {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
             _ = try? await self.app.deleteSavedPoint(id: point.id)
-            self.selectedSavedPoint = nil
+            if self.selectedSavedPoint?.id == point.id {
+                self.clearSavedPointProperties()
+            }
+            await self.loadSavedPointData()
+        }
+    }
+
+    func deleteSavedPoints(_ ids: [Int64]) {
+        guard !ids.isEmpty else { return }
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let idSet = Set(ids)
+            if let selected = self.selectedSavedPoint, idSet.contains(selected.id) {
+                self.clearSavedPointProperties()
+            }
+            _ = try? await self.app.deleteSavedPoints(ids: ids.map { KotlinLong(value: $0) })
             await self.loadSavedPointData()
         }
     }

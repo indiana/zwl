@@ -48,6 +48,20 @@ class SavedPointRepositoryImpl(
         database.savedPointQueries.deleteById(id)
     }
 
+    override suspend fun deleteByIds(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        val existingIds = database.savedPointQueries
+            .selectAll { id, _, _, _, _, _, _, _ -> id }
+            .executeAsList()
+        database.transaction {
+            if (existingIds.isNotEmpty() && ids.toSet().containsAll(existingIds)) {
+                database.savedPointQueries.deleteAll()
+            } else {
+                database.savedPointQueries.deleteByIds(ids)
+            }
+        }
+    }
+
     override suspend fun deleteAll() {
         database.savedPointQueries.deleteAll()
     }

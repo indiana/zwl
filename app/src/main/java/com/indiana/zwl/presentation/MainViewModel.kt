@@ -456,9 +456,21 @@ class MainViewModel @Inject constructor(
     }
 
     fun deleteSavedPoint(id: Long) {
-        _selectedSavedPointInfo.value = null
+        if (_selectedSavedPointInfo.value?.id == id) {
+            _selectedSavedPointInfo.value = null
+        }
         viewModelScope.launch(Dispatchers.IO) {
             savedPointRepository.delete(id)
+        }
+    }
+
+    fun deleteSavedPoints(ids: Set<Long>) {
+        if (ids.isEmpty()) return
+        if (_selectedSavedPointInfo.value?.id?.let { it in ids } == true) {
+            _selectedSavedPointInfo.value = null
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            savedPointRepository.deleteByIds(ids.toList())
         }
     }
 

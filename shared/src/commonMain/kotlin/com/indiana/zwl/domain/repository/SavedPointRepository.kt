@@ -11,5 +11,6 @@ interface SavedPointRepository {
     suspend fun updateFireRisk(id: Long, level: Int, timestamp: Long)
     suspend fun updateForestStand(id: Long, json: String, timestamp: Long)
     suspend fun delete(id: Long)
+    suspend fun deleteByIds(ids: List<Long>)
     suspend fun deleteAll()
 }
