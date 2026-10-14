@@ -1,0 +1,133 @@
+import SwiftUI
+import shared
+
+/// Full-screen "Ustawienia" screen (Android `SettingsOverlay` parity): a
+/// "Zachowanie" section for behavior toggles and a "Wyświetlanie" section with
+/// one toggle per layer group (own points first in owner-brand magenta).
+struct SettingsView: View {
+    @ObservedObject var viewModel: MainViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Zachowanie") {
+                    Toggle(isOn: $viewModel.keepScreenOn) {
+                        Text("Nie wygaszaj ekranu")
+                    }
+                }
+                Section("Wyświetlanie") {
+                    Toggle(isOn: $viewModel.showOwnPoints) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0xE91E63)).frame(width: 10, height: 10)
+                            Text("Własne punkty")
+                        }
+                    }
+                    Toggle(isOn: $viewModel.showBans) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color.red).frame(width: 10, height: 10)
+                            Text("Zakazy wstępu do lasu")
+                        }
+                    }
+                    Toggle(isOn: $viewModel.showAccommodation) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x1B5E20)).frame(width: 10, height: 10)
+                            Text("Noclegi i biwakowanie")
+                        }
+                    }
+                    Toggle(isOn: $viewModel.showRest) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x558B2F)).frame(width: 10, height: 10)
+                            Text("Miejsca wypoczynku")
+                        }
+                    }
+                    Toggle(isOn: $viewModel.showShelters) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x4E342E)).frame(width: 10, height: 10)
+                            Text("Wiaty i schronienia")
+                        }
+                    }
+                    Toggle(isOn: $viewModel.showFireplaces) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0xE65100)).frame(width: 10, height: 10)
+                            Text("Miejsca na ognisko")
+                        }
+                    }
+                    Toggle(isOn: $viewModel.showViewpoints) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x0097A7)).frame(width: 10, height: 10)
+                            Text("Punkty widokowe i rekreacja")
+                        }
+                    }
+                    Toggle(isOn: $viewModel.showWaterLaunch) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x0277BD)).frame(width: 10, height: 10)
+                            Text("Wodowanie sprzętu wodnego")
+                        }
+                    }
+                    Toggle(isOn: Binding(
+                        get: {
+                            viewModel.showWaterDrinking && viewModel.showWaterSprings
+                                && viewModel.showWaterWells
+                        },
+                        set: { viewModel.setAllWater($0) }
+                    )) {
+                        Text("Woda").fontWeight(.semibold)
+                    }
+                    Toggle(isOn: $viewModel.showWaterDrinking) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x1565C0)).frame(width: 10, height: 10)
+                            Text("Woda pitna")
+                        }
+                    }
+                    .padding(.leading, 20)
+                    Toggle(isOn: $viewModel.showWaterSprings) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x00838F)).frame(width: 10, height: 10)
+                            Text("Źródła")
+                        }
+                    }
+                    .padding(.leading, 20)
+                    Toggle(isOn: $viewModel.showWaterWells) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x6D4C41)).frame(width: 10, height: 10)
+                            Text("Studnie")
+                        }
+                    }
+                    .padding(.leading, 20)
+                    Toggle(isOn: $viewModel.showParking) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x5D4037)).frame(width: 10, height: 10)
+                            Text("Parkingi")
+                        }
+                    }
+                    Toggle(isOn: $viewModel.showEducation) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x7B1FA2)).frame(width: 10, height: 10)
+                            Text("Edukacja leśna")
+                        }
+                    }
+                    Toggle(isOn: $viewModel.showOthers) {
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(hex: 0x1976D2)).frame(width: 10, height: 10)
+                            Text("Inne punkty")
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity)
+            .navigationTitle("Ustawienia")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.backward")
+                            .fontWeight(.semibold)
+                    }
+                    .accessibilityLabel("Wstecz")
+                }
+            }
+        }
+    }
+}

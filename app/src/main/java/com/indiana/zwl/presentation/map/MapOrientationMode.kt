@@ -12,4 +12,5 @@ enum class MapOrientationMode {
 /** Shared SharedPreferences keys for map settings persisted in "zwl_map_settings". */
 object MapSettingsPrefsKeys {
     const val ORIENTATION_MODE = "orientation_mode"
+    const val KEEP_SCREEN_ON = "keep_screen_on"
 }
