@@ -179,7 +179,13 @@ final class MainViewModel: NSObject, ObservableObject {
     // Layer-visible toggles (Android parity). showOwnPoints resets to true on
     // launch like Android; the POI/ban toggles above persist.
     @Published var showOwnPoints = true
-    @Published var showLayersOverlay = false
+    @Published var showSettingsOverlay = false
+    // "Nie wygaszaj ekranu" (Android `KEEP_SCREEN_ON`): persisted behavior
+    // setting, enforced in MainView via `isIdleTimerDisabled` while the scene
+    // is active.
+    @Published var keepScreenOn = false {
+        didSet { UserDefaults.standard.set(keepScreenOn, forKey: Self.keyKeepScreenOn) }
+    }
     // Increment to ask the map to center on a saved point (zoom 15).
     @Published var centerSavedPointSignal: Int = 0
     private(set) var centerSavedPointLatitude: Double?
@@ -298,6 +304,7 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyShowWaterSprings = "mapSettings.showWaterSprings"
     private static let keyShowWaterWells = "mapSettings.showWaterWells"
     private static let keyHeadingUp = "mapSettings.headingUp"
+    private static let keyKeepScreenOn = "mapSettings.keepScreenOn"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
     // re-renders the map on the main thread (the iPad-class bottleneck), so
@@ -325,6 +332,7 @@ final class MainViewModel: NSObject, ObservableObject {
         showWaterSprings = defaults.object(forKey: Self.keyShowWaterSprings) as? Bool ?? legacyWater
         showWaterWells = defaults.object(forKey: Self.keyShowWaterWells) as? Bool ?? legacyWater
         headingUp = defaults.object(forKey: Self.keyHeadingUp) as? Bool ?? false
+        keepScreenOn = defaults.object(forKey: Self.keyKeepScreenOn) as? Bool ?? false
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor [weak self] in
@@ -793,12 +801,12 @@ final class MainViewModel: NSObject, ObservableObject {
         showSavedPointList = false
     }
 
-    func openLayersOverlay() {
-        showLayersOverlay = true
+    func openSettingsOverlay() {
+        showSettingsOverlay = true
     }
 
-    func closeLayersOverlay() {
-        showLayersOverlay = false
+    func closeSettingsOverlay() {
+        showSettingsOverlay = false
     }
 
     /// Short tap on a list row: center the camera on the point (map stays

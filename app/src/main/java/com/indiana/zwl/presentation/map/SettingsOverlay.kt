@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,7 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun MapLayersOverlay(
+fun SettingsOverlay(
+    keepScreenOn: Boolean,
     showOwnPoints: Boolean,
     showForestBans: Boolean,
     showAccommodation: Boolean,
@@ -37,6 +39,7 @@ fun MapLayersOverlay(
     showParking: Boolean,
     showEducation: Boolean,
     showOthers: Boolean,
+    onKeepScreenOnChange: (Boolean) -> Unit,
     onShowOwnPointsChange: (Boolean) -> Unit,
     onShowForestBansChange: (Boolean) -> Unit,
     onShowAccommodationChange: (Boolean) -> Unit,
@@ -89,7 +92,7 @@ fun MapLayersOverlay(
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Wyświetlanie na mapie",
+                        text = "Ustawienia",
                         fontSize = if (isLandscape) 15.sp else 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -105,6 +108,19 @@ fun MapLayersOverlay(
                     verticalArrangement = Arrangement.spacedBy(0.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        SectionHeader("Zachowanie")
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        SimpleCheckboxRow(
+                            checked = keepScreenOn,
+                            label = "Nie wygaszaj ekranu",
+                            onCheckedChange = onKeepScreenOnChange
+                        )
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        SectionHeader("Wyświetlanie")
+                    }
                     item {
                         LayerCheckboxRow(
                             checked = showOwnPoints,
@@ -243,6 +259,43 @@ fun MapLayersOverlay(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+private fun SimpleCheckboxRow(
+    checked: Boolean,
+    label: String,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -59,6 +60,16 @@ fun MainScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val debugError by viewModel.debugError.collectAsStateWithLifecycle()
     val azimuth by viewModel.azimuth.collectAsStateWithLifecycle()
+
+    // "Nie wygaszaj ekranu": keep the window awake while the setting is on (both
+    // tabs, for as long as the app is in the foreground). The flag lives on the
+    // view, so it is automatically inert when the window is not visible.
+    val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
+    val windowView = LocalView.current
+    DisposableEffect(keepScreenOn) {
+        windowView.keepScreenOn = keepScreenOn
+        onDispose { windowView.keepScreenOn = false }
+    }
 
     debugError?.let { errorMsg ->
         AlertDialog(

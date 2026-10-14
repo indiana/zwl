@@ -207,6 +207,20 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // "Nie wygaszaj ekranu" — persists across launches; the effect itself is
+    // applied at the window level in MainScreen, so it holds whenever the app is
+    // in the foreground (both tabs).
+    private val _keepScreenOn = MutableStateFlow(
+        sharedPrefs.getBoolean(MapSettingsPrefsKeys.KEEP_SCREEN_ON, false)
+    )
+    val keepScreenOn: StateFlow<Boolean> = _keepScreenOn.asStateFlow()
+
+    fun setKeepScreenOn(enabled: Boolean) {
+        if (_keepScreenOn.value == enabled) return
+        _keepScreenOn.value = enabled
+        sharedPrefs.edit().putBoolean(MapSettingsPrefsKeys.KEEP_SCREEN_ON, enabled).apply()
+    }
+
     // Follow-the-user is session state: it always starts enabled on a fresh map
     // entry and is never persisted. A user pan disables it; the "my location"
     // button re-enables it. `recenterSignal` bumps on an explicit recenter so
@@ -357,15 +371,15 @@ class MainViewModel @Inject constructor(
         _showOwnPoints.value = visible
     }
 
-    private val _showLayersOverlay = MutableStateFlow(false)
-    val showLayersOverlay: StateFlow<Boolean> = _showLayersOverlay.asStateFlow()
+    private val _showSettingsOverlay = MutableStateFlow(false)
+    val showSettingsOverlay: StateFlow<Boolean> = _showSettingsOverlay.asStateFlow()
 
-    fun openLayersOverlay() {
-        _showLayersOverlay.value = true
+    fun openSettingsOverlay() {
+        _showSettingsOverlay.value = true
     }
 
-    fun closeLayersOverlay() {
-        _showLayersOverlay.value = false
+    fun closeSettingsOverlay() {
+        _showSettingsOverlay.value = false
     }
 
     private val _pendingPoint = MutableStateFlow<PendingPoint?>(null)

@@ -165,7 +165,8 @@ fun MapViewContainer(
     // keeps an empty list and zone taps silently do nothing.
     val latestZones by rememberUpdatedState(zones)
     val pendingPoint by viewModel.pendingPoint.collectAsState()
-    val showLayersOverlay by viewModel.showLayersOverlay.collectAsState()
+    val showSettingsOverlay by viewModel.showSettingsOverlay.collectAsState()
+    val keepScreenOn by viewModel.keepScreenOn.collectAsState()
     val focusSavedPoint by viewModel.focusSavedPoint.collectAsState()
     val focusCoordinate by viewModel.focusCoordinate.collectAsState()
     val orientationMode by viewModel.orientationMode.collectAsState()
@@ -531,13 +532,13 @@ fun MapViewContainer(
     // The map menu dropdown and AlertDialogs handle back on their own; this
     // covers the full-screen overlays and the bottom detail card.
     BackHandler(
-        enabled = showOfflineAreas || showZoneSearch || showLayersOverlay || selectedPoi != null ||
+        enabled = showOfflineAreas || showZoneSearch || showSettingsOverlay || selectedPoi != null ||
             selectedWaterSource != null || isSettingsOpen
     ) {
         when {
             showOfflineAreas -> mapViewModel.closeOfflineAreas()
             showZoneSearch -> mapViewModel.closeZoneSearch()
-            showLayersOverlay -> viewModel.closeLayersOverlay()
+            showSettingsOverlay -> viewModel.closeSettingsOverlay()
             selectedPoi != null -> zoneDetailViewModel.clearSelectedPoi()
             selectedWaterSource != null -> zoneDetailViewModel.clearSelectedWaterSource()
             isSettingsOpen -> isSettingsOpen = false
@@ -929,9 +930,9 @@ fun MapViewContainer(
                 isSettingsOpen = false
                 viewModel.openSavedPointList()
             }
-            val openLayers: () -> Unit = {
+            val openSettings: () -> Unit = {
                 isSettingsOpen = false
-                viewModel.openLayersOverlay()
+                viewModel.openSettingsOverlay()
             }
             val downloadArea: () -> Unit = {
                 isSettingsOpen = false
@@ -1083,7 +1084,7 @@ fun MapViewContainer(
                                         isDownloadingArea = isDownloadingArea,
                                         onOpenSavedPoints = openSavedPoints,
                                         onOpenZoneSearch = openZoneSearch,
-                                        onOpenLayers = openLayers,
+                                        onOpenSettings = openSettings,
                                         onDownloadArea = downloadArea,
                                         onOpenOfflineAreas = openOfflineAreas,
                                         onOpenAbout = openAbout
@@ -1124,7 +1125,7 @@ fun MapViewContainer(
                             isDownloadingArea = isDownloadingArea,
                             onOpenSavedPoints = openSavedPoints,
                             onOpenZoneSearch = openZoneSearch,
-                            onOpenLayers = openLayers,
+                            onOpenSettings = openSettings,
                             onDownloadArea = downloadArea,
                             onOpenOfflineAreas = openOfflineAreas,
                             onOpenAbout = openAbout
@@ -1267,8 +1268,9 @@ fun MapViewContainer(
                 }
             }
 
-            if (showLayersOverlay) {
-                MapLayersOverlay(
+            if (showSettingsOverlay) {
+                SettingsOverlay(
+                    keepScreenOn = keepScreenOn,
                     showOwnPoints = showOwnPoints,
                     showForestBans = showForestBans,
                     showAccommodation = showAccommodation,
@@ -1283,6 +1285,7 @@ fun MapViewContainer(
                     showParking = showParking,
                     showEducation = showEducation,
                     showOthers = showOthers,
+                    onKeepScreenOnChange = viewModel::setKeepScreenOn,
                     onShowOwnPointsChange = viewModel::setShowOwnPoints,
                     onShowForestBansChange = viewModel::setShowForestBans,
                     onShowAccommodationChange = viewModel::setShowAccommodation,
@@ -1298,7 +1301,7 @@ fun MapViewContainer(
                     onShowParkingChange = viewModel::setShowParking,
                     onShowEducationChange = viewModel::setShowEducation,
                     onShowOthersChange = viewModel::setShowOthers,
-                    onClose = viewModel::closeLayersOverlay
+                    onClose = viewModel::closeSettingsOverlay
                 )
             }
         }
@@ -1311,7 +1314,7 @@ private fun SettingsMenuContent(
     isDownloadingArea: Boolean,
     onOpenSavedPoints: () -> Unit,
     onOpenZoneSearch: () -> Unit,
-    onOpenLayers: () -> Unit,
+    onOpenSettings: () -> Unit,
     onDownloadArea: () -> Unit,
     onOpenOfflineAreas: () -> Unit,
     onOpenAbout: () -> Unit
@@ -1365,7 +1368,7 @@ private fun SettingsMenuContent(
         }
 
         Button(
-            onClick = onOpenLayers,
+            onClick = onOpenSettings,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer
             ),
@@ -1379,7 +1382,7 @@ private fun SettingsMenuContent(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Wyświetlanie na mapie",
+                text = "Ustawienia",
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
