@@ -110,6 +110,21 @@ enum Formatters {
         String(format: "%.6f", latitude) + ", " + String(format: "%.6f", longitude)
     }
 
+    /// Absolute localized save date+time (Android parity — short date and time,
+    /// e.g. "15.10.2026, 14:30"). `epochMillis <= 0` means "unknown" (nil).
+    static func savedPointDateText(_ epochMillis: Int64) -> String? {
+        guard epochMillis > 0 else { return nil }
+        let date = Date(timeIntervalSince1970: Double(epochMillis) / 1000.0)
+        return savedPointDateFormatter.string(from: date)
+    }
+
+    private static let savedPointDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
     /// Distance text used in status summaries (Android `formatDistance`
     /// parity: whole meters below 100 m, otherwise km with one decimal).
     static func approximateDistanceText(_ meters: Double) -> String {

@@ -11,6 +11,7 @@ import com.indiana.zwl.presentation.MainScreen
 import com.indiana.zwl.presentation.MainViewModel
 import com.indiana.zwl.presentation.ZoneDetailViewModel
 import com.indiana.zwl.presentation.map.MapViewModel
+import com.indiana.zwl.presentation.map.ZoneSearchViewModel
 import com.indiana.zwl.update.PlayAppUpdateChecker
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
     private val zoneDetailViewModel: ZoneDetailViewModel by viewModels()
     private val mapViewModel: MapViewModel by viewModels()
+    private val zoneSearchViewModel: ZoneSearchViewModel by viewModels()
 
     private val updateFlowLauncher = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -59,7 +61,8 @@ class MainActivity : ComponentActivity() {
             MainScreen(
                 viewModel = viewModel,
                 zoneDetailViewModel = zoneDetailViewModel,
-                mapViewModel = mapViewModel
+                mapViewModel = mapViewModel,
+                zoneSearchViewModel = zoneSearchViewModel
             )
         }
     }

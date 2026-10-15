@@ -13,12 +13,13 @@ class SavedPointRepositoryImpl(
 ) : SavedPointRepository {
 
     override fun getAllPoints(): Flow<List<SavedPoint>> {
-        return database.savedPointQueries.selectAll { id, name, latitude, longitude, fireRiskLevel, fireRiskTimestamp, forestStandJson, forestStandTimestamp ->
+        return database.savedPointQueries.selectAll { id, name, latitude, longitude, fireRiskLevel, fireRiskTimestamp, forestStandJson, forestStandTimestamp, createdAt ->
             SavedPoint(
                 id = id,
                 name = name,
                 latitude = latitude,
                 longitude = longitude,
+                createdAt = createdAt?.toLong() ?: 0L,
                 fireRiskLevel = fireRiskLevel?.toInt(),
                 fireRiskTimestamp = fireRiskTimestamp?.toLong(),
                 forestStandJson = forestStandJson,
@@ -28,7 +29,12 @@ class SavedPointRepositoryImpl(
     }
 
     override suspend fun insert(point: NewSavedPoint): Long {
-        database.savedPointQueries.insert(point.name, point.latitude, point.longitude)
+        database.savedPointQueries.insert(
+            point.name,
+            point.latitude,
+            point.longitude,
+            System.currentTimeMillis()
+        )
         return database.savedPointQueries.lastInsertRowId().executeAsOne()
     }
 
@@ -46,6 +52,20 @@ class SavedPointRepositoryImpl(
 
     override suspend fun delete(id: Long) {
         database.savedPointQueries.deleteById(id)
+    }
+
+    override suspend fun deleteByIds(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        val existingIds = database.savedPointQueries
+            .selectAll { id, _, _, _, _, _, _, _, _ -> id }
+            .executeAsList()
+        database.transaction {
+            if (existingIds.isNotEmpty() && ids.toSet().containsAll(existingIds)) {
+                database.savedPointQueries.deleteAll()
+            } else {
+                database.savedPointQueries.deleteByIds(ids)
+            }
+        }
     }
 
     override suspend fun deleteAll() {

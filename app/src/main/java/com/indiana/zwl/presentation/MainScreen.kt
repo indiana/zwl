@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,12 +53,23 @@ import androidx.compose.material.icons.filled.Map
 fun MainScreen(
     viewModel: MainViewModel,
     zoneDetailViewModel: ZoneDetailViewModel,
-    mapViewModel: com.indiana.zwl.presentation.map.MapViewModel
+    mapViewModel: com.indiana.zwl.presentation.map.MapViewModel,
+    zoneSearchViewModel: com.indiana.zwl.presentation.map.ZoneSearchViewModel
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val debugError by viewModel.debugError.collectAsStateWithLifecycle()
     val azimuth by viewModel.azimuth.collectAsStateWithLifecycle()
+
+    // "Nie wygaszaj ekranu": keep the window awake while the setting is on (both
+    // tabs, for as long as the app is in the foreground). The flag lives on the
+    // view, so it is automatically inert when the window is not visible.
+    val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
+    val windowView = LocalView.current
+    DisposableEffect(keepScreenOn) {
+        windowView.keepScreenOn = keepScreenOn
+        onDispose { windowView.keepScreenOn = false }
+    }
 
     debugError?.let { errorMsg ->
         AlertDialog(
@@ -233,12 +245,15 @@ fun MainScreen(
             val selectedZoneDetails by zoneDetailViewModel.selectedZoneDetails.collectAsStateWithLifecycle()
             val selectedForestBan by viewModel.selectedForestBan.collectAsStateWithLifecycle()
             val pendingPoint by viewModel.pendingPoint.collectAsStateWithLifecycle()
-            val savedPoints by viewModel.savedPoints.collectAsStateWithLifecycle()
+            val savedPointListPoints by viewModel.savedPointListPoints.collectAsStateWithLifecycle()
+            val savedPointSortMode by viewModel.savedPointEffectiveSortMode.collectAsStateWithLifecycle()
             val showSavedPointList by viewModel.showSavedPointList.collectAsStateWithLifecycle()
             val selectedSavedPointInfo by viewModel.selectedSavedPointInfo.collectAsStateWithLifecycle()
             val waterDataState by viewModel.waterDataState.collectAsStateWithLifecycle()
             val savedPointDetailViewModel: SavedPointDetailViewModel = hiltViewModel()
             val selectedSavedPointDetails by savedPointDetailViewModel.details.collectAsStateWithLifecycle()
+            val pendingPointDetailViewModel: PendingPointDetailViewModel = hiltViewModel()
+            val pendingPointDetails by pendingPointDetailViewModel.details.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableStateOf(0) }
             var showAbout by rememberSaveable { mutableStateOf(false) }
             // Which tab a zone/ban detail was opened from — the detail only shows
@@ -293,6 +308,14 @@ fun MainScreen(
                     // A pending point (map long-press OR a zwl://point deep link)
                     // belongs to the map tab: make sure it is visible.
                     if (pendingPoint != null) selectedTab = 1
+                }
+                LaunchedEffect(pendingPoint?.lat, pendingPoint?.lng) {
+                    val point = pendingPoint
+                    if (point != null) {
+                        pendingPointDetailViewModel.load(point)
+                    } else {
+                        pendingPointDetailViewModel.clear()
+                    }
                 }
                 Scaffold(
                     bottomBar = {
@@ -454,6 +477,7 @@ fun MainScreen(
                                     viewModel = viewModel,
                                     zoneDetailViewModel = zoneDetailViewModel,
                                     mapViewModel = mapViewModel,
+                                    zoneSearchViewModel = zoneSearchViewModel,
                                     zones = viewModel.zones,
                                     isActive = true,
                                     onOpenAbout = { showAbout = true }
@@ -468,7 +492,11 @@ fun MainScreen(
 
                                 if (showSavedPointList) {
                                     SavedPointListOverlay(
-                                        points = savedPoints,
+                                        points = savedPointListPoints,
+                                        sortMode = savedPointSortMode,
+                                        userLatitude = state.latitude,
+                                        userLongitude = state.longitude,
+                                        onSortModeChange = { viewModel.setSavedPointSortMode(it) },
                                         onClose = { viewModel.closeSavedPointList() },
                                         onSelect = { point ->
                                             viewModel.selectSavedPoint(point)
@@ -481,6 +509,9 @@ fun MainScreen(
                                         onPasteCoordinates = { lat, lng ->
                                             viewModel.openPointFromPaste(lat, lng)
                                             viewModel.closeSavedPointList()
+                                        },
+                                        onDeletePoints = { ids ->
+                                            viewModel.deleteSavedPoints(ids)
                                         }
                                     )
                                 }
@@ -502,7 +533,13 @@ fun MainScreen(
                                 pendingPoint?.let { point ->
                                     PointDetailCard(
                                         point = point,
-                                        onSave = { name -> viewModel.savePendingPoint(name) },
+                                        details = pendingPointDetails,
+                                        onSave = { name ->
+                                            viewModel.savePendingPoint(
+                                                name,
+                                                pendingPointDetailViewModel.latestDetails()
+                                            )
+                                        },
                                         onShare = { sharePoint(context, point.lat, point.lng, null) },
                                         onClose = { viewModel.clearPendingPoint() },
                                         modifier = Modifier.align(Alignment.BottomCenter)

@@ -6,15 +6,16 @@ CREATE TABLE IF NOT EXISTS SavedPoint (
     fireRiskLevel INTEGER,
     fireRiskTimestamp INTEGER,
     forestStandJson TEXT,
-    forestStandTimestamp INTEGER
+    forestStandTimestamp INTEGER,
+    createdAt INTEGER
 );
 
 selectAll:
 SELECT * FROM SavedPoint;
 
 insert:
-INSERT INTO SavedPoint(name, latitude, longitude)
-VALUES (?, ?, ?);
+INSERT INTO SavedPoint(name, latitude, longitude, createdAt)
+VALUES (?, ?, ?, ?);
 
 lastInsertRowId:
 SELECT last_insert_rowid();
@@ -30,6 +31,9 @@ UPDATE SavedPoint SET forestStandJson = :json, forestStandTimestamp = :timestamp
 
 deleteById:
 DELETE FROM SavedPoint WHERE id = :id;
+
+deleteByIds:
+DELETE FROM SavedPoint WHERE id IN ?;
 
 deleteAll:
 DELETE FROM SavedPoint;

@@ -3,10 +3,20 @@ import shared
 
 /// Pending (unsaved) point card — opened by a long-press on the map or a
 /// `zwl://point` deep link. Shows the zone status + forest ban computed
-/// offline by the shared spatial engine and offers Save (with a name prompt),
-/// Share (system share sheet) and Close (Android `PointDetailCard` parity).
+/// offline by the shared spatial engine plus the eagerly fetched fire-risk
+/// and BDL forest-stand data, and offers Save (with a name prompt), Share
+/// (system share sheet) and Close (Android `PointDetailCard` parity).
+///
+/// Header and actions are pinned; only the middle data block scrolls, so the
+/// buttons stay reachable while the data (which grew with the data cards)
+/// overflows (D12).
 struct PointDetailView: View {
     let point: PendingPoint
+    let app: ForestApp
+    let fireRiskLevel: Int?
+    let isLoadingFireRisk: Bool
+    let forestStand: ForestStandSummary?
+    let isLoadingForestStand: Bool
     let onSave: (String) -> Void
     let shareLink: String
     let onClose: () -> Void
@@ -16,10 +26,20 @@ struct PointDetailView: View {
     @State private var isSavePromptPresented = false
 
     init(point: PendingPoint,
+         app: ForestApp,
+         fireRiskLevel: Int?,
+         isLoadingFireRisk: Bool,
+         forestStand: ForestStandSummary?,
+         isLoadingForestStand: Bool,
          onSave: @escaping (String) -> Void,
          shareLink: String,
          onClose: @escaping () -> Void) {
         self.point = point
+        self.app = app
+        self.fireRiskLevel = fireRiskLevel
+        self.isLoadingFireRisk = isLoadingFireRisk
+        self.forestStand = forestStand
+        self.isLoadingForestStand = isLoadingForestStand
         self.onSave = onSave
         self.shareLink = shareLink
         self.onClose = onClose
@@ -27,20 +47,37 @@ struct PointDetailView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 0) {
             headerRow
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
 
-            coordinatesSubcard
+            Divider()
 
-            if point.status != nil {
-                zoneSubcard
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    coordinatesSubcard
+
+                    if point.status != nil {
+                        zoneSubcard
+                    }
+
+                    if point.ban != nil {
+                        banSubcard
+                    }
+
+                    // Zone-detail style data for the point. Fire risk only —
+                    // stove rules are a ZWL-zone concept (outside zones stoves
+                    // are forbidden regardless of fire risk).
+                    FireRiskCard(level: fireRiskLevel, isLoading: isLoadingFireRisk)
+
+                    ForestStandCard(app: app, summary: forestStand, isLoading: isLoadingForestStand)
+                }
+                .padding(16)
             }
 
-            if point.ban != nil {
-                banSubcard
-            }
-
-            Spacer(minLength: 4)
+            Divider()
 
             HStack(spacing: 12) {
                 Button(action: { isSavePromptPresented = true }) {
@@ -67,8 +104,8 @@ struct PointDetailView: View {
                 }
                 .buttonStyle(.bordered)
             }
+            .padding(16)
         }
-        .padding(16)
         .background(Color(.systemBackground))
         .alert("Nazwa punktu", isPresented: $isSavePromptPresented) {
             TextField("Zapisany punkt", text: $name)

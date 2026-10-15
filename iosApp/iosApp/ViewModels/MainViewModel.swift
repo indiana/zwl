@@ -176,10 +176,19 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var pendingPoint: PendingPoint?
     @Published var showSavedPointList = false
     @Published var selectedSavedPoint: SavedPoint?
+    // Ordering of the "Zapisane punkty" list (session only, defaults to newest
+    // first — Android parity).
+    @Published var savedPointSortMode: SavedPointSortMode = .dateDesc
     // Layer-visible toggles (Android parity). showOwnPoints resets to true on
     // launch like Android; the POI/ban toggles above persist.
     @Published var showOwnPoints = true
-    @Published var showLayersOverlay = false
+    @Published var showSettingsOverlay = false
+    // "Nie wygaszaj ekranu" (Android `KEEP_SCREEN_ON`): persisted behavior
+    // setting, enforced in MainView via `isIdleTimerDisabled` while the scene
+    // is active.
+    @Published var keepScreenOn = false {
+        didSet { UserDefaults.standard.set(keepScreenOn, forKey: Self.keyKeepScreenOn) }
+    }
     // Increment to ask the map to center on a saved point (zoom 15).
     @Published var centerSavedPointSignal: Int = 0
     private(set) var centerSavedPointLatitude: Double?
@@ -228,6 +237,18 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var selectedSavedPointForestStand: ForestStandSummary?
     @Published var isLoadingSavedPointForestStand = false
 
+    // Pending (unsaved) point data: eager fire risk + BDL forest stand fetched
+    // on creation (Android `PendingPointDetailViewModel` parity). Nothing is
+    // persisted until the user saves.
+    @Published var pendingPointFireRiskLevel: Int?
+    @Published var isLoadingPendingPointFireRisk = false
+    @Published var pendingPointForestStand: ForestStandSummary?
+    @Published var isLoadingPendingPointForestStand = false
+    // The in-flight pending-point extras fetch; a new point cancels it.
+    private var pendingPointExtrasTask: Task<Void, Never>?
+    // Last completed pending-point fetch — seeded into the new row on save.
+    private var lastPendingPointDetails: PointDetails?
+
     // Offline download
     @Published var isDownloading = false
     @Published var downloadProgress: Float = 0
@@ -264,6 +285,22 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var focusAreaSignal = 0
     private(set) var focusAreaRegion: MapRegion?
 
+    // Zone search ("Szukaj strefy") overlay. The heavy geometry pass
+    // (WKT -> bbox + distance) runs off-main only when the overlay opens or
+    // the user moved >100 m; keystrokes only rerun the cheap string filter.
+    @Published var showZoneSearch = false
+    @Published var zoneSearchQuery = ""
+    @Published var zoneSearchSortMode: ZoneSortMode = .alphabetical
+    @Published var zoneSearchResults: [ZoneSearchResult] = []
+    private var zoneSearchPrepared: [PreparedZone] = []
+    // Generation guard: a newer prepare pass cancels an older in-flight one.
+    private var zoneSearchGeneration = 0
+    // Location that the last prepare pass consumed (100 m rebuild threshold).
+    private var zoneSearchPreparedCoordinate: CLLocationCoordinate2D?
+    private let zoneSearchUseCase = SearchZonesUseCase()
+
+    var zoneSearchHasLocation: Bool { userCoordinate != nil }
+
     let app: ForestApp
     private let locationManager = CLLocationManager()
     private let pathMonitor = NWPathMonitor()
@@ -282,6 +319,7 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyShowWaterSprings = "mapSettings.showWaterSprings"
     private static let keyShowWaterWells = "mapSettings.showWaterWells"
     private static let keyHeadingUp = "mapSettings.headingUp"
+    private static let keyKeepScreenOn = "mapSettings.keepScreenOn"
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
     // re-renders the map on the main thread (the iPad-class bottleneck), so
@@ -309,6 +347,7 @@ final class MainViewModel: NSObject, ObservableObject {
         showWaterSprings = defaults.object(forKey: Self.keyShowWaterSprings) as? Bool ?? legacyWater
         showWaterWells = defaults.object(forKey: Self.keyShowWaterWells) as? Bool ?? legacyWater
         headingUp = defaults.object(forKey: Self.keyHeadingUp) as? Bool ?? false
+        keepScreenOn = defaults.object(forKey: Self.keyKeepScreenOn) as? Bool ?? false
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor [weak self] in
@@ -720,41 +759,109 @@ final class MainViewModel: NSObject, ObservableObject {
         setPendingPoint(latitude: latitude, longitude: longitude, name: name ?? "", source: .link)
     }
 
-    /// Pasted coordinates (Android `openPointFromPaste` parity).
+    /// Pasted coordinates (Android `openPointFromPaste` parity). Centers the
+    /// camera on the pasted point right after parsing, then opens the card.
     func openPointFromPaste(latitude: Double, longitude: Double) {
         setPendingPoint(latitude: latitude, longitude: longitude, name: "", source: .paste)
+        centerCamera(latitude: latitude, longitude: longitude)
     }
 
-    /// Fills the pending-point card and asynchronously computes its zone status
-    /// / forest ban off the shared spatial engine (Android parity). These
-    /// events are rare (a tap / link), so no `@Published` throttling needed —
-    /// but the Kotlin callbacks still hop through `Task { @MainActor }`.
+    /// Fills the pending-point card, asynchronously computes its zone status /
+    /// forest ban off the shared spatial engine and eagerly loads its fire risk
+    /// + BDL forest stand (Android parity). These events are rare (a tap /
+    /// link), so no `@Published` throttling needed — but the Kotlin callbacks
+    /// still hop through `Task { @MainActor }`.
     private func setPendingPoint(latitude: Double, longitude: Double, name: String, source: PendingPoint.Source) {
-        pendingPoint = PendingPoint(source: source, name: name, latitude: latitude, longitude: longitude)
+        let point = PendingPoint(source: source, name: name, latitude: latitude, longitude: longitude)
+        pendingPoint = point
+        loadPendingPointExtras(for: point)
         Task { @MainActor [weak self] in
             guard let self = self else { return }
             let status = try? await self.app.checkLocation(latitude: latitude, longitude: longitude)
             let ban = try? await self.app.checkForestBan(latitude: latitude, longitude: longitude)
+            guard self.pendingPoint?.id == point.id else { return }
             self.pendingPoint?.status = status
             self.pendingPoint?.ban = ban
         }
     }
 
+    /// Eager fire risk + BDL forest stand for the pending point (Android
+    /// `PendingPointDetailViewModel` parity). A newer point cancels the fetch;
+    /// stale results are dropped via the `pendingPoint.id` guard.
+    private func loadPendingPointExtras(for point: PendingPoint) {
+        pendingPointExtrasTask?.cancel()
+        lastPendingPointDetails = nil
+        pendingPointFireRiskLevel = nil
+        isLoadingPendingPointFireRisk = true
+        pendingPointForestStand = nil
+        isLoadingPendingPointForestStand = true
+        let pointId = point.id
+        pendingPointExtrasTask = Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let details = try? await self.app.pointDetails(
+                latitude: point.latitude,
+                longitude: point.longitude,
+                now: Self.currentTimeMillis()
+            )
+            guard self.pendingPoint?.id == pointId else { return }
+            self.lastPendingPointDetails = details
+            self.pendingPointFireRiskLevel = details.map { Int($0.fireRiskLevel) }
+            self.pendingPointForestStand = details?.forestStand
+            self.isLoadingPendingPointFireRisk = false
+            self.isLoadingPendingPointForestStand = false
+        }
+    }
+
     func savePendingPoint(name: String) {
         guard var point = pendingPoint else { return }
+        // Only seed a completed fetch; a fetch still in flight leaves the
+        // saved point to load its data on first open (no blocking).
+        let ready = !isLoadingPendingPointFireRisk && !isLoadingPendingPointForestStand
+        let details = ready ? lastPendingPointDetails : nil
         point.name = name
         pendingPoint = point
         let trimmed = name.isEmpty ? "Zapisany punkt" : name
+        let now = Self.currentTimeMillis()
+        pendingPointExtrasTask?.cancel()
+        pendingPointExtrasTask = nil
         Task { @MainActor [weak self] in
             guard let self = self else { return }
-            _ = try? await self.app.savePoint(name: trimmed, latitude: point.latitude, longitude: point.longitude)
+            if let savedId = try? await self.app.savePoint(
+                name: trimmed, latitude: point.latitude, longitude: point.longitude
+            ) {
+                let id = savedId.int64Value
+                if let details = details {
+                    if details.fireRiskLevel >= 0 && details.fireRiskLevel <= 3 {
+                        try? await self.app.updateSavedPointFireRisk(
+                            id: id, level: details.fireRiskLevel, timestamp: now
+                        )
+                    }
+                    if let stand = details.forestStand {
+                        try? await self.app.updateSavedPointForestStand(
+                            id: id, summary: stand, timestamp: now
+                        )
+                    }
+                }
+            }
             self.pendingPoint = nil
+            self.clearPendingPointExtras()
             await self.loadSavedPointData()
         }
     }
 
     func clearPendingPoint() {
         pendingPoint = nil
+        clearPendingPointExtras()
+    }
+
+    private func clearPendingPointExtras() {
+        pendingPointExtrasTask?.cancel()
+        pendingPointExtrasTask = nil
+        lastPendingPointDetails = nil
+        pendingPointFireRiskLevel = nil
+        isLoadingPendingPointFireRisk = false
+        pendingPointForestStand = nil
+        isLoadingPendingPointForestStand = false
     }
 
     func loadSavedPointData() async {
@@ -775,12 +882,42 @@ final class MainViewModel: NSObject, ObservableObject {
         showSavedPointList = false
     }
 
-    func openLayersOverlay() {
-        showLayersOverlay = true
+    var savedPointsHasLocation: Bool { userCoordinate != nil }
+
+    /// The mode actually in effect: distance orderings fall back to "data
+    /// malejąco" while there is no GPS fix (the view greys the distance chip out
+    /// and highlights "Data").
+    var effectiveSavedPointSortMode: SavedPointSortMode {
+        if userCoordinate == nil &&
+            (savedPointSortMode == .distanceAsc || savedPointSortMode == .distanceDesc) {
+            return .dateDesc
+        }
+        return savedPointSortMode
     }
 
-    func closeLayersOverlay() {
-        showLayersOverlay = false
+    func setSavedPointSortMode(_ mode: SavedPointSortMode) {
+        if mode == .distanceAsc || mode == .distanceDesc, userCoordinate == nil { return }
+        savedPointSortMode = mode
+    }
+
+    /// Saved points ordered for the list. Distance requires a user position.
+    var sortedSavedPoints: [SavedPoint] {
+        let location = userCoordinate.map {
+            SavedPointSortLocation(lat: $0.latitude, lon: $0.longitude)
+        }
+        return SavedPointSorter.shared.sort(
+            points: savedPoints,
+            mode: effectiveSavedPointSortMode,
+            location: location
+        )
+    }
+
+    func openSettingsOverlay() {
+        showSettingsOverlay = true
+    }
+
+    func closeSettingsOverlay() {
+        showSettingsOverlay = false
     }
 
     /// Short tap on a list row: center the camera on the point (map stays
@@ -789,8 +926,13 @@ final class MainViewModel: NSObject, ObservableObject {
     /// next GPS fix (Android parity: it doesn't follow). Re-enable follow via
     /// the settings toggle or a fresh app kill.
     func selectSavedPoint(_ point: SavedPoint) {
-        centerSavedPointLatitude = point.latitude
-        centerSavedPointLongitude = point.longitude
+        centerCamera(latitude: point.latitude, longitude: point.longitude)
+    }
+
+    /// Asks the map to center on a coordinate (zoom 15) by bumping the signal.
+    private func centerCamera(latitude: Double, longitude: Double) {
+        centerSavedPointLatitude = latitude
+        centerSavedPointLongitude = longitude
         centerSavedPointSignal += 1
         setFollowsUser(false)
     }
@@ -864,7 +1006,22 @@ final class MainViewModel: NSObject, ObservableObject {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
             _ = try? await self.app.deleteSavedPoint(id: point.id)
-            self.selectedSavedPoint = nil
+            if self.selectedSavedPoint?.id == point.id {
+                self.clearSavedPointProperties()
+            }
+            await self.loadSavedPointData()
+        }
+    }
+
+    func deleteSavedPoints(_ ids: [Int64]) {
+        guard !ids.isEmpty else { return }
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let idSet = Set(ids)
+            if let selected = self.selectedSavedPoint, idSet.contains(selected.id) {
+                self.clearSavedPointProperties()
+            }
+            _ = try? await self.app.deleteSavedPoints(ids: ids.map { KotlinLong(value: $0) })
             await self.loadSavedPointData()
         }
     }
@@ -997,6 +1154,92 @@ final class MainViewModel: NSObject, ObservableObject {
                                     lonEast: area.lonEast)
         focusAreaSignal += 1
         closeOfflineAreas()
+    }
+
+    // MARK: - Zone search ("Szukaj strefy")
+
+    func openZoneSearch() {
+        zoneSearchQuery = ""
+        zoneSearchSortMode = .alphabetical
+        showZoneSearch = true
+        rebuildZoneSearchPrepared()
+        runZoneSearch()
+    }
+
+    func closeZoneSearch() { showZoneSearch = false }
+
+    func setZoneSearchQuery(_ query: String) {
+        zoneSearchQuery = query
+        runZoneSearch()
+    }
+
+    func setZoneSearchSort(_ mode: ZoneSortMode) {
+        zoneSearchSortMode = mode
+        runZoneSearch()
+    }
+
+    /// Tap on a search hit: dismiss the list and fly the camera to the zone's
+    /// bounding box (reuses the offline-area focus channel).
+    func focusZone(_ bounds: ZoneBounds) {
+        focusAreaRegion = MapRegion(latSouth: bounds.south,
+                                    latNorth: bounds.north,
+                                    lonWest: bounds.west,
+                                    lonEast: bounds.east)
+        focusAreaSignal += 1
+        closeZoneSearch()
+    }
+
+    /// Re-parses zone geometry + distances on a background task. Called when
+    /// the overlay opens and (from didUpdateLocations) after the user moved
+    /// >100 m — never on keystrokes.
+    private func rebuildZoneSearchPrepared() {
+        zoneSearchGeneration += 1
+        let generation = zoneSearchGeneration
+        let zones = app.cachedZones()
+        let location: ZoneSearchLocation? = {
+            guard let lat = userLatitude, let lon = userLongitude else { return nil }
+            return ZoneSearchLocation(lat: lat, lon: lon)
+        }()
+        zoneSearchPreparedCoordinate = userCoordinate
+        Task.detached(priority: .userInitiated) {
+            let prepared = SearchZonesUseCase().prepare(zones: zones, location: location)
+            await MainActor.run {
+                guard generation == self.zoneSearchGeneration else { return }
+                self.zoneSearchPrepared = prepared
+                self.runZoneSearch()
+            }
+        }
+    }
+
+    private func runZoneSearch() {
+        guard showZoneSearch else {
+            if !zoneSearchResults.isEmpty { zoneSearchResults = [] }
+            return
+        }
+        zoneSearchResults = zoneSearchUseCase.search(
+            prepared: zoneSearchPrepared,
+            query: zoneSearchQuery,
+            sortMode: zoneSearchSortMode
+        )
+    }
+
+    /// Location hook (called from didUpdateLocations): rebuilds the prepared
+    /// zone geometry only after the device moved 100 m since the last pass.
+    func zoneSearchMaybeRebuildForLocation() {
+        guard showZoneSearch else { return }
+        guard let coordinate = userCoordinate else {
+            if zoneSearchPreparedCoordinate != nil {
+                zoneSearchPreparedCoordinate = nil
+                rebuildZoneSearchPrepared()
+            }
+            return
+        }
+        if let previous = zoneSearchPreparedCoordinate {
+            let moved = CLLocation(latitude: previous.latitude, longitude: previous.longitude)
+                .distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
+            if moved < 100 { return }
+        }
+        rebuildZoneSearchPrepared()
     }
 
     func downloadVisibleArea() {
@@ -1172,6 +1415,7 @@ extension MainViewModel: CLLocationManagerDelegate {
         }
         lastPublishedLocation = loc
         userCoordinate = loc.coordinate
+        zoneSearchMaybeRebuildForLocation()
         Task { await self.computeLocationStatus() }
         // Refresh the fire risk only while it's unresolved: each fix used to
         // spawn a redundant Task that immediately returned.

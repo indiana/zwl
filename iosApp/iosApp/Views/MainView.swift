@@ -1,8 +1,10 @@
 import SwiftUI
+import UIKit
 import shared
 
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isSettingsOpen = false
     @State private var isLandscape = false
     @State private var showAbout = false
@@ -32,6 +34,16 @@ struct MainView: View {
         .task {
             viewModel.start()
         }
+        .onAppear { updateIdleTimer() }
+        .onChange(of: scenePhase) { _ in updateIdleTimer() }
+        .onChange(of: viewModel.keepScreenOn) { _ in updateIdleTimer() }
+    }
+
+    /// "Nie wygaszaj ekranu": disable the idle timer only while the setting is
+    /// on AND the app is actually in the foreground (`scenePhase == .active`),
+    /// so a backgrounded app in a pocket can still sleep.
+    private func updateIdleTimer() {
+        UIApplication.shared.isIdleTimerDisabled = viewModel.keepScreenOn && scenePhase == .active
     }
 
     // MARK: - Main tab content (Android parity: Status + Mapa)
@@ -88,6 +100,11 @@ struct MainView: View {
             if let point = viewModel.pendingPoint {
                 PointDetailView(
                     point: point,
+                    app: viewModel.app,
+                    fireRiskLevel: viewModel.pendingPointFireRiskLevel,
+                    isLoadingFireRisk: viewModel.isLoadingPendingPointFireRisk,
+                    forestStand: viewModel.pendingPointForestStand,
+                    isLoadingForestStand: viewModel.isLoadingPendingPointForestStand,
                     onSave: { name in viewModel.savePendingPoint(name: name) },
                     shareLink: pendingPointShareLink,
                     onClose: { viewModel.clearPendingPoint() }
@@ -98,14 +115,20 @@ struct MainView: View {
         .fullScreenCover(isPresented: isSavedPointListPresented) {
             SavedPointListView(viewModel: viewModel)
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { viewModel.showZoneSearch },
+            set: { if !$0 { viewModel.closeZoneSearch() } }
+        )) {
+            ZoneSearchView(viewModel: viewModel)
+        }
         .sheet(isPresented: isSavedPointPropertiesPresented) {
             if let point = viewModel.selectedSavedPoint {
                 SavedPointPropertiesView(point: point, viewModel: viewModel)
                     .presentationDetents([.medium, .large])
             }
         }
-        .fullScreenCover(isPresented: isLayersSettingsPresented) {
-            LayersSettingsView(viewModel: viewModel)
+        .fullScreenCover(isPresented: isSettingsPresented) {
+            SettingsView(viewModel: viewModel)
         }
         .fullScreenCover(isPresented: Binding(
             get: { viewModel.showOfflineAreas },
@@ -351,9 +374,19 @@ recenterSignal: viewModel.recenterSignal,
 
             Button(action: {
                 isSettingsOpen = false
-                viewModel.openLayersOverlay()
+                viewModel.openZoneSearch()
             }) {
-                Label("Wyświetlanie na mapie", systemImage: "square.3.layers.3d")
+                Label("Szukaj strefy", systemImage: "magnifyingglass")
+            }
+            .font(.system(size: 15))
+
+            Divider()
+
+            Button(action: {
+                isSettingsOpen = false
+                viewModel.openSettingsOverlay()
+            }) {
+                Label("Ustawienia", systemImage: "square.3.layers.3d")
             }
             .font(.system(size: 15))
 
@@ -443,9 +476,9 @@ recenterSignal: viewModel.recenterSignal,
                 set: { if !$0 { viewModel.clearSelection() } })
     }
 
-    private var isLayersSettingsPresented: Binding<Bool> {
-        Binding(get: { viewModel.showLayersOverlay },
-                set: { if !$0 { viewModel.closeLayersOverlay() } })
+    private var isSettingsPresented: Binding<Bool> {
+        Binding(get: { viewModel.showSettingsOverlay },
+                set: { if !$0 { viewModel.closeSettingsOverlay() } })
     }
 
     private var isPendingPointSheetPresented: Binding<Bool> {

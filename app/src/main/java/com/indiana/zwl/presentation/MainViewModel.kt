@@ -22,7 +22,10 @@ import com.indiana.zwl.domain.model.WaterSource
 import com.indiana.zwl.shared.data.water.WaterSyncManager
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
-import com.indiana.zwl.shared.data.remote.isTransientRemoteError
+import com.indiana.zwl.domain.usecase.PointDetails
+import com.indiana.zwl.domain.usecase.SavedPointSortMode
+import com.indiana.zwl.domain.usecase.SavedPointSorter
+import com.indiana.zwl.domain.usecase.isDistance
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import com.indiana.zwl.domain.util.PoiUiGroup
@@ -53,6 +56,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 import com.indiana.zwl.domain.model.ForestBan
@@ -82,6 +87,11 @@ data class PendingPoint(
     val source: PointSource,
     val status: LocationStatus? = null,
     val ban: ForestBan? = null
+)
+
+data class FocusCoordinate(
+    val lat: Double,
+    val lng: Double
 )
 
 @HiltViewModel
@@ -200,6 +210,20 @@ class MainViewModel @Inject constructor(
             }
             MapOrientationMode.HEADING_UP -> setOrientationMode(MapOrientationMode.NORTH_UP)
         }
+    }
+
+    // "Nie wygaszaj ekranu" — persists across launches; the effect itself is
+    // applied at the window level in MainScreen, so it holds whenever the app is
+    // in the foreground (both tabs).
+    private val _keepScreenOn = MutableStateFlow(
+        sharedPrefs.getBoolean(MapSettingsPrefsKeys.KEEP_SCREEN_ON, false)
+    )
+    val keepScreenOn: StateFlow<Boolean> = _keepScreenOn.asStateFlow()
+
+    fun setKeepScreenOn(enabled: Boolean) {
+        if (_keepScreenOn.value == enabled) return
+        _keepScreenOn.value = enabled
+        sharedPrefs.edit().putBoolean(MapSettingsPrefsKeys.KEEP_SCREEN_ON, enabled).apply()
     }
 
     // Follow-the-user is session state: it always starts enabled on a fresh map
@@ -345,6 +369,51 @@ class MainViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
+    private val _savedPointSortMode = MutableStateFlow(SavedPointSortMode.DATE_DESC)
+    val savedPointSortMode: StateFlow<SavedPointSortMode> = _savedPointSortMode.asStateFlow()
+
+    fun setSavedPointSortMode(mode: SavedPointSortMode) {
+        if (mode.isDistance && !hasUserLocation()) return
+        _savedPointSortMode.value = mode
+    }
+
+    private fun sortedModeFor(mode: SavedPointSortMode, state: MainUiState): SavedPointSortMode {
+        val hasLocation = state is MainUiState.Success &&
+            state.latitude != null && state.longitude != null
+        return if (mode.isDistance && !hasLocation) SavedPointSortMode.DATE_DESC else mode
+    }
+
+    // The mode actually in effect: distance orderings fall back to "data
+    // malejąco" while there is no GPS fix (the overlay greys the distance chip
+    // out and highlights "Data").
+    val savedPointEffectiveSortMode: StateFlow<SavedPointSortMode> = combine(
+        _savedPointSortMode, uiState
+    ) { mode, state -> sortedModeFor(mode, state) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SavedPointSortMode.DATE_DESC
+        )
+
+    // Sorted list for the overlay. Distance orderings need a user position; when
+    // there is none the effective mode falls back to "data malejąco".
+    val savedPointListPoints: StateFlow<List<SavedPoint>> = combine(
+        savedPoints, _savedPointSortMode, uiState
+    ) { points, mode, state ->
+        val latitude = (state as? MainUiState.Success)?.latitude
+        val longitude = (state as? MainUiState.Success)?.longitude
+        SavedPointSorter.sort(points, sortedModeFor(mode, state), latitude, longitude)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    private fun hasUserLocation(): Boolean {
+        val state = _uiState.value
+        return state is MainUiState.Success && state.latitude != null && state.longitude != null
+    }
+
     private val _showOwnPoints = MutableStateFlow(true)
     val showOwnPoints: StateFlow<Boolean> = _showOwnPoints.asStateFlow()
 
@@ -352,15 +421,15 @@ class MainViewModel @Inject constructor(
         _showOwnPoints.value = visible
     }
 
-    private val _showLayersOverlay = MutableStateFlow(false)
-    val showLayersOverlay: StateFlow<Boolean> = _showLayersOverlay.asStateFlow()
+    private val _showSettingsOverlay = MutableStateFlow(false)
+    val showSettingsOverlay: StateFlow<Boolean> = _showSettingsOverlay.asStateFlow()
 
-    fun openLayersOverlay() {
-        _showLayersOverlay.value = true
+    fun openSettingsOverlay() {
+        _showSettingsOverlay.value = true
     }
 
-    fun closeLayersOverlay() {
-        _showLayersOverlay.value = false
+    fun closeSettingsOverlay() {
+        _showSettingsOverlay.value = false
     }
 
     private val _pendingPoint = MutableStateFlow<PendingPoint?>(null)
@@ -368,6 +437,9 @@ class MainViewModel @Inject constructor(
 
     private val _focusSavedPoint = MutableStateFlow<SavedPoint?>(null)
     val focusSavedPoint: StateFlow<SavedPoint?> = _focusSavedPoint.asStateFlow()
+
+    private val _focusCoordinate = MutableStateFlow<FocusCoordinate?>(null)
+    val focusCoordinate: StateFlow<FocusCoordinate?> = _focusCoordinate.asStateFlow()
 
     private val _selectedSavedPointInfo = MutableStateFlow<SavedPoint?>(null)
     val selectedSavedPointInfo: StateFlow<SavedPoint?> = _selectedSavedPointInfo.asStateFlow()
@@ -393,6 +465,16 @@ class MainViewModel @Inject constructor(
 
     fun openPointFromPaste(lat: Double, lng: Double) {
         setPendingPoint(PendingPoint(lat = lat, lng = lng, name = null, source = PointSource.PASTE))
+        focusCoordinate(lat, lng)
+    }
+
+    private fun focusCoordinate(lat: Double, lng: Double) {
+        _focusCoordinate.value = FocusCoordinate(lat, lng)
+        setFollowsUser(false)
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(100)
+            _focusCoordinate.value = null
+        }
     }
 
     private fun setPendingPoint(point: PendingPoint) {
@@ -408,10 +490,21 @@ class MainViewModel @Inject constructor(
         _pendingPoint.value = null
     }
 
-    fun savePendingPoint(name: String) {
+    fun savePendingPoint(name: String, details: PointDetails?) {
         val point = _pendingPoint.value ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            savedPointRepository.insert(NewSavedPoint(name = name, latitude = point.lat, longitude = point.lng))
+            val id = savedPointRepository.insert(
+                NewSavedPoint(name = name, latitude = point.lat, longitude = point.lng)
+            )
+            val now = System.currentTimeMillis()
+            if (details != null) {
+                if (details.fireRiskLevel in 0..3) {
+                    savedPointRepository.updateFireRisk(id, details.fireRiskLevel, now)
+                }
+                details.forestStand?.let { stand ->
+                    savedPointRepository.updateForestStand(id, Json.encodeToString(stand), now)
+                }
+            }
             _pendingPoint.value = null
         }
     }
@@ -424,9 +517,21 @@ class MainViewModel @Inject constructor(
     }
 
     fun deleteSavedPoint(id: Long) {
-        _selectedSavedPointInfo.value = null
+        if (_selectedSavedPointInfo.value?.id == id) {
+            _selectedSavedPointInfo.value = null
+        }
         viewModelScope.launch(Dispatchers.IO) {
             savedPointRepository.delete(id)
+        }
+    }
+
+    fun deleteSavedPoints(ids: Set<Long>) {
+        if (ids.isEmpty()) return
+        if (_selectedSavedPointInfo.value?.id?.let { it in ids } == true) {
+            _selectedSavedPointInfo.value = null
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            savedPointRepository.deleteByIds(ids.toList())
         }
     }
 
@@ -683,53 +788,33 @@ class MainViewModel @Inject constructor(
     }
 
     private suspend fun fetchFireHazard(location: Location, status: LocationStatus) {
-        val result = getFireRiskUseCase(location.latitude, location.longitude)
         val district = when (status) {
             is LocationStatus.InZone -> status.forestDistrict
             is LocationStatus.OutsideZone -> status.nearestDistrict
             else -> null
         }
-        if (result.isSuccess) {
-            val code = result.getOrDefault(-1)
-            currentFireRisk = code
+        val code = getFireRiskUseCase(
+            location.latitude,
+            location.longitude,
+            System.currentTimeMillis(),
+            cached = {
+                val zone = district?.let { withContext(Dispatchers.IO) { zoneRepository.getByForestDistrict(it) } }
+                GetFireRiskUseCase.Cached(zone?.fireRiskLevel, zone?.fireRiskTimestamp)
+            },
+            onNonTransientError = { e ->
+                _debugError.value = "fetchFireHazard API error:\n" + e.stackTraceToString()
+            }
+        )
+        currentFireRisk = code
+        if (code in 0..3 || code == GetFireRiskUseCase.NO_DATA) {
             lastFireRiskLocation = location
-            if (district != null && code in 0..3) {
-                val timestamp = System.currentTimeMillis()
-                withContext(Dispatchers.IO) {
-                    zoneRepository.updateFireRisk(district, code, timestamp)
-                }
-                updateZoneFireRiskInMemory(district, code, timestamp)
-            }
-        } else {
-            val exception = result.exceptionOrNull()
-            if (!isNetworkException(exception)) {
-                _debugError.value = "fetchFireHazard API error:\n" + exception?.stackTraceToString()
-            } else {
-                exception?.printStackTrace()
-            }
-            if (isNetworkException(exception)) {
-                val cached = if (district != null) {
-                    withContext(Dispatchers.IO) { zoneRepository.getByForestDistrict(district) }
-                } else {
-                    null
-                }
-                currentFireRisk = resolveCachedFireRisk(cached?.fireRiskLevel, cached?.fireRiskTimestamp)
-            } else {
-                currentFireRisk = -1
-            }
         }
-    }
-
-    private fun isNetworkException(e: Throwable?): Boolean = isTransientRemoteError(e)
-
-    private fun resolveCachedFireRisk(level: Int?, timestamp: Long?): Int {
-        val now = System.currentTimeMillis()
-        return if (level != null && level in 0..3 &&
-            timestamp != null && now - timestamp < FIRE_RISK_CACHE_MAX_AGE_MS
-        ) {
-            level + 10
-        } else {
-            -2
+        if (district != null && code in 0..3) {
+            val timestamp = System.currentTimeMillis()
+            withContext(Dispatchers.IO) {
+                zoneRepository.updateFireRisk(district, code, timestamp)
+            }
+            updateZoneFireRiskInMemory(district, code, timestamp)
         }
     }
 
@@ -757,7 +842,6 @@ class MainViewModel @Inject constructor(
     }
 
     companion object {
-        private const val FIRE_RISK_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
         private const val INIT_HARD_TIMEOUT_MS = 20_000L
     }
 }
