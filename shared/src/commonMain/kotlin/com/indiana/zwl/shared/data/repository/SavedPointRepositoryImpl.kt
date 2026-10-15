@@ -4,6 +4,7 @@ import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.shared.data.local.SharedDatabase
+import com.indiana.zwl.shared.data.water.PlatformClock
 import app.cash.sqldelight.coroutines.asFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -33,7 +34,7 @@ class SavedPointRepositoryImpl(
             point.name,
             point.latitude,
             point.longitude,
-            System.currentTimeMillis()
+            PlatformClock.nowMillis()
         )
         return database.savedPointQueries.lastInsertRowId().executeAsOne()
     }
