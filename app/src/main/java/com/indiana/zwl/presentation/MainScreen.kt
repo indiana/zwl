@@ -245,7 +245,8 @@ fun MainScreen(
             val selectedZoneDetails by zoneDetailViewModel.selectedZoneDetails.collectAsStateWithLifecycle()
             val selectedForestBan by viewModel.selectedForestBan.collectAsStateWithLifecycle()
             val pendingPoint by viewModel.pendingPoint.collectAsStateWithLifecycle()
-            val savedPoints by viewModel.savedPoints.collectAsStateWithLifecycle()
+            val savedPointListPoints by viewModel.savedPointListPoints.collectAsStateWithLifecycle()
+            val savedPointSortMode by viewModel.savedPointEffectiveSortMode.collectAsStateWithLifecycle()
             val showSavedPointList by viewModel.showSavedPointList.collectAsStateWithLifecycle()
             val selectedSavedPointInfo by viewModel.selectedSavedPointInfo.collectAsStateWithLifecycle()
             val waterDataState by viewModel.waterDataState.collectAsStateWithLifecycle()
@@ -491,7 +492,11 @@ fun MainScreen(
 
                                 if (showSavedPointList) {
                                     SavedPointListOverlay(
-                                        points = savedPoints,
+                                        points = savedPointListPoints,
+                                        sortMode = savedPointSortMode,
+                                        userLatitude = state.latitude,
+                                        userLongitude = state.longitude,
+                                        onSortModeChange = { viewModel.setSavedPointSortMode(it) },
                                         onClose = { viewModel.closeSavedPointList() },
                                         onSelect = { point ->
                                             viewModel.selectSavedPoint(point)

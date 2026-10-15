@@ -23,6 +23,9 @@ import com.indiana.zwl.shared.data.water.WaterSyncManager
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.PointDetails
+import com.indiana.zwl.domain.usecase.SavedPointSortMode
+import com.indiana.zwl.domain.usecase.SavedPointSorter
+import com.indiana.zwl.domain.usecase.isDistance
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
 import com.indiana.zwl.domain.usecase.SyncZonesUseCase
 import com.indiana.zwl.domain.util.PoiUiGroup
@@ -365,6 +368,51 @@ class MainViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    private val _savedPointSortMode = MutableStateFlow(SavedPointSortMode.DATE_DESC)
+    val savedPointSortMode: StateFlow<SavedPointSortMode> = _savedPointSortMode.asStateFlow()
+
+    fun setSavedPointSortMode(mode: SavedPointSortMode) {
+        if (mode.isDistance && !hasUserLocation()) return
+        _savedPointSortMode.value = mode
+    }
+
+    private fun sortedModeFor(mode: SavedPointSortMode, state: MainUiState): SavedPointSortMode {
+        val hasLocation = state is MainUiState.Success &&
+            state.latitude != null && state.longitude != null
+        return if (mode.isDistance && !hasLocation) SavedPointSortMode.DATE_DESC else mode
+    }
+
+    // The mode actually in effect: distance orderings fall back to "data
+    // malejąco" while there is no GPS fix (the overlay greys the distance chip
+    // out and highlights "Data").
+    val savedPointEffectiveSortMode: StateFlow<SavedPointSortMode> = combine(
+        _savedPointSortMode, uiState
+    ) { mode, state -> sortedModeFor(mode, state) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SavedPointSortMode.DATE_DESC
+        )
+
+    // Sorted list for the overlay. Distance orderings need a user position; when
+    // there is none the effective mode falls back to "data malejąco".
+    val savedPointListPoints: StateFlow<List<SavedPoint>> = combine(
+        savedPoints, _savedPointSortMode, uiState
+    ) { points, mode, state ->
+        val latitude = (state as? MainUiState.Success)?.latitude
+        val longitude = (state as? MainUiState.Success)?.longitude
+        SavedPointSorter.sort(points, sortedModeFor(mode, state), latitude, longitude)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    private fun hasUserLocation(): Boolean {
+        val state = _uiState.value
+        return state is MainUiState.Success && state.latitude != null && state.longitude != null
+    }
 
     private val _showOwnPoints = MutableStateFlow(true)
     val showOwnPoints: StateFlow<Boolean> = _showOwnPoints.asStateFlow()

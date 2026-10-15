@@ -176,6 +176,9 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var pendingPoint: PendingPoint?
     @Published var showSavedPointList = false
     @Published var selectedSavedPoint: SavedPoint?
+    // Ordering of the "Zapisane punkty" list (session only, defaults to newest
+    // first — Android parity).
+    @Published var savedPointSortMode: SavedPointSortMode = .dateDesc
     // Layer-visible toggles (Android parity). showOwnPoints resets to true on
     // launch like Android; the POI/ban toggles above persist.
     @Published var showOwnPoints = true
@@ -877,6 +880,36 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func closeSavedPointList() {
         showSavedPointList = false
+    }
+
+    var savedPointsHasLocation: Bool { userCoordinate != nil }
+
+    /// The mode actually in effect: distance orderings fall back to "data
+    /// malejąco" while there is no GPS fix (the view greys the distance chip out
+    /// and highlights "Data").
+    var effectiveSavedPointSortMode: SavedPointSortMode {
+        if userCoordinate == nil &&
+            (savedPointSortMode == .distanceAsc || savedPointSortMode == .distanceDesc) {
+            return .dateDesc
+        }
+        return savedPointSortMode
+    }
+
+    func setSavedPointSortMode(_ mode: SavedPointSortMode) {
+        if mode == .distanceAsc || mode == .distanceDesc, userCoordinate == nil { return }
+        savedPointSortMode = mode
+    }
+
+    /// Saved points ordered for the list. Distance requires a user position.
+    var sortedSavedPoints: [SavedPoint] {
+        let location = userCoordinate.map {
+            SavedPointSortLocation(lat: $0.latitude, lon: $0.longitude)
+        }
+        return SavedPointSorter.shared.sort(
+            points: savedPoints,
+            mode: effectiveSavedPointSortMode,
+            location: location
+        )
     }
 
     func openSettingsOverlay() {

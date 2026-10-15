@@ -1,6 +1,7 @@
 package com.indiana.zwl.presentation.map
 
 import android.content.res.Configuration
+import android.location.Location
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
@@ -23,18 +24,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import com.indiana.zwl.domain.model.SavedPoint
+import com.indiana.zwl.domain.usecase.SavedPointSortMode
+import com.indiana.zwl.domain.usecase.isDistance
 import com.indiana.zwl.presentation.FireRiskCard
 import com.indiana.zwl.presentation.ForestStandCard
 import com.indiana.zwl.presentation.SelectedSavedPointDetails
 import com.indiana.zwl.shared.map.CoordinateParser
+import java.text.DateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SavedPointListOverlay(
     points: List<SavedPoint>,
+    sortMode: SavedPointSortMode,
+    userLatitude: Double?,
+    userLongitude: Double?,
+    onSortModeChange: (SavedPointSortMode) -> Unit,
     onClose: () -> Unit,
     onSelect: (SavedPoint) -> Unit,
     onOpenProperties: (SavedPoint) -> Unit,
@@ -43,6 +56,10 @@ fun SavedPointListOverlay(
 ) {
     val isLandscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val hasLocation = userLatitude != null && userLongitude != null
+    val distanceSelected = sortMode.isDistance
+    val descending = sortMode == SavedPointSortMode.DATE_DESC ||
+        sortMode == SavedPointSortMode.DISTANCE_DESC
     var pasteDialogVisible by remember { mutableStateOf(false) }
     var pasteInput by remember { mutableStateOf("") }
     var pasteError by remember { mutableStateOf(false) }
@@ -145,6 +162,58 @@ fun SavedPointListOverlay(
                 Text("Otwórz punkt ze współrzędnych", fontWeight = FontWeight.SemiBold)
             }
 
+            if (points.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = !distanceSelected,
+                        onClick = {
+                            onSortModeChange(
+                                if (descending) SavedPointSortMode.DATE_DESC
+                                else SavedPointSortMode.DATE_ASC
+                            )
+                        },
+                        label = { Text("Data", fontSize = 12.sp) }
+                    )
+                    FilterChip(
+                        selected = distanceSelected,
+                        onClick = {
+                            onSortModeChange(
+                                if (descending) SavedPointSortMode.DISTANCE_DESC
+                                else SavedPointSortMode.DISTANCE_ASC
+                            )
+                        },
+                        enabled = hasLocation,
+                        label = { Text("Odległość", fontSize = 12.sp) }
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(
+                        onClick = {
+                            onSortModeChange(
+                                when (sortMode) {
+                                    SavedPointSortMode.DATE_DESC -> SavedPointSortMode.DATE_ASC
+                                    SavedPointSortMode.DATE_ASC -> SavedPointSortMode.DATE_DESC
+                                    SavedPointSortMode.DISTANCE_ASC -> SavedPointSortMode.DISTANCE_DESC
+                                    SavedPointSortMode.DISTANCE_DESC -> SavedPointSortMode.DISTANCE_ASC
+                                }
+                            )
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (descending) Icons.Default.ArrowDownward
+                            else Icons.Default.ArrowUpward,
+                            contentDescription = if (descending) "Malejąco" else "Rosnąco",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
             if (selectionMode && points.isNotEmpty()) {
                 val allSelected = selectedIds.size == points.size
                 Row(
@@ -225,6 +294,25 @@ fun SavedPointListOverlay(
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                val meta = buildList {
+                                    if (point.createdAt > 0L) {
+                                        add(formatSavedPointDate(point.createdAt))
+                                    }
+                                    distanceMetersOrNull(
+                                        point.latitude,
+                                        point.longitude,
+                                        userLatitude,
+                                        userLongitude
+                                    )?.let { add(formatDistanceMeters(it)) }
+                                }
+                                if (meta.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = meta.joinToString("  ·  "),
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                             if (selectionMode) {
                                 Checkbox(
@@ -389,6 +477,14 @@ fun SavedPointPropertiesCard(
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (point.createdAt > 0L) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Zapisano: ${formatSavedPointDate(point.createdAt)}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 IconButton(onClick = onClose) {
                     Text(
@@ -512,4 +608,29 @@ fun SavedPointPropertiesCard(
             }
         )
     }
+}
+
+private val savedPointDateFormat: DateFormat =
+    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+
+private fun formatSavedPointDate(epochMillis: Long): String =
+    savedPointDateFormat.format(Date(epochMillis))
+
+private fun formatDistanceMeters(meters: Double): String =
+    if (meters < 1000.0) {
+        "${meters.roundToInt()} m"
+    } else {
+        String.format(Locale.US, "%.1f km", meters / 1000.0)
+    }
+
+private fun distanceMetersOrNull(
+    pointLat: Double,
+    pointLon: Double,
+    userLat: Double?,
+    userLon: Double?
+): Double? {
+    if (userLat == null || userLon == null) return null
+    val results = FloatArray(1)
+    Location.distanceBetween(pointLat, pointLon, userLat, userLon, results)
+    return results[0].toDouble()
 }

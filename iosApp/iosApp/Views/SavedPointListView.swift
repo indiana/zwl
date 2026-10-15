@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 import shared
 
 /// Full-screen "Zapisane punkty" list over the map (Android overlay parity;
@@ -38,7 +39,10 @@ struct SavedPointListView: View {
                     }
                 } else {
                     Section {
-                        ForEach(viewModel.savedPoints, id: \.id) { point in
+                        sortBar
+                    }
+                    Section {
+                        ForEach(viewModel.sortedSavedPoints, id: \.id) { point in
                             row(for: point)
                                 .tag(point.id)
                         }
@@ -134,6 +138,11 @@ struct SavedPointListView: View {
             Text(Formatters.coordinateText(latitude: point.latitude, longitude: point.longitude))
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
+            if let meta = metaText(for: point) {
+                Text(meta)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -159,6 +168,79 @@ struct SavedPointListView: View {
                 Label("Usuń", systemImage: "trash")
             }
         }
+    }
+
+    private var sortBar: some View {
+        let mode = viewModel.effectiveSavedPointSortMode
+        let distanceSelected = mode == .distanceAsc || mode == .distanceDesc
+        let descending = mode == .dateDesc || mode == .distanceDesc
+        return HStack(spacing: 8) {
+            sortChip(title: "Data", isSelected: !distanceSelected) {
+                viewModel.setSavedPointSortMode(descending ? .dateDesc : .dateAsc)
+            }
+            sortChip(title: "Odległość",
+                     isSelected: distanceSelected,
+                     isEnabled: viewModel.savedPointsHasLocation) {
+                viewModel.setSavedPointSortMode(descending ? .distanceDesc : .distanceAsc)
+            }
+            Spacer()
+            Button(action: { toggleSortDirection(mode) }) {
+                Image(systemName: descending ? "arrow.down" : "arrow.up")
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .accessibilityLabel(descending ? "Malejąco" : "Rosnąco")
+        }
+    }
+
+    private func toggleSortDirection(_ mode: SavedPointSortMode) {
+        if mode == .dateDesc {
+            viewModel.setSavedPointSortMode(.dateAsc)
+        } else if mode == .dateAsc {
+            viewModel.setSavedPointSortMode(.dateDesc)
+        } else if mode == .distanceAsc {
+            viewModel.setSavedPointSortMode(.distanceDesc)
+        } else {
+            viewModel.setSavedPointSortMode(.distanceAsc)
+        }
+    }
+
+    private func sortChip(title: String,
+                          isSelected: Bool,
+                          isEnabled: Bool = true,
+                          action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isSelected ? Color.accentColor.opacity(0.18) : Color(.secondarySystemBackground),
+                            in: Capsule())
+                .overlay(
+                    Capsule().stroke(isSelected ? Color.accentColor : Color.gray.opacity(0.4),
+                                     lineWidth: isSelected ? 1.5 : 1)
+                )
+        }
+        .foregroundColor(isSelected ? .accentColor : (isEnabled ? .primary : .secondary))
+        .disabled(!isEnabled)
+    }
+
+    /// "data · odległość" second meta line (each part dropped when unknown).
+    private func metaText(for point: SavedPoint) -> String? {
+        var parts: [String] = []
+        if let date = Formatters.savedPointDateText(point.createdAt) {
+            parts.append(date)
+        }
+        if let distance = distanceMeters(to: point) {
+            parts.append(Formatters.distanceText(distance))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "  ·  ")
+    }
+
+    private func distanceMeters(to point: SavedPoint) -> Double? {
+        guard let user = viewModel.userCoordinate else { return nil }
+        let userLocation = CLLocation(latitude: user.latitude, longitude: user.longitude)
+        let pointLocation = CLLocation(latitude: point.latitude, longitude: point.longitude)
+        return userLocation.distance(from: pointLocation)
     }
 
     private var deleteConfirmTitle: String {

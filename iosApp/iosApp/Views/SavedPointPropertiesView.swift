@@ -107,6 +107,11 @@ struct SavedPointPropertiesView: View {
                 Text("Zapisywany punkt")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
+                if let date = Formatters.savedPointDateText(point.createdAt) {
+                    Text("Zapisano: \(date)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
             }
             Spacer()
         }
