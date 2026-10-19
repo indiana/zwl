@@ -157,5 +157,4 @@ struct SettingsView: View {
             set: { viewModel.setNearbyRadiusKm($0) }
         )
     }
-    }
 }
