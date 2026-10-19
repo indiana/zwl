@@ -8,21 +8,21 @@ import org.junit.Test
 
 class WhatsNewTest {
 
-    private val shipped = WhatsNew.latestNote()!!
+    private val latest = WhatsNew.latestNote()!!
 
     @Test
-    fun `fresh install shows the note`() {
-        assertEquals(shipped, WhatsNew.noteToShow("1.6", null, false))
+    fun `fresh install shows the latest note`() {
+        assertEquals(latest, WhatsNew.noteToShow(latest.version, null, false))
     }
 
     @Test
     fun `same version after seen stays silent`() {
-        assertNull(WhatsNew.noteToShow("1.6", "1.6", false))
+        assertNull(WhatsNew.noteToShow(latest.version, latest.version, false))
     }
 
     @Test
-    fun `upgrade shows the note`() {
-        assertEquals(shipped, WhatsNew.noteToShow("1.6", "1.5", false))
+    fun `upgrade shows the latest note`() {
+        assertEquals(latest, WhatsNew.noteToShow(latest.version, "1.5", false))
     }
 
     @Test
@@ -37,24 +37,31 @@ class WhatsNewTest {
 
     @Test
     fun `falls back to newest note not newer than current`() {
-        assertEquals(shipped, WhatsNew.noteToShow("9.9", null, false))
+        assertEquals(latest, WhatsNew.noteToShow("9.9", null, false))
     }
 
     @Test
     fun `seen garbage version still shows the note`() {
-        assertEquals(shipped, WhatsNew.noteToShow("1.6", "debug-local", false))
+        assertEquals(latest, WhatsNew.noteToShow(latest.version, "debug-local", false))
+    }
+
+    @Test
+    fun `older installed version shows its own note`() {
+        val note = WhatsNew.noteFor("1.6")!!
+        assertEquals("1.6", note.version)
+        assertEquals(note, WhatsNew.noteToShow("1.6", null, false))
     }
 
     @Test
     fun `debug always shows the latest note`() {
-        assertEquals(shipped, WhatsNew.noteToShow("1.6", "1.6", true))
-        assertEquals(shipped, WhatsNew.noteToShow("0.9", "9.9", true))
+        assertEquals(latest, WhatsNew.noteToShow(latest.version, latest.version, true))
+        assertEquals(latest, WhatsNew.noteToShow("0.9", "9.9", true))
     }
 
     @Test
     fun `shipped note has version and non empty items`() {
-        assertTrue(shipped.version.isNotBlank())
-        assertTrue(shipped.items.isNotEmpty())
-        assertTrue(shipped.items.all { it.isNotBlank() })
+        assertTrue(latest.version.isNotBlank())
+        assertTrue(latest.items.isNotEmpty())
+        assertTrue(latest.items.all { it.isNotBlank() })
     }
 }
