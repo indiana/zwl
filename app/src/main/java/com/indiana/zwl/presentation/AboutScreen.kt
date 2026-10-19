@@ -1,7 +1,6 @@
 package com.indiana.zwl.presentation
 
 import android.content.res.Configuration
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,17 +40,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.BuildConfig
-import com.indiana.zwl.R
 import com.indiana.zwl.domain.model.WaterDataState
 import com.indiana.zwl.presentation.theme.DarkForestBackground
 import com.indiana.zwl.presentation.theme.ForestGreenAccent
@@ -61,7 +57,6 @@ import com.indiana.zwl.shared.data.water.WaterAttribution
 private const val BDL_PORTAL_URL = "https://www.bdl.lasy.gov.pl/portal/"
 private const val IBL_FIRE_URL = "https://bazapozarow.ibles.pl/"
 private const val ZANOCUJ_W_LESIE_URL = "https://www.lasy.gov.pl/pl/turystyka/program-zanocuj-w-lesie"
-private const val BUYCOFFEE_URL = "https://buycoffee.to/legalny-bushcraft"
 private const val FACEBOOK_URL = "https://www.facebook.com/profile.php?id=61593227626210"
 private const val INSTAGRAM_URL = "https://instagram.com/legalny.bushcraft"
 
@@ -354,20 +349,6 @@ fun AboutScreen(
         }
         }
     }
-}
-
-@Composable
-private fun BuyCoffeeButton() {
-    val context = LocalContext.current
-    Image(
-        painter = painterResource(id = R.drawable.buycoffee_button),
-        contentDescription = "Wesprzyj projekt w BuyCoffee",
-        contentScale = ContentScale.Fit,
-        modifier = Modifier
-            .width(220.dp)
-            .height(58.dp)
-            .clickable { openNadlesnictwoWebsite(context, BUYCOFFEE_URL) }
-    )
 }
 
 @Composable

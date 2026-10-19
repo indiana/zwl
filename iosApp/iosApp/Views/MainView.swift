@@ -4,6 +4,8 @@ import shared
 
 struct MainView: View {
     @ObservedObject var viewModel: MainViewModel
+    @ObservedObject var updateService: AppUpdateService
+    @ObservedObject var whatsNewService: WhatsNewService
     @Environment(\.scenePhase) private var scenePhase
     @State private var isSettingsOpen = false
     @State private var isLandscape = false
@@ -155,6 +157,15 @@ struct MainView: View {
             Button("Anuluj", role: .cancel) { viewModel.cancelDownloadConfirmation() }
         } message: {
             Text(viewModel.downloadConfirmMessage ?? "")
+        }
+        .sheet(isPresented: Binding(
+            get: { whatsNewService.note != nil && updateService.prompt == nil },
+            set: { if !$0 { whatsNewService.dismiss() } }
+        )) {
+            if let note = whatsNewService.note {
+                WhatsNewView(note: note) { whatsNewService.dismiss() }
+                    .presentationDetents([.medium, .large])
+            }
         }
     }
 

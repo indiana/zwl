@@ -13,4 +13,5 @@ enum class MapOrientationMode {
 object MapSettingsPrefsKeys {
     const val ORIENTATION_MODE = "orientation_mode"
     const val KEEP_SCREEN_ON = "keep_screen_on"
+    const val LAST_SEEN_VERSION = "last_seen_version"
 }
