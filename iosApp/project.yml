@@ -66,6 +66,9 @@ targets:
           ./gradlew :shared:embedAndSignAppleFrameworkForXcode
         basedOnDependencyAnalysis: false
     settings:
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.indiana.zwl.iosApp
         PRODUCT_NAME: ZWL

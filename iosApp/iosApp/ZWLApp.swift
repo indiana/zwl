@@ -6,6 +6,7 @@ import shared
 struct ZWLApp: App {
     @StateObject private var viewModel: MainViewModel
     @StateObject private var updateService = AppUpdateService()
+    @StateObject private var whatsNewService = WhatsNewService()
 
     init() {
         let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].path
@@ -15,13 +16,14 @@ struct ZWLApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainView(viewModel: viewModel)
+            MainView(viewModel: viewModel, updateService: updateService, whatsNewService: whatsNewService)
                 .preferredColorScheme(.dark)
                 .onOpenURL { url in
                     viewModel.openPointFromLink(url)
                 }
                 .task {
                     await updateService.checkIfNeeded()
+                    whatsNewService.check()
                 }
                 .alert(
                     "Dostępna aktualizacja",

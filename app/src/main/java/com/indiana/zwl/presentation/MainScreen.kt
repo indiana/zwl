@@ -261,6 +261,10 @@ fun MainScreen(
             // back restores the detail (consistent with the map-menu overlays).
             var detailOriginTab by rememberSaveable { mutableStateOf(1) }
 
+            // "Co nowego" popup: rendered only once the app is initialized
+            // (Success branch) and after the permission screen is resolved.
+            val whatsNew by viewModel.whatsNew.collectAsStateWithLifecycle()
+
             val isDebug = BuildConfig.DEBUG
             val debugInvertZone by viewModel.debugInvertZone.collectAsStateWithLifecycle()
             val debugBanOverride by viewModel.debugForestBanOverride.collectAsStateWithLifecycle()
@@ -574,6 +578,9 @@ fun MainScreen(
                         }
                         }
                     }
+                }
+                whatsNew?.let { note ->
+                    WhatsNewSheet(note = note, onClose = { viewModel.dismissWhatsNew() })
                 }
                 BackHandler(
                     enabled = showAbout || showSavedPointList ||

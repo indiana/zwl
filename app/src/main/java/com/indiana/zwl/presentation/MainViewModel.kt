@@ -20,6 +20,8 @@ import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.model.WaterDataState
 import com.indiana.zwl.domain.model.WaterSource
 import com.indiana.zwl.shared.data.water.WaterSyncManager
+import com.indiana.zwl.shared.update.ReleaseNote
+import com.indiana.zwl.shared.update.WhatsNew
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.PointDetails
@@ -224,6 +226,27 @@ class MainViewModel @Inject constructor(
         if (_keepScreenOn.value == enabled) return
         _keepScreenOn.value = enabled
         sharedPrefs.edit().putBoolean(MapSettingsPrefsKeys.KEEP_SCREEN_ON, enabled).apply()
+    }
+
+    // "Co nowego": release notes shown once per marketing version, on both
+    // upgrade and fresh install. Debug builds always get the latest note and
+    // never persist the seen marker, so the popup can be exercised on every
+    // launch.
+    private val _whatsNew = MutableStateFlow(
+        WhatsNew.noteToShow(
+            currentVersion = com.indiana.zwl.BuildConfig.VERSION_NAME,
+            lastSeenVersion = sharedPrefs.getString(MapSettingsPrefsKeys.LAST_SEEN_VERSION, null),
+            debugBuild = com.indiana.zwl.BuildConfig.DEBUG
+        )
+    )
+    val whatsNew: StateFlow<ReleaseNote?> = _whatsNew.asStateFlow()
+
+    fun dismissWhatsNew() {
+        val note = _whatsNew.value ?: return
+        if (!com.indiana.zwl.BuildConfig.DEBUG) {
+            sharedPrefs.edit().putString(MapSettingsPrefsKeys.LAST_SEEN_VERSION, note.version).apply()
+        }
+        _whatsNew.value = null
     }
 
     // Follow-the-user is session state: it always starts enabled on a fresh map
