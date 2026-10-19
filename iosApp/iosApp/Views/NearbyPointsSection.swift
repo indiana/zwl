@@ -5,7 +5,8 @@ import shared
 /// `NearbyPointsSection` parity): nearby saved points, POIs and water sources
 /// sorted by distance, capped by the shared use case. The empty state is a
 /// single line — no header, no container — so it stays unobtrusive when
-/// nothing is nearby. Tapping a row opens that point's detail.
+/// nothing is nearby. Radius 0 turns the feature off and the section is not
+/// rendered at all. Tapping a row opens that point's detail.
 struct NearbyPointsSection: View {
     let points: [NearbyPoint]
     let totalCount: Int
@@ -13,6 +14,13 @@ struct NearbyPointsSection: View {
     let onSelect: (NearbyPoint) -> Void
 
     var body: some View {
+        // Radius 0 = feature off: no section anywhere.
+        if radiusKm > 0 {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 6) {
             if points.isEmpty {
                 Text("Brak innych punktów w promieniu \(Self.radiusText(radiusKm))")

@@ -111,6 +111,21 @@ class GetNearbyPointsUseCaseTest {
     }
 
     @Test
+    fun `radius zero disables the feature`() {
+        val result = useCase(
+            latitude = originLat,
+            longitude = originLon,
+            savedPoints = listOf(savedPoint(1, 100.0)),
+            pois = listOf(poi(10, "PKT WIDOK", 200.0)),
+            waterSources = listOf(water(20, WaterSourceType.WELL, 300.0)),
+            filter = NearbyFilter(radiusKm = 0f)
+        )
+
+        assertTrue(result.points.isEmpty())
+        assertEquals(0, result.totalCount)
+    }
+
+    @Test
     fun `uses five kilometers as the default radius`() {
         val result = useCase(
             latitude = originLat,

@@ -12,7 +12,7 @@ object WhatsNew {
             version = "1.7",
             items = listOf(
                 "Okienko „Co nowego” — po każdej aktualizacji krótka lista najważniejszych zmian, żeby niczego nie przegapić.",
-                "Wsparcie w zasięgu ręki — link do buycoffee teraz też w okienku nowości, obok wpisu w „O aplikacji”."
+                "Pobliskie punkty — w widoku punktu (własnego, POI albo źródła wody) zobaczysz listę innych punktów w okolicy z odległością; ile kilometrów to „blisko”, ustawisz suwakiem w Ustawieniach."
             )
         ),
         ReleaseNote(

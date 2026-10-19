@@ -336,8 +336,8 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyNearbyRadiusKm = "mapSettings.nearbyRadiusKm"
     // Mirrors shared `NearbyFilter` (DEFAULT/MIN/MAX_RADIUS_KM) — duplicated as
     // plain Swift constants so the settings UI does not depend on the SKIE
-    // companion-object export.
-    private static let minNearbyRadiusKm: Float = 0.5
+    // companion-object export. Radius 0 = feature off (no section anywhere).
+    private static let minNearbyRadiusKm: Float = 0
     private static let maxNearbyRadiusKm: Float = 25
     private static let defaultNearbyRadiusKm: Float = 5
     private var lastInZoneDistrict: String?

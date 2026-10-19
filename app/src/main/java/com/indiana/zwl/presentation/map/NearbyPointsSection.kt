@@ -32,7 +32,8 @@ import java.util.Locale
  * "Pobliskie punkty" section for the point detail cards: points of every type
  * within the configured radius, sorted by distance, capped by the use case.
  * The empty state is a single line — no header, no container — so it stays
- * unobtrusive when nothing is nearby. Tapping a row opens that point's detail.
+ * unobtrusive when nothing is nearby. Radius 0 turns the feature off and the
+ * section is not rendered at all. Tapping a row opens that point's detail.
  */
 @Composable
 fun NearbyPointsSection(
@@ -42,6 +43,9 @@ fun NearbyPointsSection(
     onPointClick: (NearbyPoint) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Radius 0 = feature off: no section anywhere.
+    if (radiusKm <= 0f) return
+
     if (points.isEmpty()) {
         Text(
             text = "Brak innych punktów w promieniu ${formatRadiusKm(radiusKm)}",

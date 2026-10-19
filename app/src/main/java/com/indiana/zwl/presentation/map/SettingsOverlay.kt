@@ -308,7 +308,7 @@ private fun NearbyRadiusRow(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = formatRadiusKm(radiusKm),
+                text = if (radiusKm <= 0f) "Wyłączone" else formatRadiusKm(radiusKm),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary

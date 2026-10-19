@@ -43,7 +43,9 @@ data class NearbyFilter(
 ) {
     companion object {
         const val DEFAULT_RADIUS_KM = 5f
-        const val MIN_RADIUS_KM = 0.5f
+
+        /** 0 = feature off: the section is not rendered at all. */
+        const val MIN_RADIUS_KM = 0f
         const val MAX_RADIUS_KM = 25f
         const val RADIUS_STEP_KM = 0.5f
         const val DEFAULT_LIMIT = 10
@@ -70,6 +72,10 @@ class GetNearbyPointsUseCase {
         filter: NearbyFilter = NearbyFilter(),
         limit: Int = NearbyFilter.DEFAULT_LIMIT
     ): NearbyPointsResult {
+        // Radius 0 (or below) disables the feature — no section is shown, so
+        // the query short-circuits without touching the lists.
+        if (filter.radiusKm <= 0f) return NearbyPointsResult(emptyList(), 0)
+
         val origin = Location(latitude, longitude)
         val radiusMeters = filter.radiusKm.toDouble() * 1000.0
 

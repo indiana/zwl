@@ -22,13 +22,15 @@ struct SettingsView: View {
                         HStack {
                             Text("Promień wyszukiwania")
                             Spacer()
-                            Text(String(format: "%.1f km", viewModel.nearbyRadiusKm))
+                            Text(viewModel.nearbyRadiusKm <= 0
+                                 ? "Wyłączone"
+                                 : String(format: "%.1f km", viewModel.nearbyRadiusKm))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.tint)
                         }
                         Slider(
                             value: nearbyRadiusBinding,
-                            in: 0.5...25,
+                            in: 0...25,
                             step: 0.5
                         )
                     }

@@ -125,8 +125,9 @@ class NearbyRadiusTest {
         viewModel.setNearbyRadiusKm(100f)
         assertEquals(NearbyFilter.MAX_RADIUS_KM, viewModel.nearbyRadiusKm.value)
 
+        // 0 is allowed and means "off" (no section is rendered).
         viewModel.setNearbyRadiusKm(0.1f)
-        assertEquals(NearbyFilter.MIN_RADIUS_KM, viewModel.nearbyRadiusKm.value)
+        assertEquals(0f, viewModel.nearbyRadiusKm.value)
     }
 
     @Test
