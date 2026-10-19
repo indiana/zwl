@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.domain.model.DrinkingWaterStatus
 import com.indiana.zwl.domain.model.WaterSourceType
+import com.indiana.zwl.domain.util.displayLabel
 import com.indiana.zwl.presentation.SelectedWaterSourceDetails
 import com.indiana.zwl.shared.data.water.WaterAttribution
 
@@ -221,16 +222,7 @@ private fun InfoBlock(title: String, value: String) {
     }
 }
 
-internal fun waterSourceTypeLabel(type: WaterSourceType): String = when (type) {
-    WaterSourceType.DRINKING_WATER -> "Woda pitna"
-    WaterSourceType.WATER_TAP -> "Kran z wodą"
-    WaterSourceType.WATER_POINT -> "Punkt poboru wody"
-    WaterSourceType.SPRING -> "Źródło"
-    WaterSourceType.WELL -> "Studnia"
-    WaterSourceType.FOUNTAIN -> "Fontanna"
-    WaterSourceType.WATER_ON_SITE -> "Woda na miejscu (biwak/wiata)"
-    WaterSourceType.REFILL -> "Punkt napełniania butelek"
-}
+internal fun waterSourceTypeLabel(type: WaterSourceType): String = type.displayLabel()
 
 internal fun drinkingWaterLabel(status: DrinkingWaterStatus): String = when (status) {
     DrinkingWaterStatus.YES -> "Pitna (potwierdzona)"

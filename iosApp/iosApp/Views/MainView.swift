@@ -87,7 +87,9 @@ struct MainView: View {
         }
         .sheet(isPresented: isPoiSheetPresented) {
             if let poi = viewModel.selectedPoi {
-                PoiDetailView(poi: poi, distanceMeters: viewModel.selectedPoiDistanceMeters)
+                PoiDetailView(poi: poi,
+                              distanceMeters: viewModel.selectedPoiDistanceMeters,
+                              viewModel: viewModel)
                     .presentationDetents([.medium])
             }
         }
@@ -109,7 +111,8 @@ struct MainView: View {
                     isLoadingForestStand: viewModel.isLoadingPendingPointForestStand,
                     onSave: { name in viewModel.savePendingPoint(name: name) },
                     shareLink: pendingPointShareLink,
-                    onClose: { viewModel.clearPendingPoint() }
+                    onClose: { viewModel.clearPendingPoint() },
+                    viewModel: viewModel
                 )
                 .presentationDetents([.medium, .large])
             }

@@ -7,6 +7,7 @@ import com.indiana.zwl.domain.repository.SavedPointRepository
 import com.indiana.zwl.domain.repository.WaterSourceRepository
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
+import com.indiana.zwl.domain.usecase.GetNearbyPointsUseCase
 import com.indiana.zwl.shared.data.remote.BdlArcgisApi
 import com.indiana.zwl.shared.data.remote.BdlFireApi
 import com.indiana.zwl.shared.data.water.WaterSyncManager
@@ -45,7 +46,8 @@ object IosAppBootstrap {
             arcgisApi = koin.get<BdlArcgisApi>(),
             fireApi = koin.get<BdlFireApi>(),
             httpClient = koin.get<HttpClient>(),
-            forestStandUseCase = koin.get<GetForestStandUseCase>()
+            forestStandUseCase = koin.get<GetForestStandUseCase>(),
+            getNearbyPointsUseCase = koin.get<GetNearbyPointsUseCase>()
         )
     }
 }

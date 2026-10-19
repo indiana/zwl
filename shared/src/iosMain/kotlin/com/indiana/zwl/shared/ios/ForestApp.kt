@@ -21,9 +21,13 @@ import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
+import com.indiana.zwl.domain.usecase.GetNearbyPointsUseCase
 import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
 import com.indiana.zwl.domain.usecase.LoadPointDetailsUseCase
+import com.indiana.zwl.domain.usecase.NearbyFilter
+import com.indiana.zwl.domain.usecase.NearbyPointsResult
 import com.indiana.zwl.domain.usecase.PointDetails
+import com.indiana.zwl.domain.util.PoiUiGroup
 import com.indiana.zwl.domain.util.BdlInfo
 import com.indiana.zwl.domain.util.NadlesnictwoUrls
 import com.indiana.zwl.domain.util.WaterSourceGroup
@@ -85,7 +89,8 @@ class ForestApp(
     private val arcgisApi: BdlArcgisApi,
     private val fireApi: BdlFireApi,
     private val httpClient: HttpClient,
-    private val forestStandUseCase: GetForestStandUseCase
+    private val forestStandUseCase: GetForestStandUseCase,
+    private val getNearbyPointsUseCase: GetNearbyPointsUseCase
 ) {
 
     private val zoneEngine = SpatialEngine()
@@ -407,6 +412,47 @@ class ForestApp(
         withContext(Dispatchers.Default) {
             MapGeoJson.savedPointsToGeoJson(savedPointRepository.getAllPoints().first())
         }
+
+    /**
+     * Points of every type within [radiusKm] of the coordinate, for the
+     * "Pobliskie punkty" section of a point detail view. The map layer
+     * visibility flags come from Swift (iOS keeps its POI/water filtering on
+     * the view-model side), so the list matches what the user sees on the map.
+     *
+     * Flat parameter list on purpose: only primitive / enum / list types cross
+     * the SKIE bridge here (same shapes as [waterSourcesGeoJson] and
+     * [deleteSavedPoints]).
+     */
+    suspend fun nearbyPoints(
+        latitude: Double,
+        longitude: Double,
+        radiusKm: Float,
+        includeOwnPoints: Boolean,
+        visiblePoiGroups: List<PoiUiGroup>,
+        includeDrinking: Boolean,
+        includeSprings: Boolean,
+        includeWells: Boolean,
+        excludeSavedPointId: Long?,
+        excludePoiId: Long?
+    ): NearbyPointsResult = withContext(Dispatchers.Default) {
+        getNearbyPointsUseCase(
+            latitude = latitude,
+            longitude = longitude,
+            savedPoints = savedPointRepository.getAllPoints().first(),
+            pois = cachedPois,
+            waterSources = cachedWaterSources,
+            filter = NearbyFilter(
+                radiusKm = radiusKm,
+                includeOwnPoints = includeOwnPoints,
+                visiblePoiGroups = visiblePoiGroups,
+                includeDrinking = includeDrinking,
+                includeSprings = includeSprings,
+                includeWells = includeWells,
+                excludeSavedPointId = excludeSavedPointId,
+                excludePoiId = excludePoiId
+            )
+        )
+    }
 
     fun cachedZones(): List<Zone> = cachedZones
 

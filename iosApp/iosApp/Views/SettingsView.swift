@@ -2,8 +2,9 @@ import SwiftUI
 import shared
 
 /// Full-screen "Ustawienia" screen (Android `SettingsOverlay` parity): a
-/// "Zachowanie" section for behavior toggles and a "Wyświetlanie" section with
-/// one toggle per layer group (own points first in owner-brand magenta).
+/// "Zachowanie" section for behavior toggles, a "Pobliskie punkty" section
+/// with the nearby-search radius, and a "Wyświetlanie" section with one toggle
+/// per layer group (own points first in owner-brand magenta).
 struct SettingsView: View {
     @ObservedObject var viewModel: MainViewModel
     @Environment(\.dismiss) private var dismiss
@@ -15,6 +16,23 @@ struct SettingsView: View {
                     Toggle(isOn: $viewModel.keepScreenOn) {
                         Text("Nie wygaszaj ekranu")
                     }
+                }
+                Section("Pobliskie punkty") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Promień wyszukiwania")
+                            Spacer()
+                            Text(String(format: "%.1f km", viewModel.nearbyRadiusKm))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.tint)
+                        }
+                        Slider(
+                            value: nearbyRadiusBinding,
+                            in: 0.5...25,
+                            step: 0.5
+                        )
+                    }
+                    .padding(.vertical, 4)
                 }
                 Section("Wyświetlanie") {
                     Toggle(isOn: $viewModel.showOwnPoints) {
@@ -129,5 +147,15 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    /// Snaps the slider to 0.5 km steps and clamps to 0.5–25 km (mirrors the
+    /// Android `setNearbyRadiusKm`), then persists + recomputes.
+    private var nearbyRadiusBinding: Binding<Float> {
+        Binding(
+            get: { viewModel.nearbyRadiusKm },
+            set: { viewModel.setNearbyRadiusKm($0) }
+        )
+    }
     }
 }
