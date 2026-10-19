@@ -202,7 +202,7 @@ fun MapViewContainer(
             NearbyPointType.WATER_SOURCE ->
                 waterSources.firstOrNull { it.id == nearby.id }?.let { source ->
                     val successState = uiState as? MainUiState.Success
-                    viewModel.clearNearby()
+                    viewModel.selectWaterSourceForNearby(source)
                     zoneDetailViewModel.selectWaterSource(
                         source,
                         successState?.latitude,
@@ -827,7 +827,7 @@ fun MapViewContainer(
                                         if (waterSourceHit != null) {
                                             android.os.Handler(android.os.Looper.getMainLooper()).post {
                                                 val successState = uiState as? MainUiState.Success
-                                                viewModel.clearNearby()
+                                                viewModel.selectWaterSourceForNearby(waterSourceHit)
                                                 zoneDetailViewModel.selectWaterSource(
                                                     waterSourceHit,
                                                     successState?.latitude,
@@ -1314,6 +1314,10 @@ fun MapViewContainer(
                 selectedWaterSource?.let { details ->
                     WaterSourceDetailsCard(
                         details = details,
+                        nearbyPoints = nearbyPoints.points,
+                        nearbyTotalCount = nearbyPoints.totalCount,
+                        nearbyRadiusKm = nearbyRadiusKm,
+                        onNearbyPointClick = { nearby -> onNearbyPointClick(nearby) },
                         onClose = {
                             zoneDetailViewModel.clearSelectedWaterSource()
                             viewModel.clearNearby()

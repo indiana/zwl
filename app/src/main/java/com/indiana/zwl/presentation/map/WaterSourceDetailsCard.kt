@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.domain.model.DrinkingWaterStatus
+import com.indiana.zwl.domain.model.NearbyPoint
 import com.indiana.zwl.domain.model.WaterSourceType
 import com.indiana.zwl.domain.util.displayLabel
 import com.indiana.zwl.presentation.SelectedWaterSourceDetails
@@ -20,6 +21,10 @@ import com.indiana.zwl.shared.data.water.WaterAttribution
 @Composable
 fun WaterSourceDetailsCard(
     details: SelectedWaterSourceDetails,
+    nearbyPoints: List<NearbyPoint>,
+    nearbyTotalCount: Int,
+    nearbyRadiusKm: Float,
+    onNearbyPointClick: (NearbyPoint) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -187,6 +192,15 @@ fun WaterSourceDetailsCard(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                NearbyPointsSection(
+                    points = nearbyPoints,
+                    totalCount = nearbyTotalCount,
+                    radiusKm = nearbyRadiusKm,
+                    onPointClick = onNearbyPointClick
+                )
             }
         }
     }

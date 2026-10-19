@@ -433,7 +433,8 @@ class ForestApp(
         includeSprings: Boolean,
         includeWells: Boolean,
         excludeSavedPointId: Long?,
-        excludePoiId: Long?
+        excludePoiId: Long?,
+        excludeWaterSourceId: Long?
     ): NearbyPointsResult = withContext(Dispatchers.Default) {
         getNearbyPointsUseCase(
             latitude = latitude,
@@ -449,7 +450,8 @@ class ForestApp(
                 includeSprings = includeSprings,
                 includeWells = includeWells,
                 excludeSavedPointId = excludeSavedPointId,
-                excludePoiId = excludePoiId
+                excludePoiId = excludePoiId,
+                excludeWaterSourceId = excludeWaterSourceId
             )
         )
     }

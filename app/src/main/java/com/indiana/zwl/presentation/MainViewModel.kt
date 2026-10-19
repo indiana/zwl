@@ -524,6 +524,14 @@ class MainViewModel @Inject constructor(
         )
     }
 
+    fun selectWaterSourceForNearby(waterSource: WaterSource) {
+        _nearbyHost.value = NearbyHost(
+            latitude = waterSource.latitude,
+            longitude = waterSource.longitude,
+            excludeWaterSourceId = waterSource.id
+        )
+    }
+
     fun clearNearby() {
         _nearbyHost.value = null
     }

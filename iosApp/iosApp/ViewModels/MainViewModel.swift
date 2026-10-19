@@ -200,6 +200,7 @@ final class MainViewModel: NSObject, ObservableObject {
     private var nearbyOriginLongitude: Double?
     private var nearbyExcludeSavedPointId: Int64?
     private var nearbyExcludePoiId: Int64?
+    private var nearbyExcludeWaterSourceId: Int64?
     private var nearbyTask: Task<Void, Never>?
     // Increment to ask the map to center on a saved point (zoom 15).
     @Published var centerSavedPointSignal: Int = 0
@@ -762,7 +763,11 @@ final class MainViewModel: NSObject, ObservableObject {
             let waterLoc = CLLocation(latitude: water.latitude, longitude: water.longitude)
             selectedWaterSourceDistanceMeters = userLoc.distance(from: waterLoc)
         }
-        clearNearby()
+        if let water = selectedWaterSource {
+            setNearbyOrigin(latitude: water.latitude, longitude: water.longitude, excludeWaterSourceId: water.id)
+        } else {
+            clearNearby()
+        }
     }
 
     func openActiveBan() {
@@ -813,7 +818,8 @@ final class MainViewModel: NSObject, ObservableObject {
                 includeSprings: self.showWaterSprings,
                 includeWells: self.showWaterWells,
                 excludeSavedPointId: self.nearbyExcludeSavedPointId.map { KotlinLong(value: $0) },
-                excludePoiId: self.nearbyExcludePoiId.map { KotlinLong(value: $0) }
+                excludePoiId: self.nearbyExcludePoiId.map { KotlinLong(value: $0) },
+                excludeWaterSourceId: self.nearbyExcludeWaterSourceId.map { KotlinLong(value: $0) }
             ) else { return }
             self.nearbyPoints = Array(result.points)
             self.nearbyTotalCount = Int(result.totalCount)
@@ -840,12 +846,14 @@ final class MainViewModel: NSObject, ObservableObject {
         latitude: Double,
         longitude: Double,
         excludeSavedPointId: Int64? = nil,
-        excludePoiId: Int64? = nil
+        excludePoiId: Int64? = nil,
+        excludeWaterSourceId: Int64? = nil
     ) {
         nearbyOriginLatitude = latitude
         nearbyOriginLongitude = longitude
         nearbyExcludeSavedPointId = excludeSavedPointId
         nearbyExcludePoiId = excludePoiId
+        nearbyExcludeWaterSourceId = excludeWaterSourceId
         refreshNearbyPoints()
     }
 
@@ -855,6 +863,7 @@ final class MainViewModel: NSObject, ObservableObject {
         nearbyOriginLongitude = nil
         nearbyExcludeSavedPointId = nil
         nearbyExcludePoiId = nil
+        nearbyExcludeWaterSourceId = nil
         nearbyPoints = []
         nearbyTotalCount = 0
     }
@@ -884,7 +893,11 @@ final class MainViewModel: NSObject, ObservableObject {
                     let waterLoc = CLLocation(latitude: source.latitude, longitude: source.longitude)
                     selectedWaterSourceDistanceMeters = userLoc.distance(from: waterLoc)
                 }
-                clearNearby()
+                setNearbyOrigin(
+                    latitude: source.latitude,
+                    longitude: source.longitude,
+                    excludeWaterSourceId: source.id
+                )
             }
         @unknown default:
             break

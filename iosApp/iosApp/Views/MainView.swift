@@ -96,7 +96,8 @@ struct MainView: View {
         .sheet(isPresented: isWaterSourceSheetPresented) {
             if let waterSource = viewModel.selectedWaterSource {
                 WaterSourceDetailView(waterSource: waterSource,
-                                      distanceMeters: viewModel.selectedWaterSourceDistanceMeters)
+                                      distanceMeters: viewModel.selectedWaterSourceDistanceMeters,
+                                      viewModel: viewModel)
                     .presentationDetents([.medium, .large])
             }
         }

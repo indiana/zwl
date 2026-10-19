@@ -278,7 +278,7 @@ fun MainScreen(
 
                     NearbyPointType.WATER_SOURCE ->
                         waterSources.firstOrNull { it.id == nearby.id }?.let { source ->
-                            viewModel.clearNearby()
+                            viewModel.selectWaterSourceForNearby(source)
                             zoneDetailViewModel.selectWaterSource(
                                 source,
                                 state.latitude,
