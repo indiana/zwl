@@ -2,10 +2,12 @@ import SwiftUI
 import shared
 
 /// POI sheet, Android `PoiDetailsCard` parity: title + category header with a
-/// close button, distance-from-user subcard and the BDL category description.
+/// close button, distance-from-user subcard, the BDL category description and
+/// the "Pobliskie punkty" section.
 struct PoiDetailView: View {
     let poi: Poi
     let distanceMeters: Double?
+    @ObservedObject var viewModel: MainViewModel
 
     var body: some View {
         ScrollView {
@@ -17,6 +19,13 @@ struct PoiDetailView: View {
                 if showDescription {
                     descriptionSubcard
                 }
+
+                NearbyPointsSection(
+                    points: viewModel.nearbyPoints,
+                    totalCount: viewModel.nearbyTotalCount,
+                    radiusKm: viewModel.nearbyRadiusKm,
+                    onSelect: { viewModel.openNearbyPoint($0) }
+                )
 
                 Spacer(minLength: 8)
             }

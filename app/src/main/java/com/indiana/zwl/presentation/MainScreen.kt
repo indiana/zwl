@@ -31,6 +31,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.indiana.zwl.BuildConfig
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.domain.model.NearbyPoint
+import com.indiana.zwl.domain.model.NearbyPointType
 import com.indiana.zwl.presentation.theme.ZwlTheme
 import com.indiana.zwl.presentation.theme.DarkForestBackground
 import com.indiana.zwl.presentation.theme.ForestGreenAccent
@@ -249,11 +251,42 @@ fun MainScreen(
             val savedPointSortMode by viewModel.savedPointEffectiveSortMode.collectAsStateWithLifecycle()
             val showSavedPointList by viewModel.showSavedPointList.collectAsStateWithLifecycle()
             val selectedSavedPointInfo by viewModel.selectedSavedPointInfo.collectAsStateWithLifecycle()
+            val nearbyPoints by viewModel.nearbyPoints.collectAsStateWithLifecycle()
+            val nearbyRadiusKm by viewModel.nearbyRadiusKm.collectAsStateWithLifecycle()
+            val savedPoints by viewModel.savedPoints.collectAsStateWithLifecycle()
+            val pois by viewModel.pois.collectAsStateWithLifecycle()
+            val waterSources by viewModel.waterSources.collectAsStateWithLifecycle()
             val waterDataState by viewModel.waterDataState.collectAsStateWithLifecycle()
             val savedPointDetailViewModel: SavedPointDetailViewModel = hiltViewModel()
             val selectedSavedPointDetails by savedPointDetailViewModel.details.collectAsStateWithLifecycle()
             val pendingPointDetailViewModel: PendingPointDetailViewModel = hiltViewModel()
             val pendingPointDetails by pendingPointDetailViewModel.details.collectAsStateWithLifecycle()
+
+            // Row tap in a "Pobliskie punkty" section: open that point's detail,
+            // exactly like tapping its marker on the map.
+            val onNearbyPointClick: (NearbyPoint) -> Unit = { nearby ->
+                when (nearby.type) {
+                    NearbyPointType.OWN_POINT ->
+                        savedPoints.firstOrNull { it.id == nearby.id }
+                            ?.let { viewModel.openSavedPointProperties(it) }
+
+                    NearbyPointType.POI ->
+                        pois.firstOrNull { it.id == nearby.id }?.let { poi ->
+                            viewModel.selectPoiForNearby(poi)
+                            zoneDetailViewModel.selectPoi(poi, state.latitude, state.longitude)
+                        }
+
+                    NearbyPointType.WATER_SOURCE ->
+                        waterSources.firstOrNull { it.id == nearby.id }?.let { source ->
+                            viewModel.selectWaterSourceForNearby(source)
+                            zoneDetailViewModel.selectWaterSource(
+                                source,
+                                state.latitude,
+                                state.longitude
+                            )
+                        }
+                }
+            }
             var selectedTab by rememberSaveable { mutableStateOf(0) }
             var showAbout by rememberSaveable { mutableStateOf(false) }
             // Which tab a zone/ban detail was opened from — the detail only shows
@@ -524,6 +557,10 @@ fun MainScreen(
                                     SavedPointPropertiesCard(
                                         point = point,
                                         details = selectedSavedPointDetails?.takeIf { it.pointId == point.id },
+                                        nearbyPoints = nearbyPoints.points,
+                                        nearbyTotalCount = nearbyPoints.totalCount,
+                                        nearbyRadiusKm = nearbyRadiusKm,
+                                        onNearbyPointClick = onNearbyPointClick,
                                         onRename = { name -> viewModel.renameSavedPoint(point.id, name) },
                                         onShare = { shareSavedPoint(context, point) },
                                         onDelete = {
@@ -538,6 +575,10 @@ fun MainScreen(
                                     PointDetailCard(
                                         point = point,
                                         details = pendingPointDetails,
+                                        nearbyPoints = nearbyPoints.points,
+                                        nearbyTotalCount = nearbyPoints.totalCount,
+                                        nearbyRadiusKm = nearbyRadiusKm,
+                                        onNearbyPointClick = onNearbyPointClick,
                                         onSave = { name ->
                                             viewModel.savePendingPoint(
                                                 name,

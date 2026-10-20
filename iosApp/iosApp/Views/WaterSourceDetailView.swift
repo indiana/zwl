@@ -3,10 +3,12 @@ import shared
 
 /// Water-source sheet, Android `WaterSourceDetailsCard` parity: title + type
 /// header with a close button, water status, optional well depth,
-/// distance-from-user and the OSM ODbL attribution + disclaimer.
+/// distance-from-user, the OSM ODbL attribution + disclaimer and the
+/// "Pobliskie punkty" section.
 struct WaterSourceDetailView: View {
     let waterSource: WaterSource
     let distanceMeters: Double?
+    @ObservedObject var viewModel: MainViewModel
 
     var body: some View {
         ScrollView {
@@ -62,6 +64,13 @@ struct WaterSourceDetailView: View {
                 infoSubcard(title: "ODLEGŁOŚĆ OD TWOJEJ POZYCJI", value: distanceText)
 
                 attributionSubcard
+
+                NearbyPointsSection(
+                    points: viewModel.nearbyPoints,
+                    totalCount: viewModel.nearbyTotalCount,
+                    radiusKm: viewModel.nearbyRadiusKm,
+                    onSelect: { viewModel.openNearbyPoint($0) }
+                )
 
                 Spacer(minLength: 8)
             }

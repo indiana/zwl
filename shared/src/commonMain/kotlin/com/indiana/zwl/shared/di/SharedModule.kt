@@ -9,6 +9,7 @@ import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandForPointUseCase
 import com.indiana.zwl.domain.usecase.GetForestStandUseCase
+import com.indiana.zwl.domain.usecase.GetNearbyPointsUseCase
 import com.indiana.zwl.domain.usecase.GetSoilCoverForPointUseCase
 import com.indiana.zwl.domain.usecase.LoadPointDetailsUseCase
 import com.indiana.zwl.shared.data.local.DatabaseDriverFactory
@@ -41,6 +42,7 @@ val sharedModule = module {
     single { GetSoilCoverForPointUseCase(get()) }
     single { GetForestStandForPointUseCase(get(), get()) }
     single { LoadPointDetailsUseCase(get(), get()) }
+    single { GetNearbyPointsUseCase() }
     single { Json { ignoreUnknownKeys = true; isLenient = true } }
     single { WaterDataApi(get()) }
     single { WaterSyncManager(get(), get(), get(), get()) }

@@ -14,6 +14,7 @@ import com.indiana.zwl.shared.data.water.WaterSyncManager
 import com.indiana.zwl.domain.repository.ZoneRepository
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
 import com.indiana.zwl.domain.usecase.GetForestBansUseCase
+import com.indiana.zwl.domain.usecase.GetNearbyPointsUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
 import com.indiana.zwl.domain.usecase.SyncForestBansUseCase
 import com.indiana.zwl.domain.usecase.SyncPoiUseCase
@@ -52,6 +53,7 @@ class OrientationModeTest {
     private val syncForestBansUseCase: SyncForestBansUseCase = mockk()
     private val getForestBansUseCase: GetForestBansUseCase = mockk()
     private val getFireRiskUseCase: GetFireRiskUseCase = mockk()
+    private val getNearbyPointsUseCase: GetNearbyPointsUseCase = mockk(relaxed = true)
     private val getZonesUseCase: GetZonesUseCase = mockk()
     private val spatialEngine: SpatialEngine = mockk(relaxed = true)
     private val context: Context = mockk()
@@ -80,7 +82,7 @@ class OrientationModeTest {
         zoneRepository, poiRepository, savedPointRepository, waterSourceRepository, waterSyncManager,
         locationRepository, compassRepository,
         syncZonesUseCase, syncPoiUseCase, syncForestBansUseCase,
-        getForestBansUseCase, getFireRiskUseCase,
+        getForestBansUseCase, getFireRiskUseCase, getNearbyPointsUseCase,
         getZonesUseCase, spatialEngine, mainDispatcherRule.testDispatcher, context
     )
 

@@ -12,12 +12,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.indiana.zwl.domain.model.NearbyPoint
 import com.indiana.zwl.domain.util.displayGroupName
 import com.indiana.zwl.presentation.SelectedPoiDetails
 
 @Composable
 fun PoiDetailsCard(
     details: SelectedPoiDetails,
+    nearbyPoints: List<NearbyPoint>,
+    nearbyTotalCount: Int,
+    nearbyRadiusKm: Float,
+    onNearbyPointClick: (NearbyPoint) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -129,6 +134,14 @@ fun PoiDetailsCard(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            NearbyPointsSection(
+                points = nearbyPoints,
+                totalCount = nearbyTotalCount,
+                radiusKm = nearbyRadiusKm,
+                onPointClick = onNearbyPointClick
+            )
             }
         }
     }

@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.domain.model.NearbyPoint
 import com.indiana.zwl.presentation.FireRiskCard
 import com.indiana.zwl.presentation.ForestStandCard
 import com.indiana.zwl.presentation.PendingPoint
@@ -24,6 +25,10 @@ import com.indiana.zwl.presentation.PendingPointDetailsState
 fun PointDetailCard(
     point: PendingPoint,
     details: PendingPointDetailsState?,
+    nearbyPoints: List<NearbyPoint>,
+    nearbyTotalCount: Int,
+    nearbyRadiusKm: Float,
+    onNearbyPointClick: (NearbyPoint) -> Unit,
     onSave: (String) -> Unit,
     onShare: () -> Unit,
     onClose: () -> Unit,
@@ -137,6 +142,14 @@ fun PointDetailCard(
                             isLoadingForestStand = details.isLoadingForestStand
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    NearbyPointsSection(
+                        points = nearbyPoints,
+                        totalCount = nearbyTotalCount,
+                        radiusKm = nearbyRadiusKm,
+                        onPointClick = onNearbyPointClick
+                    )
                 }
 
                 HorizontalDivider()

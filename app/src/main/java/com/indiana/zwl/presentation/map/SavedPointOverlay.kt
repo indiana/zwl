@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
+import com.indiana.zwl.domain.model.NearbyPoint
 import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.domain.usecase.SavedPointSortMode
 import com.indiana.zwl.domain.usecase.isDistance
@@ -429,6 +430,10 @@ fun SavedPointListOverlay(
 fun SavedPointPropertiesCard(
     point: SavedPoint,
     details: SelectedSavedPointDetails?,
+    nearbyPoints: List<NearbyPoint>,
+    nearbyTotalCount: Int,
+    nearbyRadiusKm: Float,
+    onNearbyPointClick: (NearbyPoint) -> Unit,
     onRename: (String) -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
@@ -550,6 +555,14 @@ fun SavedPointPropertiesCard(
                         isLoadingForestStand = details.isLoadingForestStand
                     )
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                NearbyPointsSection(
+                    points = nearbyPoints,
+                    totalCount = nearbyTotalCount,
+                    radiusKm = nearbyRadiusKm,
+                    onPointClick = onNearbyPointClick
+                )
             }
             }
         }

@@ -21,10 +21,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.indiana.zwl.domain.usecase.NearbyFilter
 
 @Composable
 fun SettingsOverlay(
     keepScreenOn: Boolean,
+    nearbyRadiusKm: Float,
     showOwnPoints: Boolean,
     showForestBans: Boolean,
     showAccommodation: Boolean,
@@ -40,6 +42,7 @@ fun SettingsOverlay(
     showEducation: Boolean,
     showOthers: Boolean,
     onKeepScreenOnChange: (Boolean) -> Unit,
+    onNearbyRadiusKmChange: (Float) -> Unit,
     onShowOwnPointsChange: (Boolean) -> Unit,
     onShowForestBansChange: (Boolean) -> Unit,
     onShowAccommodationChange: (Boolean) -> Unit,
@@ -116,6 +119,15 @@ fun SettingsOverlay(
                             checked = keepScreenOn,
                             label = "Nie wygaszaj ekranu",
                             onCheckedChange = onKeepScreenOnChange
+                        )
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        SectionHeader("Pobliskie punkty")
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        NearbyRadiusRow(
+                            radiusKm = nearbyRadiusKm,
+                            onRadiusChange = onNearbyRadiusKmChange
                         )
                     }
                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -273,6 +285,43 @@ private fun SectionHeader(title: String) {
             .fillMaxWidth()
             .padding(top = 12.dp, bottom = 4.dp)
     )
+}
+
+@Composable
+private fun NearbyRadiusRow(
+    radiusKm: Float,
+    onRadiusChange: (Float) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Promień wyszukiwania",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = if (radiusKm <= 0f) "Wyłączone" else formatRadiusKm(radiusKm),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Slider(
+            value = radiusKm,
+            onValueChange = onRadiusChange,
+            valueRange = NearbyFilter.MIN_RADIUS_KM..NearbyFilter.MAX_RADIUS_KM,
+            steps = ((NearbyFilter.MAX_RADIUS_KM - NearbyFilter.MIN_RADIUS_KM) /
+                    NearbyFilter.RADIUS_STEP_KM).toInt() - 1
+        )
+    }
 }
 
 @Composable
