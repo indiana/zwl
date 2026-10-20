@@ -71,4 +71,23 @@ class OfflineAreaJanitorTest {
         OfflineAreaJanitor(InMemoryOfflineAreaRepository(), files).run()
         assertTrue(files.files.isEmpty())
     }
+
+    @Test
+    fun `keeps files owned by an active download`() = runBlocking {
+        val repo = InMemoryOfflineAreaRepository()
+        val files = FakeOfflineAreaFiles()
+        files.files["area_inflight.mbtiles"] = byteArrayOf(1)
+        files.files["area_orphan.mbtiles"] = byteArrayOf(1)
+
+        OfflineAreaJanitor(
+            repository = repo,
+            files = files,
+            protectedFileNames = { setOf("area_inflight.mbtiles") }
+        ).run()
+
+        // A download the OS is still running owns its partial file — it is not
+        // an orphan and must survive so the job can resume from it.
+        assertTrue(files.files.containsKey("area_inflight.mbtiles"))
+        assertFalse(files.files.containsKey("area_orphan.mbtiles"))
+    }
 }

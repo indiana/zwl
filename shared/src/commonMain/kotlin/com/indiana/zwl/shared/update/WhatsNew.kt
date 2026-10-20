@@ -9,6 +9,15 @@ object WhatsNew {
 
     private val notes = listOf(
         ReleaseNote(
+            version = "1.8",
+            items = listOf(
+                "Pobieranie mapy offline przetrwa wygaszenie ekranu — kafelki lecą dalej, gdy schowasz telefon do kieszeni, a postęp widać w powiadomieniu z przyciskiem „Anuluj”.",
+                "Przerwane pobieranie wraca tam, gdzie się skończyło — jeśli system zamknie aplikację w trakcie, przy następnym uruchomieniu dochodzi brakujące kafelki zamiast zaczynać od nowa.",
+                "Awaria sieci już nie kasuje pobierania — chwilowa utrata zasięgu jest ponawiana automatycznie, zamiast kończyć całość komunikatem o błędzie.",
+                "Szybsze pobieranie bez zacinania mapy — kafelki pobierają się w tle aplikacji, więc przesuwanie mapy podczas pobierania jest płynniejsze."
+            )
+        ),
+        ReleaseNote(
             version = "1.7",
             items = listOf(
                 "Okienko „Co nowego” — po każdej aktualizacji krótka lista najważniejszych zmian, żeby niczego nie przegapić.",

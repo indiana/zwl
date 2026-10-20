@@ -67,11 +67,13 @@ class MbtilesTilePackagerTest {
         region: Region,
         packer: MbtilesTilePackager,
         fetcher: FakeFetcher,
-        store: FakeStore
+        store: FakeStore,
+        maxFetchAttempts: Int = MbtilesTilePackager.DEFAULT_FETCH_ATTEMPTS
     ): Driver = runBlocking {
         val driver = Driver(store, fetcher.fetchCounts)
         packer.download(
             region = region,
+            maxFetchAttempts = maxFetchAttempts,
             onProgress = { _, _ -> },
             onSuccess = { driver.successCount = it },
             onError = { driver.errors.add(it) }
@@ -139,13 +141,42 @@ class MbtilesTilePackagerTest {
             region = Region(52.20, 52.25, 21.00, 21.05),
             packer = packer(fetcher, store),
             fetcher = fetcher,
-            store = store
+            store = store,
+            maxFetchAttempts = 1
         )
 
         assertEquals(null, driver.successCount)
         assertEquals(1, driver.errors.size)
         assertTrue(driver.errors[0].contains("Błąd połączenia"))
         assertEquals(1, store.closeCount)
+    }
+
+    @Test
+    fun `transient network errors are retried before the download is aborted`() = runBlocking {
+        val store = FakeStore()
+        var calls = 0
+        val fetcher = object : TileFetcher {
+            override suspend fun fetch(x: Int, y: Int, z: Int): TileFetchResult {
+                calls++
+                // Every third attempt fails: a flaky connection, not a dead one.
+                return if (calls % 3 == 0) TileFetchResult.NetworkError else TileFetchResult.Ok(byteArrayOf(1))
+            }
+        }
+        var success: Int? = null
+        var error: String? = null
+
+        MbtilesTilePackager(fetcher, store, Dispatchers.Unconfined).download(
+            region = Region(52.20, 52.25, 21.00, 21.05),
+            maxFetchAttempts = 3,
+            fetchRetryBaseDelayMs = 1L,
+            onProgress = { _, _ -> },
+            onSuccess = { success = it },
+            onError = { error = it }
+        )
+
+        assertEquals(null, error)
+        assertTrue((success ?: 0) > 0)
+        assertFalse(store.written.isEmpty())
     }
 
     @Test

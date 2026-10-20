@@ -2,20 +2,16 @@ package com.indiana.zwl.presentation.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.indiana.zwl.data.tiledownload.TileDownloadController
 import com.indiana.zwl.domain.model.DownloadedArea
 import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.domain.usecase.ZoneBounds
 import com.indiana.zwl.presentation.DownloadEvent
-import com.indiana.zwl.shared.offline.MbtilesStoreFactory
-import com.indiana.zwl.shared.offline.OfflineAreaDownloadCoordinator
 import com.indiana.zwl.shared.offline.OfflineAreaFiles
-import com.indiana.zwl.shared.offline.OfflineAreaNames
 import com.indiana.zwl.shared.offline.OfflineLimits
 import com.indiana.zwl.shared.offline.Region
 import com.indiana.zwl.shared.offline.TileMath
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -23,31 +19,44 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
 import java.io.File
-import java.util.TimeZone
 import javax.inject.Inject
 
 @HiltViewModel
 class MapViewModel @Inject constructor(
-    okHttpClient: OkHttpClient,
+    private val tileDownloads: TileDownloadController,
     private val offlineAreaRepository: OfflineAreaRepository,
     private val offlineAreaFiles: OfflineAreaFiles
 ) : ViewModel() {
 
-    private val _isDownloadingArea = MutableStateFlow(false)
-    val isDownloadingArea: StateFlow<Boolean> = _isDownloadingArea.asStateFlow()
+    // The download itself lives in a WorkManager job owned by the controller
+    // (it must outlive this ViewModel and the screen), so these are views onto
+    // its state rather than state of our own.
+    val isDownloadingArea: StateFlow<Boolean> = tileDownloads.state
+        .map { it.active }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), tileDownloads.state.value.active)
 
-    private val _downloadProgress = MutableStateFlow(0f)
-    val downloadProgress: StateFlow<Float> = _downloadProgress.asStateFlow()
+    val downloadProgress: StateFlow<Float> = tileDownloads.state
+        .map { it.progress }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), tileDownloads.state.value.progress)
 
-    private val _downloadText = MutableStateFlow("")
-    val downloadText: StateFlow<String> = _downloadText.asStateFlow()
+    val downloadText: StateFlow<String> = tileDownloads.state
+        .map { it.text }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), tileDownloads.state.value.text)
 
     private val _downloadEvent = MutableSharedFlow<DownloadEvent>()
     val downloadEvent: SharedFlow<DownloadEvent> = _downloadEvent.asSharedFlow()
+
+    init {
+        viewModelScope.launch {
+            tileDownloads.messages.collect { message ->
+                _downloadEvent.emit(DownloadEvent.ToastMessage(message.text, message.isLong))
+            }
+        }
+    }
 
     // Tap on a managed area -> fly the map camera to its bbox.
     private val _flyToArea = MutableSharedFlow<DownloadedArea>(extraBufferCapacity = 1)
@@ -74,12 +83,6 @@ class MapViewModel @Inject constructor(
     val downloadConfirmMessage: StateFlow<String?> = _downloadConfirmMessage.asStateFlow()
     private var pendingRegion: Region? = null
 
-    // In-flight download/refresh — kept so the user can cancel it from the
-    // progress card. `downloadGeneration` guards the completion cleanup against
-    // a new download started right after a cancellation.
-    private var downloadJob: Job? = null
-    private var downloadGeneration = 0
-
     // "Pobrane obszary" is a full-screen map overlay whose open state must
     // survive switching to the Status tab and back (ViewModel scope, not a
     // MapViewContainer-local remember which is disposed with the map).
@@ -89,23 +92,10 @@ class MapViewModel @Inject constructor(
     val offlineAreas: StateFlow<List<DownloadedArea>> = offlineAreaRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val coordinator = OfflineAreaDownloadCoordinator(
-        repository = offlineAreaRepository,
-        storeFactory = MbtilesStoreFactory { fileName ->
-            SqliteMbtilesStore(File(offlineAreaFiles.areasDirPath(), fileName))
-        },
-        fetcherProvider = { OkHttpTileFetcher(okHttpClient) },
-        files = offlineAreaFiles,
-        nameFormatter = { now ->
-            OfflineAreaNames.autoName(now, TimeZone.getDefault().getOffset(now) / 60_000)
-        }
-    )
-
     fun downloadMapArea(
         latSouth: Double, latNorth: Double,
         lonWest: Double, lonEast: Double
     ) {
-        if (downloadJob?.isActive == true) return
         val region = Region(latSouth, latNorth, lonWest, lonEast)
         val estimated = TileMath.estimateTileCount(region)
         when {
@@ -139,106 +129,15 @@ class MapViewModel @Inject constructor(
 
     /** Cancels the running download/refresh; the coordinator drops the partial file. */
     fun cancelDownload() {
-        downloadJob?.cancel()
+        tileDownloads.cancel()
     }
 
     private fun startDownload(region: Region) {
-        if (downloadJob?.isActive == true) return
-        // Feedback must be immediate: the progress card is the only visible
-        // confirmation, and the first onProgress arrives only after the size
-        // check + store open.
-        _downloadProgress.value = 0f
-        _downloadText.value = "Rozpoczynanie pobierania..."
-        _isDownloadingArea.value = true
-        val generation = ++downloadGeneration
-        downloadJob = viewModelScope.launch {
-            try {
-                coordinator.download(
-                    region = region,
-                    onProgress = { progress, text ->
-                        _downloadProgress.value = progress
-                        _downloadText.value = text
-                    },
-                    onSuccess = { count ->
-                        _downloadEvent.tryEmit(
-                            DownloadEvent.ToastMessage(
-                                "Pobrano pomyślnie $count kafelków do map offline!",
-                                isLong = true
-                            )
-                        )
-                    },
-                    onError = { msg ->
-                        _downloadEvent.tryEmit(DownloadEvent.ToastMessage(msg, isLong = true))
-                    }
-                )
-            } catch (e: CancellationException) {
-                _downloadEvent.tryEmit(
-                    DownloadEvent.ToastMessage("Pobieranie anulowane", isLong = true)
-                )
-                throw e
-            } catch (e: Exception) {
-                _downloadEvent.tryEmit(
-                    DownloadEvent.ToastMessage(
-                        "Błąd podczas pobierania: ${e.message ?: e.javaClass.simpleName}",
-                        isLong = true
-                    )
-                )
-            } finally {
-                if (generation == downloadGeneration) {
-                    _isDownloadingArea.value = false
-                    _downloadProgress.value = 0f
-                    downloadJob = null
-                }
-            }
-        }
+        tileDownloads.startDownload(region, OfflineLimits.MIN_ZOOM, OfflineLimits.MAX_ZOOM)
     }
 
     fun refreshArea(area: DownloadedArea) {
-        if (downloadJob?.isActive == true) return
-        _downloadProgress.value = 0f
-        _downloadText.value = "Rozpoczynanie odświeżania..."
-        _isDownloadingArea.value = true
-        val generation = ++downloadGeneration
-        downloadJob = viewModelScope.launch {
-            try {
-                coordinator.refresh(
-                    area = area,
-                    onProgress = { progress, text ->
-                        _downloadProgress.value = progress
-                        _downloadText.value = text
-                    },
-                    onSuccess = { count ->
-                        _downloadEvent.tryEmit(
-                            DownloadEvent.ToastMessage(
-                                "Obszar odświeżony ($count kafelków)",
-                                isLong = true
-                            )
-                        )
-                    },
-                    onError = { msg ->
-                        _downloadEvent.tryEmit(DownloadEvent.ToastMessage(msg, isLong = true))
-                    }
-                )
-            } catch (e: CancellationException) {
-                _downloadEvent.tryEmit(
-                    DownloadEvent.ToastMessage("Odświeżanie anulowane", isLong = true)
-                )
-                throw e
-            } catch (e: Exception) {
-                _downloadEvent.tryEmit(
-                    DownloadEvent.ToastMessage(
-                        "Błąd podczas odświeżania: ${e.message ?: e.javaClass.simpleName}",
-                        isLong = true
-                    )
-                )
-            } finally {
-                if (generation == downloadGeneration) {
-                    _isDownloadingArea.value = false
-                    _downloadProgress.value = 0f
-                    downloadJob = null
-                }
-            }
-        }
+        tileDownloads.startRefresh(area)
     }
 
     fun deleteArea(area: DownloadedArea) {

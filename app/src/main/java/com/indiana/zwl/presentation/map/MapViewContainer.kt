@@ -1,9 +1,14 @@
 package com.indiana.zwl.presentation.map
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.LocationStatus
@@ -459,6 +465,13 @@ fun MapViewContainer(
     val isDownloadingArea by mapViewModel.isDownloadingArea.collectAsState()
     val downloadProgress by mapViewModel.downloadProgress.collectAsState()
     val downloadText by mapViewModel.downloadText.collectAsState()
+
+    // The download runs in a foreground service, whose notification needs the
+    // runtime permission on Android 13+. Asking is non-blocking: without it the
+    // download still runs, it is just not visible in the status bar.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
 
     LaunchedEffect(mapViewModel) {
         mapViewModel.downloadEvent.collect { event ->
@@ -990,6 +1003,16 @@ fun MapViewContainer(
                         val center = pos.target
                         val zoom = pos.zoom
                         if (center != null) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationPermissionLauncher.launch(
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                )
+                            }
                             val mv = rememberedMapView
                             val width = mv.width.toDouble()
                             val height = mv.height.toDouble()

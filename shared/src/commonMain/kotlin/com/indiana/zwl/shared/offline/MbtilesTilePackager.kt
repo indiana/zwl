@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -60,6 +61,12 @@ class MbtilesTilePackager(
         maxZoom: Int = OfflineLimits.MAX_ZOOM,
         maxTiles: Int = OfflineLimits.MAX_TILES,
         concurrency: Int = 4,
+        // Wi-Fi/LTE hand-offs and idle sockets are transient: every tile gets
+        // this many fetch attempts with exponential backoff before the batch
+        // is treated as a network failure. Callers that need fail-fast
+        // behaviour (tests, tiny probes) pass 1.
+        maxFetchAttempts: Int = DEFAULT_FETCH_ATTEMPTS,
+        fetchRetryBaseDelayMs: Long = FETCH_RETRY_BASE_DELAY_MS,
         onProgress: (Float, String) -> Unit,
         // Suspend so callers can run post-download work (e.g. registering the
         // area in a repository) before being told "done".
@@ -95,7 +102,15 @@ class MbtilesTilePackager(
                 val batchEnd = minOf(batchStart + concurrency, total)
                 val results = coroutineScope {
                     (batchStart until batchEnd).map { index ->
-                        async(dispatcher) { downloadTile(tiles[index], existingTiles, writeMutex) }
+                        async(dispatcher) {
+                            downloadTile(
+                                tile = tiles[index],
+                                existingTiles = existingTiles,
+                                writeMutex = writeMutex,
+                                maxFetchAttempts = maxFetchAttempts,
+                                retryBaseDelayMs = fetchRetryBaseDelayMs
+                            )
+                        }
                     }.awaitAll()
                 }
 
@@ -175,33 +190,52 @@ class MbtilesTilePackager(
     private suspend fun downloadTile(
         tile: TileRef,
         existingTiles: Set<TileRef>,
-        writeMutex: Mutex
+        writeMutex: Mutex,
+        maxFetchAttempts: Int,
+        retryBaseDelayMs: Long
     ): TileResult {
         val (z, x, y) = tile
         if (TileRef(z, x, y) in existingTiles) {
             return TileResult.Skipped
         }
 
-        return try {
-            when (val result = fetcher.fetch(x, y, z)) {
-                is TileFetchResult.Ok -> {
-                    if (result.bytes.isNotEmpty()) {
-                        writeMutex.withLock {
-                            store.putTile(z, x, (1 shl z) - 1 - y, result.bytes)
+        var attempt = 0
+        while (true) {
+            attempt++
+            try {
+                when (val result = fetcher.fetch(x, y, z)) {
+                    is TileFetchResult.Ok -> {
+                        if (result.bytes.isNotEmpty()) {
+                            writeMutex.withLock {
+                                store.putTile(z, x, (1 shl z) - 1 - y, result.bytes)
+                            }
+                            return TileResult.Downloaded
+                        } else {
+                            return TileResult.NotDownloaded
                         }
-                        TileResult.Downloaded
-                    } else {
-                        TileResult.NotDownloaded
+                    }
+                    TileFetchResult.Empty -> return TileResult.NotDownloaded
+                    TileFetchResult.NetworkError -> {
+                        if (attempt >= maxFetchAttempts) return TileResult.NetworkError
+                        delay(retryDelay(retryBaseDelayMs, attempt))
                     }
                 }
-                TileFetchResult.Empty -> TileResult.NotDownloaded
-                TileFetchResult.NetworkError -> TileResult.NetworkError
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                println("MbtilesTilePackager: tile ${tile.z}/${tile.x}/${tile.y} failed: ${e.message}")
+                return TileResult.NotDownloaded
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            println("MbtilesTilePackager: tile ${tile.z}/${tile.x}/${tile.y} failed: ${e.message}")
-            TileResult.NotDownloaded
         }
+    }
+
+    private fun retryDelay(baseDelayMs: Long, attempt: Int): Long =
+        minOf(baseDelayMs shl (attempt - 1), MAX_FETCH_RETRY_DELAY_MS)
+
+    companion object {
+        /** One initial try plus three retries: 0.5s, 1s, 2s of backoff. */
+        const val DEFAULT_FETCH_ATTEMPTS = 4
+        const val FETCH_RETRY_BASE_DELAY_MS = 500L
+        const val MAX_FETCH_RETRY_DELAY_MS = 8_000L
     }
 }

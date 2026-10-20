@@ -100,7 +100,10 @@ class InMemoryOfflineAreaRepository : OfflineAreaRepository {
     }
 }
 
-class FakeStore : MbtilesStore {
+class FakeStore(
+    /** Tiles the "database" already holds — a resumed run must skip them. */
+    private val existing: Set<TileRef> = emptySet()
+) : MbtilesStore {
     var openCount = 0
     var closeCount = 0
 
@@ -108,7 +111,7 @@ class FakeStore : MbtilesStore {
         openCount++
     }
 
-    override fun existingTiles(): Set<TileRef> = emptySet()
+    override fun existingTiles(): Set<TileRef> = existing
 
     override fun putTile(zoom: Int, column: Int, tmsRow: Int, blob: ByteArray) {}
 
@@ -121,4 +124,15 @@ class FakeFetcher(
     private val result: TileFetchResult = TileFetchResult.Ok(byteArrayOf(1, 2, 3))
 ) : TileFetcher {
     override suspend fun fetch(x: Int, y: Int, z: Int): TileFetchResult = result
+}
+
+/** Fetcher that records every requested tile. */
+class CountingFetcher(
+    private val result: TileFetchResult = TileFetchResult.Ok(byteArrayOf(1, 2, 3))
+) : TileFetcher {
+    val requested = mutableListOf<TileRef>()
+    override suspend fun fetch(x: Int, y: Int, z: Int): TileFetchResult {
+        requested.add(TileRef(z, x, y))
+        return result
+    }
 }

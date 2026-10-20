@@ -7,6 +7,13 @@ import com.indiana.zwl.data.repository.MotionDetector
 import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
+import com.indiana.zwl.domain.repository.OfflineAreaRepository
+import com.indiana.zwl.presentation.map.OkHttpTileFetcher
+import com.indiana.zwl.presentation.map.SqliteMbtilesStore
+import com.indiana.zwl.shared.offline.MbtilesStoreFactory
+import com.indiana.zwl.shared.offline.OfflineAreaDownloadCoordinator
+import com.indiana.zwl.shared.offline.OfflineAreaFiles
+import com.indiana.zwl.shared.offline.OfflineAreaNames
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,6 +22,8 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import okhttp3.OkHttpClient
+import java.io.File
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
@@ -63,4 +72,28 @@ object AppModule {
             .writeTimeout(60, TimeUnit.SECONDS)
             .build()
     }
+
+    /**
+     * Shared by the map UI (immediate feedback) and the tile download worker
+     * (the actual download), so exactly one download is ever in flight.
+     */
+    @Provides
+    @Singleton
+    fun provideOfflineAreaDownloadCoordinator(
+        repository: OfflineAreaRepository,
+        files: OfflineAreaFiles,
+        okHttpClient: OkHttpClient,
+        @IoDispatcher dispatcher: CoroutineDispatcher
+    ): OfflineAreaDownloadCoordinator = OfflineAreaDownloadCoordinator(
+        repository = repository,
+        storeFactory = MbtilesStoreFactory { fileName ->
+            SqliteMbtilesStore(File(files.areasDirPath(), fileName))
+        },
+        fetcherProvider = { OkHttpTileFetcher(okHttpClient) },
+        files = files,
+        nameFormatter = { now ->
+            OfflineAreaNames.autoName(now, TimeZone.getDefault().getOffset(now) / 60_000)
+        },
+        dispatcher = dispatcher
+    )
 }
