@@ -14,3 +14,18 @@ fun WaterSourceType.waterGroup(): WaterSourceGroup = when (this) {
     WaterSourceType.SPRING -> WaterSourceGroup.SPRING
     WaterSourceType.WELL -> WaterSourceGroup.WELL
 }
+
+/**
+ * Polish label for a water source type. Single source of truth for both
+ * platforms' detail cards and the nearby-points list.
+ */
+fun WaterSourceType.displayLabel(): String = when (this) {
+    WaterSourceType.DRINKING_WATER -> "Woda pitna"
+    WaterSourceType.WATER_TAP -> "Kran z wodą"
+    WaterSourceType.WATER_POINT -> "Punkt poboru wody"
+    WaterSourceType.SPRING -> "Źródło"
+    WaterSourceType.WELL -> "Studnia"
+    WaterSourceType.FOUNTAIN -> "Fontanna"
+    WaterSourceType.WATER_ON_SITE -> "Woda na miejscu (biwak/wiata)"
+    WaterSourceType.REFILL -> "Punkt napełniania butelek"
+}

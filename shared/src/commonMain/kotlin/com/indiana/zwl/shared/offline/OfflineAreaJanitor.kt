@@ -8,20 +8,27 @@ import com.indiana.zwl.domain.repository.OfflineAreaRepository
  *    its contents were never registered per-area and are superseded),
  * 2. deletes orphaned `area_*.mbtiles` files with no DB row (downloads
  *    killed mid-write leave the file but no registration).
+ *
+ * [protectedFileNames] names the files a still-active download owns. Android
+ * passes a lookup backed by WorkManager's persisted work, so a download that
+ * was interrupted by a process kill keeps its partial file and resumes from it
+ * instead of being wiped as an "orphan".
  */
 class OfflineAreaJanitor(
     private val repository: OfflineAreaRepository,
-    private val files: OfflineAreaFiles
+    private val files: OfflineAreaFiles,
+    private val protectedFileNames: suspend () -> Set<String> = { emptySet() }
 ) {
 
     suspend fun run() {
         try {
             files.deleteFile(LEGACY_FILE_NAME)
+            val protected = protectedFileNames()
             val areas = repository.getAll()
             val known = areas.map { it.fileName }.toSet()
             // Orphaned files: download killed mid-write leaves the file but no row.
             files.listFileNames()
-                .filter { it.endsWith(".mbtiles") && it !in known }
+                .filter { it.endsWith(".mbtiles") && it !in known && it !in protected }
                 .forEach { orphan ->
                     if (files.deleteFile(orphan)) {
                         println("OfflineAreaJanitor: removed orphan $orphan")

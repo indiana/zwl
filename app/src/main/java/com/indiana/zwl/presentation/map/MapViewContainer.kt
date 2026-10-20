@@ -1,9 +1,14 @@
 package com.indiana.zwl.presentation.map
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,9 +31,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import com.indiana.zwl.domain.model.ForestBan
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.domain.model.NearbyPoint
+import com.indiana.zwl.domain.model.NearbyPointType
 import com.indiana.zwl.domain.model.SavedPoint
 import com.indiana.zwl.presentation.MainUiState
 import com.indiana.zwl.presentation.MainViewModel
@@ -167,6 +175,8 @@ fun MapViewContainer(
     val pendingPoint by viewModel.pendingPoint.collectAsState()
     val showSettingsOverlay by viewModel.showSettingsOverlay.collectAsState()
     val keepScreenOn by viewModel.keepScreenOn.collectAsState()
+    val nearbyRadiusKm by viewModel.nearbyRadiusKm.collectAsState()
+    val nearbyPoints by viewModel.nearbyPoints.collectAsState()
     val focusSavedPoint by viewModel.focusSavedPoint.collectAsState()
     val focusCoordinate by viewModel.focusCoordinate.collectAsState()
     val orientationMode by viewModel.orientationMode.collectAsState()
@@ -175,6 +185,38 @@ fun MapViewContainer(
     val recenterSignal by viewModel.recenterSignal.collectAsState()
     val isLandscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // Row tap in a "Pobliskie punkty" section: open that point's detail, exactly
+    // like tapping its marker on the map.
+    val onNearbyPointClick: (NearbyPoint) -> Unit = { nearby ->
+        when (nearby.type) {
+            NearbyPointType.OWN_POINT ->
+                savedPoints.firstOrNull { it.id == nearby.id }
+                    ?.let { viewModel.openSavedPointProperties(it) }
+
+            NearbyPointType.POI ->
+                pois.firstOrNull { it.id == nearby.id }?.let { poi ->
+                    val successState = uiState as? MainUiState.Success
+                    viewModel.selectPoiForNearby(poi)
+                    zoneDetailViewModel.selectPoi(
+                        poi,
+                        successState?.latitude,
+                        successState?.longitude
+                    )
+                }
+
+            NearbyPointType.WATER_SOURCE ->
+                waterSources.firstOrNull { it.id == nearby.id }?.let { source ->
+                    val successState = uiState as? MainUiState.Success
+                    viewModel.selectWaterSourceForNearby(source)
+                    zoneDetailViewModel.selectWaterSource(
+                        source,
+                        successState?.latitude,
+                        successState?.longitude
+                    )
+                }
+        }
+    }
 
     val rememberedMapView = remember {
         try {
@@ -424,6 +466,13 @@ fun MapViewContainer(
     val downloadProgress by mapViewModel.downloadProgress.collectAsState()
     val downloadText by mapViewModel.downloadText.collectAsState()
 
+    // The download runs in a foreground service, whose notification needs the
+    // runtime permission on Android 13+. Asking is non-blocking: without it the
+    // download still runs, it is just not visible in the status bar.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     LaunchedEffect(mapViewModel) {
         mapViewModel.downloadEvent.collect { event ->
             when (event) {
@@ -539,8 +588,14 @@ fun MapViewContainer(
             showOfflineAreas -> mapViewModel.closeOfflineAreas()
             showZoneSearch -> mapViewModel.closeZoneSearch()
             showSettingsOverlay -> viewModel.closeSettingsOverlay()
-            selectedPoi != null -> zoneDetailViewModel.clearSelectedPoi()
-            selectedWaterSource != null -> zoneDetailViewModel.clearSelectedWaterSource()
+            selectedPoi != null -> {
+                zoneDetailViewModel.clearSelectedPoi()
+                viewModel.clearNearby()
+            }
+            selectedWaterSource != null -> {
+                zoneDetailViewModel.clearSelectedWaterSource()
+                viewModel.clearNearby()
+            }
             isSettingsOpen -> isSettingsOpen = false
         }
     }
@@ -759,6 +814,7 @@ fun MapViewContainer(
                                         if (poi != null) {
                                             android.os.Handler(android.os.Looper.getMainLooper()).post {
                                                 val successState = uiState as? MainUiState.Success
+                                                viewModel.selectPoiForNearby(poi)
                                                 zoneDetailViewModel.selectPoi(
                                                     poi,
                                                     successState?.latitude,
@@ -784,6 +840,7 @@ fun MapViewContainer(
                                         if (waterSourceHit != null) {
                                             android.os.Handler(android.os.Looper.getMainLooper()).post {
                                                 val successState = uiState as? MainUiState.Success
+                                                viewModel.selectWaterSourceForNearby(waterSourceHit)
                                                 zoneDetailViewModel.selectWaterSource(
                                                     waterSourceHit,
                                                     successState?.latitude,
@@ -801,6 +858,7 @@ fun MapViewContainer(
                                         if (zone != null && jtsPoly != null) {
                                             android.os.Handler(android.os.Looper.getMainLooper()).post {
                                                 val successState = uiState as? MainUiState.Success
+                                                viewModel.clearNearby()
                                                 zoneDetailViewModel.selectZone(
                                                     zone, jtsPoly,
                                                     point.latitude, point.longitude,
@@ -945,6 +1003,16 @@ fun MapViewContainer(
                         val center = pos.target
                         val zoom = pos.zoom
                         if (center != null) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationPermissionLauncher.launch(
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                )
+                            }
                             val mv = rememberedMapView
                             val width = mv.width.toDouble()
                             val height = mv.height.toDouble()
@@ -1247,7 +1315,14 @@ fun MapViewContainer(
                 selectedPoi?.let { details ->
                     PoiDetailsCard(
                         details = details,
-                        onClose = { zoneDetailViewModel.clearSelectedPoi() },
+                        nearbyPoints = nearbyPoints.points,
+                        nearbyTotalCount = nearbyPoints.totalCount,
+                        nearbyRadiusKm = nearbyRadiusKm,
+                        onNearbyPointClick = { nearby -> onNearbyPointClick(nearby) },
+                        onClose = {
+                            zoneDetailViewModel.clearSelectedPoi()
+                            viewModel.clearNearby()
+                        },
                         modifier = Modifier.padding(bottom = 88.dp)
                     )
                 }
@@ -1262,7 +1337,14 @@ fun MapViewContainer(
                 selectedWaterSource?.let { details ->
                     WaterSourceDetailsCard(
                         details = details,
-                        onClose = { zoneDetailViewModel.clearSelectedWaterSource() },
+                        nearbyPoints = nearbyPoints.points,
+                        nearbyTotalCount = nearbyPoints.totalCount,
+                        nearbyRadiusKm = nearbyRadiusKm,
+                        onNearbyPointClick = { nearby -> onNearbyPointClick(nearby) },
+                        onClose = {
+                            zoneDetailViewModel.clearSelectedWaterSource()
+                            viewModel.clearNearby()
+                        },
                         modifier = Modifier.padding(bottom = 88.dp)
                     )
                 }
@@ -1271,6 +1353,7 @@ fun MapViewContainer(
             if (showSettingsOverlay) {
                 SettingsOverlay(
                     keepScreenOn = keepScreenOn,
+                    nearbyRadiusKm = nearbyRadiusKm,
                     showOwnPoints = showOwnPoints,
                     showForestBans = showForestBans,
                     showAccommodation = showAccommodation,
@@ -1286,6 +1369,7 @@ fun MapViewContainer(
                     showEducation = showEducation,
                     showOthers = showOthers,
                     onKeepScreenOnChange = viewModel::setKeepScreenOn,
+                    onNearbyRadiusKmChange = viewModel::setNearbyRadiusKm,
                     onShowOwnPointsChange = viewModel::setShowOwnPoints,
                     onShowForestBansChange = viewModel::setShowForestBans,
                     onShowAccommodationChange = viewModel::setShowAccommodation,

@@ -5,6 +5,8 @@ import com.indiana.zwl.shared.offline.OfflineLimits
 import com.indiana.zwl.shared.offline.OfflineAreaDownloadCoordinator
 import com.indiana.zwl.shared.offline.Region
 import com.indiana.zwl.shared.offline.TileFetcher
+import com.indiana.zwl.shared.offline.TileMath
+import com.indiana.zwl.shared.offline.TileRef
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
@@ -26,11 +28,12 @@ class OfflineAreaDownloadCoordinatorTest {
         repo: InMemoryOfflineAreaRepository,
         files: FakeOfflineAreaFiles,
         fetcher: TileFetcher,
-        stores: MutableList<FakeStore>
+        stores: MutableList<FakeStore>,
+        existingTiles: Set<TileRef> = emptySet()
     ): OfflineAreaDownloadCoordinator = OfflineAreaDownloadCoordinator(
         repository = repo,
         storeFactory = MbtilesStoreFactory {
-            FakeStore().also { stores.add(it) }
+            FakeStore(existingTiles).also { stores.add(it) }
         },
         fetcherProvider = { fetcher },
         files = files,
@@ -191,6 +194,71 @@ class OfflineAreaDownloadCoordinatorTest {
         assertTrue(repo.items.isEmpty())
         assertFalse(files.files.containsKey(expectedFile))
         assertEquals(1, stores.first().closeCount)
+    }
+
+    @Test
+    fun `cancelled resumable download keeps its partial file`() = runBlocking {
+        val repo = InMemoryOfflineAreaRepository()
+        val files = FakeOfflineAreaFiles()
+        val stores = mutableListOf<FakeStore>()
+        val expectedFile = "area_4242.mbtiles"
+        files.files[expectedFile] = byteArrayOf(1)
+        val callbacks = Callbacks()
+
+        val job = launch {
+            coordinator(repo, files, blockingFetcher(), stores).download(
+                region = Region(52.20, 52.25, 21.00, 21.05),
+                startedAt = 4242L,
+                keepPartialOnCancellation = true,
+                onProgress = { _, _ -> },
+                onSuccess = { callbacks.success = it },
+                onError = { callbacks.error = it }
+            )
+        }
+        while (stores.isEmpty() || stores.first().openCount == 0) yield()
+        job.cancelAndJoin()
+
+        assertEquals(null, callbacks.success)
+        assertTrue(repo.items.isEmpty())
+        // The partial file survives so the next run resumes from it.
+        assertTrue(files.files.containsKey(expectedFile))
+    }
+
+    @Test
+    fun `resumed run skips tiles already stored and reuses the same file`() = runBlocking {
+        val repo = InMemoryOfflineAreaRepository()
+        val files = FakeOfflineAreaFiles()
+        val region = Region(52.20, 52.25, 21.00, 21.05)
+        val firstFetcher = CountingFetcher()
+        val callbacks = Callbacks()
+
+        // First attempt: everything has to be fetched.
+        coordinator(repo, files, firstFetcher, mutableListOf()).download(
+            region = region,
+            startedAt = 777L,
+            onProgress = { _, _ -> },
+            onSuccess = { callbacks.success = it },
+            onError = { callbacks.error = it }
+        )
+        assertTrue(firstFetcher.requested.isNotEmpty())
+
+        // Resumed attempt into the same file: the database already holds every
+        // tile, so nothing is fetched again.
+        val resumedFetcher = CountingFetcher()
+        val resumedStores = mutableListOf<FakeStore>()
+        val resumedCallbacks = Callbacks()
+        coordinator(repo, files, resumedFetcher, resumedStores, firstFetcher.requested.toSet())
+            .download(
+                region = region,
+                startedAt = 777L,
+                onProgress = { _, _ -> },
+                onSuccess = { resumedCallbacks.success = it },
+                onError = { resumedCallbacks.error = it }
+            )
+
+        assertEquals(null, resumedCallbacks.error)
+        assertTrue(resumedFetcher.requested.isEmpty())
+        assertEquals(firstFetcher.requested.size, resumedCallbacks.success)
     }
 
     @Test

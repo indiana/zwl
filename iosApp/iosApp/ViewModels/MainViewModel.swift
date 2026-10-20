@@ -189,6 +189,19 @@ final class MainViewModel: NSObject, ObservableObject {
     @Published var keepScreenOn = false {
         didSet { UserDefaults.standard.set(keepScreenOn, forKey: Self.keyKeepScreenOn) }
     }
+    // "Pobliskie punkty": radius (km) for the nearby-points section in the
+    // point detail views (Android `NEARBY_RADIUS_KM` parity) plus the computed
+    // section itself. The origin is the currently open detail view; nil means
+    // no detail is open and the section stays empty.
+    @Published var nearbyRadiusKm: Float = 5
+    @Published var nearbyPoints: [NearbyPoint] = []
+    @Published var nearbyTotalCount: Int = 0
+    private var nearbyOriginLatitude: Double?
+    private var nearbyOriginLongitude: Double?
+    private var nearbyExcludeSavedPointId: Int64?
+    private var nearbyExcludePoiId: Int64?
+    private var nearbyExcludeWaterSourceId: Int64?
+    private var nearbyTask: Task<Void, Never>?
     // Increment to ask the map to center on a saved point (zoom 15).
     @Published var centerSavedPointSignal: Int = 0
     private(set) var centerSavedPointLatitude: Double?
@@ -320,6 +333,13 @@ final class MainViewModel: NSObject, ObservableObject {
     private static let keyShowWaterWells = "mapSettings.showWaterWells"
     private static let keyHeadingUp = "mapSettings.headingUp"
     private static let keyKeepScreenOn = "mapSettings.keepScreenOn"
+    private static let keyNearbyRadiusKm = "mapSettings.nearbyRadiusKm"
+    // Mirrors shared `NearbyFilter` (DEFAULT/MIN/MAX_RADIUS_KM) — duplicated as
+    // plain Swift constants so the settings UI does not depend on the SKIE
+    // companion-object export. Radius 0 = feature off (no section anywhere).
+    private static let minNearbyRadiusKm: Float = 0
+    private static let maxNearbyRadiusKm: Float = 25
+    private static let defaultNearbyRadiusKm: Float = 5
     private var lastInZoneDistrict: String?
     // Throttling: GPS is 1Hz and heading can be tens of Hz; each update
     // re-renders the map on the main thread (the iPad-class bottleneck), so
@@ -348,6 +368,8 @@ final class MainViewModel: NSObject, ObservableObject {
         showWaterWells = defaults.object(forKey: Self.keyShowWaterWells) as? Bool ?? legacyWater
         headingUp = defaults.object(forKey: Self.keyHeadingUp) as? Bool ?? false
         keepScreenOn = defaults.object(forKey: Self.keyKeepScreenOn) as? Bool ?? false
+        nearbyRadiusKm = Float(defaults.object(forKey: Self.keyNearbyRadiusKm) as? Double
+            ?? Double(Self.defaultNearbyRadiusKm))
         locationManager.delegate = self
         pathMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor [weak self] in
@@ -420,6 +442,9 @@ final class MainViewModel: NSObject, ObservableObject {
         zonesGeoJson = zones
         bansGeoJson = bans
         poisGeoJson = pois
+        // Cached POI/water lists may have changed (sync) — a detail view that
+        // is open must show the new points.
+        refreshNearbyPoints()
     }
 
     // MARK: - Location
@@ -536,6 +561,7 @@ final class MainViewModel: NSObject, ObservableObject {
         isLoadingZoneFireRisk = false
         selectedZoneForestStand = nil
         isLoadingZoneForestStand = false
+        clearNearby()
         computeZoneDetail(for: zone)
     }
 
@@ -694,19 +720,35 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedZone = nil
         selectedPoi = nil
         selectedWaterSource = nil
+        clearNearby()
     }
 
     func selectPoi(named name: String) {
-        selectedPoi = app.cachedPois().first { $0.name == name }
+        guard let poi = app.cachedPois().first(where: { $0.name == name }) else {
+            // Keep the old "not found" behaviour: selections still reset.
+            selectedPoi = nil
+            selectedZone = nil
+            selectedBan = nil
+            selectedWaterSource = nil
+            selectedPoiDistanceMeters = nil
+            clearNearby()
+            return
+        }
+        selectPoi(poi)
+    }
+
+    func selectPoi(_ poi: Poi) {
+        selectedPoi = poi
         selectedZone = nil
         selectedBan = nil
         selectedWaterSource = nil
         selectedPoiDistanceMeters = nil
-        if let poi = selectedPoi, let userLat = userLatitude, let userLon = userLongitude {
+        if let userLat = userLatitude, let userLon = userLongitude {
             let userLoc = CLLocation(latitude: userLat, longitude: userLon)
             let poiLoc = CLLocation(latitude: poi.latitude, longitude: poi.longitude)
             selectedPoiDistanceMeters = userLoc.distance(from: poiLoc)
         }
+        setNearbyOrigin(latitude: poi.latitude, longitude: poi.longitude, excludePoiId: poi.id)
     }
 
     func selectWaterSource(osmId: String) {
@@ -720,6 +762,11 @@ final class MainViewModel: NSObject, ObservableObject {
             let userLoc = CLLocation(latitude: userLat, longitude: userLon)
             let waterLoc = CLLocation(latitude: water.latitude, longitude: water.longitude)
             selectedWaterSourceDistanceMeters = userLoc.distance(from: waterLoc)
+        }
+        if let water = selectedWaterSource {
+            setNearbyOrigin(latitude: water.latitude, longitude: water.longitude, excludeWaterSourceId: water.id)
+        } else {
+            clearNearby()
         }
     }
 
@@ -735,6 +782,126 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedPoiDistanceMeters = nil
         selectedWaterSource = nil
         selectedWaterSourceDistanceMeters = nil
+        clearNearby()
+    }
+
+    // MARK: - Nearby points ("Pobliskie punkty")
+
+    func setNearbyRadiusKm(_ km: Float) {
+        let snapped = (km * 2).rounded() / 2
+        let clamped = Swift.min(Swift.max(snapped, Self.minNearbyRadiusKm), Self.maxNearbyRadiusKm)
+        guard clamped != nearbyRadiusKm else { return }
+        nearbyRadiusKm = clamped
+        UserDefaults.standard.set(Double(clamped), forKey: Self.keyNearbyRadiusKm)
+        refreshNearbyPoints()
+    }
+
+    /// Recomputes the nearby-points section for the currently open detail view.
+    /// The shared use case filters the cached lists, so this is cheap enough to
+    /// run on every selection / radius / layer-toggle / data change.
+    func refreshNearbyPoints() {
+        nearbyTask?.cancel()
+        guard let latitude = nearbyOriginLatitude, let longitude = nearbyOriginLongitude else {
+            nearbyPoints = []
+            nearbyTotalCount = 0
+            return
+        }
+        nearbyTask = Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            guard let result = try? await self.app.nearbyPoints(
+                latitude: latitude,
+                longitude: longitude,
+                radiusKm: self.nearbyRadiusKm,
+                includeOwnPoints: self.showOwnPoints,
+                visiblePoiGroups: self.visiblePoiGroups(),
+                includeDrinking: self.showWaterDrinking,
+                includeSprings: self.showWaterSprings,
+                includeWells: self.showWaterWells,
+                excludeSavedPointId: self.nearbyExcludeSavedPointId.map { KotlinLong(value: $0) },
+                excludePoiId: self.nearbyExcludePoiId.map { KotlinLong(value: $0) },
+                excludeWaterSourceId: self.nearbyExcludeWaterSourceId.map { KotlinLong(value: $0) }
+            ) else { return }
+            self.nearbyPoints = Array(result.points)
+            self.nearbyTotalCount = Int(result.totalCount)
+        }
+    }
+
+    /// POI groups currently visible on the map — the nearby list shows exactly
+    /// what the user sees (hidden groups stay hidden).
+    private func visiblePoiGroups() -> [PoiUiGroup] {
+        var groups: [PoiUiGroup] = []
+        if showAccommodation { groups.append(.accommodation) }
+        if showRest { groups.append(.rest) }
+        if showShelters { groups.append(.shelter) }
+        if showFireplaces { groups.append(.fireplace) }
+        if showViewpoints { groups.append(.viewpoint) }
+        if showWaterLaunch { groups.append(.waterLaunch) }
+        if showParking { groups.append(.parking) }
+        if showEducation { groups.append(.education) }
+        if showOthers { groups.append(.other) }
+        return groups
+    }
+
+    private func setNearbyOrigin(
+        latitude: Double,
+        longitude: Double,
+        excludeSavedPointId: Int64? = nil,
+        excludePoiId: Int64? = nil,
+        excludeWaterSourceId: Int64? = nil
+    ) {
+        nearbyOriginLatitude = latitude
+        nearbyOriginLongitude = longitude
+        nearbyExcludeSavedPointId = excludeSavedPointId
+        nearbyExcludePoiId = excludePoiId
+        nearbyExcludeWaterSourceId = excludeWaterSourceId
+        refreshNearbyPoints()
+    }
+
+    private func clearNearby() {
+        nearbyTask?.cancel()
+        nearbyOriginLatitude = nil
+        nearbyOriginLongitude = nil
+        nearbyExcludeSavedPointId = nil
+        nearbyExcludePoiId = nil
+        nearbyExcludeWaterSourceId = nil
+        nearbyPoints = []
+        nearbyTotalCount = 0
+    }
+
+    /// Row tap in a nearby-points section: open that point's detail, exactly
+    /// like tapping its marker on the map.
+    func openNearbyPoint(_ nearby: NearbyPoint) {
+        switch nearby.type {
+        case .ownPoint:
+            if let point = savedPoints.first(where: { $0.id == nearby.id }) {
+                openSavedPointProperties(point)
+            }
+        case .poi:
+            if let poi = app.cachedPois().first(where: { $0.id == nearby.id }) {
+                selectPoi(poi)
+            }
+        case .waterSource:
+            if let source = app.cachedWaterSources().first(where: { $0.id == nearby.id }) {
+                selectedWaterSource = source
+                selectedZone = nil
+                selectedBan = nil
+                selectedPoi = nil
+                selectedPoiDistanceMeters = nil
+                selectedWaterSourceDistanceMeters = nil
+                if let userLat = userLatitude, let userLon = userLongitude {
+                    let userLoc = CLLocation(latitude: userLat, longitude: userLon)
+                    let waterLoc = CLLocation(latitude: source.latitude, longitude: source.longitude)
+                    selectedWaterSourceDistanceMeters = userLoc.distance(from: waterLoc)
+                }
+                setNearbyOrigin(
+                    latitude: source.latitude,
+                    longitude: source.longitude,
+                    excludeWaterSourceId: source.id
+                )
+            }
+        @unknown default:
+            break
+        }
     }
 
     // MARK: - Saved points
@@ -774,6 +941,7 @@ final class MainViewModel: NSObject, ObservableObject {
     private func setPendingPoint(latitude: Double, longitude: Double, name: String, source: PendingPoint.Source) {
         let point = PendingPoint(source: source, name: name, latitude: latitude, longitude: longitude)
         pendingPoint = point
+        setNearbyOrigin(latitude: latitude, longitude: longitude)
         loadPendingPointExtras(for: point)
         Task { @MainActor [weak self] in
             guard let self = self else { return }
@@ -845,6 +1013,7 @@ final class MainViewModel: NSObject, ObservableObject {
             }
             self.pendingPoint = nil
             self.clearPendingPointExtras()
+            self.clearNearby()
             await self.loadSavedPointData()
         }
     }
@@ -852,6 +1021,7 @@ final class MainViewModel: NSObject, ObservableObject {
     func clearPendingPoint() {
         pendingPoint = nil
         clearPendingPointExtras()
+        clearNearby()
     }
 
     private func clearPendingPointExtras() {
@@ -868,6 +1038,7 @@ final class MainViewModel: NSObject, ObservableObject {
         let points = (try? await app.savedPoints()).map { Array($0) } ?? []
         savedPoints = points
         savedPointsGeoJson = (try? await app.savedPointsGeoJson()) ?? ""
+        refreshNearbyPoints()
     }
 
     func openSavedPointList() {
@@ -918,6 +1089,9 @@ final class MainViewModel: NSObject, ObservableObject {
 
     func closeSettingsOverlay() {
         showSettingsOverlay = false
+        // Layer toggles may have changed while the overlay was up — the
+        // nearby list must follow the same visibility rules as the map.
+        refreshNearbyPoints()
     }
 
     /// Short tap on a list row: center the camera on the point (map stays
@@ -944,6 +1118,7 @@ final class MainViewModel: NSObject, ObservableObject {
         selectedSavedPointForestStand = nil
         isLoadingSavedPointForestStand = true
         loadSavedPointExtras(for: point)
+        setNearbyOrigin(latitude: point.latitude, longitude: point.longitude, excludeSavedPointId: point.id)
     }
 
     /// Fire risk (fresh point query, 24h offline fallback) + BDL forest stand
@@ -992,6 +1167,7 @@ final class MainViewModel: NSObject, ObservableObject {
         isLoadingSavedPointFireRisk = false
         selectedSavedPointForestStand = nil
         isLoadingSavedPointForestStand = false
+        clearNearby()
     }
 
     func renameSavedPoint(_ point: SavedPoint, to name: String) {

@@ -66,6 +66,13 @@ struct SavedPointPropertiesView: View {
                         isLoading: viewModel.isLoadingSavedPointForestStand
                     )
 
+                    NearbyPointsSection(
+                        points: viewModel.nearbyPoints,
+                        totalCount: viewModel.nearbyTotalCount,
+                        radiusKm: viewModel.nearbyRadiusKm,
+                        onSelect: { viewModel.openNearbyPoint($0) }
+                    )
+
                     Spacer(minLength: 8)
                 }
                 .padding(16)

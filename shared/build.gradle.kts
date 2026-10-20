@@ -15,6 +15,8 @@ kotlin {
         compileSdk = 37
         minSdk = 26
 
+        withHostTest {}
+
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
@@ -64,6 +66,11 @@ kotlin {
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.sqldelight.android.driver)
                 implementation(libs.koin.android)
+            }
+        }
+        val commonTest = getByName("commonTest") {
+            dependencies {
+                implementation(kotlin("test"))
             }
         }
     }

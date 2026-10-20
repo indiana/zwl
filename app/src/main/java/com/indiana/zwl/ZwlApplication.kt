@@ -10,12 +10,16 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.indiana.zwl.data.sync.SyncWorker
+import com.indiana.zwl.data.tiledownload.TileDownloadController
+import com.indiana.zwl.domain.repository.OfflineAreaRepository
 import com.indiana.zwl.presentation.map.util.clearParsedGeometryCache
 import com.indiana.zwl.shared.di.androidModule
 import com.indiana.zwl.shared.di.databaseModule
 import com.indiana.zwl.shared.di.repositoryModule
 import com.indiana.zwl.shared.di.sharedModule
+import com.indiana.zwl.shared.offline.OfflineAreaFiles
 import com.indiana.zwl.shared.offline.OfflineAreaJanitor
+import org.koin.java.KoinJavaComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +41,9 @@ class ZwlApplication : Application(), androidx.work.Configuration.Provider {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var tileDownloads: TileDownloadController
 
     override val workManagerConfiguration: androidx.work.Configuration
         get() = androidx.work.Configuration.Builder()
@@ -85,10 +92,16 @@ class ZwlApplication : Application(), androidx.work.Configuration.Provider {
         }
 
         // One-shot offline store housekeeping (legacy map.mbtiles + orphans);
-        // fire-and-forget so it never slows down app startup.
+        // fire-and-forget so it never slows down app startup. Files owned by a
+        // still-pending tile download are protected: the job resumes from them
+        // instead of starting over.
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                org.koin.java.KoinJavaComponent.getKoin().get<OfflineAreaJanitor>().run()
+                OfflineAreaJanitor(
+                    repository = KoinJavaComponent.getKoin().get<OfflineAreaRepository>(),
+                    files = KoinJavaComponent.getKoin().get<OfflineAreaFiles>(),
+                    protectedFileNames = { tileDownloads.protectedFileNames() }
+                ).run()
             } catch (_: Exception) {
             }
         }

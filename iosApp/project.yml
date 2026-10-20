@@ -66,11 +66,14 @@ targets:
           ./gradlew :shared:embedAndSignAppleFrameworkForXcode
         basedOnDependencyAnalysis: false
     settings:
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.indiana.zwl.iosApp
         PRODUCT_NAME: ZWL
-        MARKETING_VERSION: "1.6"
-        CURRENT_PROJECT_VERSION: "71"
+        MARKETING_VERSION: "1.8"
+        CURRENT_PROJECT_VERSION: "74"
         FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
         OTHER_LDFLAGS: "$(inherited) -framework shared -lsqlite3"
         SWIFT_VERSION: "5.0"

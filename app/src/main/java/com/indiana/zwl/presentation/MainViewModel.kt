@@ -13,6 +13,7 @@ import com.indiana.zwl.domain.CompassRepository
 import com.indiana.zwl.domain.LocationRepository
 import com.indiana.zwl.domain.SpatialEngine
 import com.indiana.zwl.domain.model.LocationStatus
+import com.indiana.zwl.domain.model.NearbyPoint
 import com.indiana.zwl.domain.model.Zone
 import com.indiana.zwl.domain.model.Poi
 import com.indiana.zwl.domain.model.SavedPoint
@@ -20,8 +21,13 @@ import com.indiana.zwl.domain.model.NewSavedPoint
 import com.indiana.zwl.domain.model.WaterDataState
 import com.indiana.zwl.domain.model.WaterSource
 import com.indiana.zwl.shared.data.water.WaterSyncManager
+import com.indiana.zwl.shared.update.ReleaseNote
+import com.indiana.zwl.shared.update.WhatsNew
 import com.indiana.zwl.domain.usecase.GetFireRiskUseCase
+import com.indiana.zwl.domain.usecase.GetNearbyPointsUseCase
 import com.indiana.zwl.domain.usecase.GetZonesUseCase
+import com.indiana.zwl.domain.usecase.NearbyFilter
+import com.indiana.zwl.domain.usecase.NearbyPointsResult
 import com.indiana.zwl.domain.usecase.PointDetails
 import com.indiana.zwl.domain.usecase.SavedPointSortMode
 import com.indiana.zwl.domain.usecase.SavedPointSorter
@@ -48,6 +54,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.combine
@@ -56,6 +63,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.CancellationException
+import kotlin.math.roundToInt
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
@@ -108,6 +116,7 @@ class MainViewModel @Inject constructor(
     private val syncForestBansUseCase: SyncForestBansUseCase,
     private val getForestBansUseCase: GetForestBansUseCase,
     private val getFireRiskUseCase: GetFireRiskUseCase,
+    private val getNearbyPointsUseCase: GetNearbyPointsUseCase,
     private val getZonesUseCase: GetZonesUseCase,
     private val spatialEngine: SpatialEngine,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
@@ -224,6 +233,27 @@ class MainViewModel @Inject constructor(
         if (_keepScreenOn.value == enabled) return
         _keepScreenOn.value = enabled
         sharedPrefs.edit().putBoolean(MapSettingsPrefsKeys.KEEP_SCREEN_ON, enabled).apply()
+    }
+
+    // "Co nowego": release notes shown once per marketing version, on both
+    // upgrade and fresh install. Debug builds always get the latest note and
+    // never persist the seen marker, so the popup can be exercised on every
+    // launch.
+    private val _whatsNew = MutableStateFlow(
+        WhatsNew.noteToShow(
+            currentVersion = com.indiana.zwl.BuildConfig.VERSION_NAME,
+            lastSeenVersion = sharedPrefs.getString(MapSettingsPrefsKeys.LAST_SEEN_VERSION, null),
+            debugBuild = com.indiana.zwl.BuildConfig.DEBUG
+        )
+    )
+    val whatsNew: StateFlow<ReleaseNote?> = _whatsNew.asStateFlow()
+
+    fun dismissWhatsNew() {
+        val note = _whatsNew.value ?: return
+        if (!com.indiana.zwl.BuildConfig.DEBUG) {
+            sharedPrefs.edit().putString(MapSettingsPrefsKeys.LAST_SEEN_VERSION, note.version).apply()
+        }
+        _whatsNew.value = null
     }
 
     // Follow-the-user is session state: it always starts enabled on a fresh map
@@ -421,6 +451,91 @@ class MainViewModel @Inject constructor(
         _showOwnPoints.value = visible
     }
 
+    private val _nearbyRadiusKm = MutableStateFlow(
+        sharedPrefs.getFloat(MapSettingsPrefsKeys.NEARBY_RADIUS_KM, NearbyFilter.DEFAULT_RADIUS_KM)
+    )
+    val nearbyRadiusKm: StateFlow<Float> = _nearbyRadiusKm.asStateFlow()
+
+    fun setNearbyRadiusKm(km: Float) {
+        val snapped = (km * 2f).roundToInt() / 2f
+        val clamped = snapped.coerceIn(NearbyFilter.MIN_RADIUS_KM, NearbyFilter.MAX_RADIUS_KM)
+        if (clamped == _nearbyRadiusKm.value) return
+        _nearbyRadiusKm.value = clamped
+        sharedPrefs.edit().putFloat(MapSettingsPrefsKeys.NEARBY_RADIUS_KM, clamped).apply()
+    }
+
+    private val visibleSavedPoints: StateFlow<List<SavedPoint>> = combine(
+        savedPoints, _showOwnPoints
+    ) { points, show -> if (show) points else emptyList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private data class NearbyHost(
+        val latitude: Double,
+        val longitude: Double,
+        val excludeSavedPointId: Long? = null,
+        val excludePoiId: Long? = null,
+        val excludeWaterSourceId: Long? = null
+    )
+
+    private val _nearbyHost = MutableStateFlow<NearbyHost?>(null)
+
+    /**
+     * Points of every type around the currently open detail view (own point,
+     * pending point or POI). Recomputed on selection, radius and list changes;
+     * the lists are the ones the map renders, so layers hidden on the map stay
+     * hidden here too.
+     */
+    val nearbyPoints: StateFlow<NearbyPointsResult> = combine(
+        _nearbyHost,
+        _nearbyRadiusKm,
+        visibleSavedPoints,
+        pois,
+        waterSources
+    ) { host, radiusKm, points, visiblePois, visibleWater ->
+        if (host == null) {
+            NearbyPointsResult(emptyList(), 0)
+        } else {
+            getNearbyPointsUseCase(
+                latitude = host.latitude,
+                longitude = host.longitude,
+                savedPoints = points,
+                pois = visiblePois,
+                waterSources = visibleWater,
+                filter = NearbyFilter(
+                    radiusKm = radiusKm,
+                    excludeSavedPointId = host.excludeSavedPointId,
+                    excludePoiId = host.excludePoiId,
+                    excludeWaterSourceId = host.excludeWaterSourceId
+                )
+            )
+        }
+    }.flowOn(Dispatchers.Default)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = NearbyPointsResult(emptyList(), 0)
+        )
+
+    fun selectPoiForNearby(poi: Poi) {
+        _nearbyHost.value = NearbyHost(
+            latitude = poi.latitude,
+            longitude = poi.longitude,
+            excludePoiId = poi.id
+        )
+    }
+
+    fun selectWaterSourceForNearby(waterSource: WaterSource) {
+        _nearbyHost.value = NearbyHost(
+            latitude = waterSource.latitude,
+            longitude = waterSource.longitude,
+            excludeWaterSourceId = waterSource.id
+        )
+    }
+
+    fun clearNearby() {
+        _nearbyHost.value = null
+    }
+
     private val _showSettingsOverlay = MutableStateFlow(false)
     val showSettingsOverlay: StateFlow<Boolean> = _showSettingsOverlay.asStateFlow()
 
@@ -479,6 +594,7 @@ class MainViewModel @Inject constructor(
 
     private fun setPendingPoint(point: PendingPoint) {
         _pendingPoint.value = point
+        _nearbyHost.value = NearbyHost(latitude = point.lat, longitude = point.lng)
         viewModelScope.launch(Dispatchers.Default) {
             val status = spatialEngine.checkLocation(point.lat, point.lng)
             val ban = spatialEngine.checkForestBan(point.lat, point.lng)
@@ -488,6 +604,7 @@ class MainViewModel @Inject constructor(
 
     fun clearPendingPoint() {
         _pendingPoint.value = null
+        _nearbyHost.value = null
     }
 
     fun savePendingPoint(name: String, details: PointDetails?) {
@@ -506,6 +623,7 @@ class MainViewModel @Inject constructor(
                 }
             }
             _pendingPoint.value = null
+            _nearbyHost.value = null
         }
     }
 
@@ -519,6 +637,7 @@ class MainViewModel @Inject constructor(
     fun deleteSavedPoint(id: Long) {
         if (_selectedSavedPointInfo.value?.id == id) {
             _selectedSavedPointInfo.value = null
+            _nearbyHost.value = null
         }
         viewModelScope.launch(Dispatchers.IO) {
             savedPointRepository.delete(id)
@@ -529,6 +648,7 @@ class MainViewModel @Inject constructor(
         if (ids.isEmpty()) return
         if (_selectedSavedPointInfo.value?.id?.let { it in ids } == true) {
             _selectedSavedPointInfo.value = null
+            _nearbyHost.value = null
         }
         viewModelScope.launch(Dispatchers.IO) {
             savedPointRepository.deleteByIds(ids.toList())
@@ -546,10 +666,16 @@ class MainViewModel @Inject constructor(
 
     fun openSavedPointProperties(point: SavedPoint) {
         _selectedSavedPointInfo.value = point
+        _nearbyHost.value = NearbyHost(
+            latitude = point.latitude,
+            longitude = point.longitude,
+            excludeSavedPointId = point.id
+        )
     }
 
     fun clearSavedPointProperties() {
         _selectedSavedPointInfo.value = null
+        _nearbyHost.value = null
     }
 
     private val _debugError = MutableStateFlow<String?>(null)

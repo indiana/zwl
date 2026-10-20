@@ -3,13 +3,16 @@ package com.indiana.zwl.shared.offline
 import com.indiana.zwl.domain.model.DownloadedArea
 import com.indiana.zwl.domain.model.NewDownloadedArea
 import com.indiana.zwl.domain.repository.OfflineAreaRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 
 /**
  * Platform-neutral orchestration of per-area offline downloads: packs tiles
  * into a dedicated `area_<epochMillis>.mbtiles` file, registers the area in
  * the repository on success and removes the file whenever the packer does not
- * end in a committed state (failure, unexpected exception **and
- * cancellation**) — so an aborted download never leaves a half-written area.
+ * end in a committed state (failure, unexpected exception **and** cancellation)
+ * — so an aborted download never leaves a half-written area.
  *
  * [nameFormatter] builds the auto display name ("Obszar 03.09 14:32") from
  * the download start timestamp.
@@ -19,21 +22,35 @@ class OfflineAreaDownloadCoordinator(
     private val storeFactory: MbtilesStoreFactory,
     private val fetcherProvider: () -> TileFetcher,
     private val files: OfflineAreaFiles,
-    private val nameFormatter: (Long) -> String
+    private val nameFormatter: (Long) -> String,
+    // Downloads are blocking I/O (HTTP + SQLite). Android's worker passes
+    // Dispatchers.IO so the tile pool never steals threads from the CPU pool.
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
 
     suspend fun download(
         region: Region,
         minZoom: Int = OfflineLimits.MIN_ZOOM,
         maxZoom: Int = OfflineLimits.MAX_ZOOM,
+        // Callers that can restart the download (Android's tile worker, whose
+        // input data survives a process kill) inject the start time so the
+        // file name — and every tile already written into it — is stable
+        // across restarts: the packer skips existing tiles and the run
+        // resumes instead of starting over.
+        startedAt: Long? = null,
+        // Keep the partial file when the download is cancelled, so the next
+        // run resumes from the tiles already packed. Real failures always
+        // clean up after themselves.
+        keepPartialOnCancellation: Boolean = false,
         onProgress: (Float, String) -> Unit,
         onSuccess: (Int) -> Unit,
         onError: (String) -> Unit
     ) {
-        val startedAt = files.nowMillis()
-        val fileName = "area_$startedAt.mbtiles"
-        val packager = MbtilesTilePackager(fetcherProvider(), storeFactory.create(fileName))
+        val effectiveStartedAt = startedAt ?: files.nowMillis()
+        val fileName = "area_$effectiveStartedAt.mbtiles"
+        val packager = MbtilesTilePackager(fetcherProvider(), storeFactory.create(fileName), dispatcher)
         var committed = false
+        var cancelled = false
         try {
             packager.download(
                 region = region,
@@ -44,7 +61,7 @@ class OfflineAreaDownloadCoordinator(
                     try {
                         repository.insert(
                             NewDownloadedArea(
-                                name = nameFormatter(startedAt),
+                                name = nameFormatter(effectiveStartedAt),
                                 fileName = fileName,
                                 latSouth = region.latSouth,
                                 latNorth = region.latNorth,
@@ -54,7 +71,7 @@ class OfflineAreaDownloadCoordinator(
                                 maxZoom = maxZoom,
                                 tileCount = count,
                                 fileSizeBytes = files.fileSize(fileName),
-                                downloadedAt = startedAt
+                                downloadedAt = effectiveStartedAt
                             )
                         )
                         committed = true
@@ -66,10 +83,18 @@ class OfflineAreaDownloadCoordinator(
                 },
                 onError = { msg -> onError(msg) }
             )
+        } catch (e: CancellationException) {
+            cancelled = true
+            throw e
         } finally {
             // Covers failure, unexpected exceptions and CancellationException
-            // (the packager rethrows it): never keep a partial area.
-            if (!committed) files.deleteFile(fileName)
+            // (the packager rethrows it): never keep a partial area — unless the
+            // caller asked to keep it so a restart can resume from it.
+            if (!committed && !(cancelled && keepPartialOnCancellation)) {
+                files.deleteFile(fileName)
+            } else if (!committed) {
+                println("OfflineAreaDownloadCoordinator: kept partial $fileName for resume")
+            }
         }
     }
 
@@ -86,7 +111,7 @@ class OfflineAreaDownloadCoordinator(
     ) {
         val startedAt = files.nowMillis()
         val newFileName = "area_$startedAt.mbtiles"
-        val packager = MbtilesTilePackager(fetcherProvider(), storeFactory.create(newFileName))
+        val packager = MbtilesTilePackager(fetcherProvider(), storeFactory.create(newFileName), dispatcher)
         val region = Region(area.latSouth, area.latNorth, area.lonWest, area.lonEast)
         var committed = false
         try {

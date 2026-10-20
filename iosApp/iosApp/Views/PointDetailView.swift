@@ -20,6 +20,7 @@ struct PointDetailView: View {
     let onSave: (String) -> Void
     let shareLink: String
     let onClose: () -> Void
+    @ObservedObject var viewModel: MainViewModel
 
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
@@ -33,7 +34,8 @@ struct PointDetailView: View {
          isLoadingForestStand: Bool,
          onSave: @escaping (String) -> Void,
          shareLink: String,
-         onClose: @escaping () -> Void) {
+         onClose: @escaping () -> Void,
+         viewModel: MainViewModel) {
         self.point = point
         self.app = app
         self.fireRiskLevel = fireRiskLevel
@@ -43,6 +45,7 @@ struct PointDetailView: View {
         self.onSave = onSave
         self.shareLink = shareLink
         self.onClose = onClose
+        self.viewModel = viewModel
         _name = State(initialValue: point.name)
     }
 
@@ -73,6 +76,13 @@ struct PointDetailView: View {
                     FireRiskCard(level: fireRiskLevel, isLoading: isLoadingFireRisk)
 
                     ForestStandCard(app: app, summary: forestStand, isLoading: isLoadingForestStand)
+
+                    NearbyPointsSection(
+                        points: viewModel.nearbyPoints,
+                        totalCount: viewModel.nearbyTotalCount,
+                        radiusKm: viewModel.nearbyRadiusKm,
+                        onSelect: { viewModel.openNearbyPoint($0) }
+                    )
                 }
                 .padding(16)
             }
