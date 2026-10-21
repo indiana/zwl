@@ -11,11 +11,9 @@ object WhatsNew {
         ReleaseNote(
             version = "1.7",
             items = listOf(
-                "Okienko „Co nowego” — po każdej aktualizacji krótka lista najważniejszych zmian, żeby niczego nie przegapić.",
-                "Pobliskie punkty — w widoku punktu (własnego, POI albo źródła wody) zobaczysz listę innych punktów w okolicy z odległością; ile kilometrów to „blisko”, ustawisz suwakiem w Ustawieniach.",
-                "Pobieranie mapy offline przetrwa wygaszenie ekranu — kafelki lecą dalej, gdy schowasz telefon do kieszeni, a postęp widać w powiadomieniu z przyciskiem „Anuluj”.",
-                "Przerwane pobieranie wraca tam, gdzie się skończyło — jeśli system zamknie aplikację w trakcie, przy następnym uruchomieniu dochodzi brakujące kafelki zamiast zaczynać od nowa.",
-                "Awaria sieci już nie kasuje pobierania — chwilowa utrata zasięgu jest ponawiana automatycznie, zamiast kończyć całość komunikatem o błędzie."
+                "Okienko „Co nowego” — po każdej aktualizacji krótka lista najważniejszych zmian, żeby niczego nie przegapił.",
+                "Pobliskie punkty — w widoku punktu (własnego, POI albo źródła wody) zobaczysz listę innych punktów w okolicy z odległością; ile kilometrów to „blisko”, ustawisz suwakiem w Ustawieniach, a 0 wyłącza sekcję.",
+                "Poprawiony mechanizm pobierania kafelków — chwilowa utrata zasięgu nie przerywa już pobierania obszaru, aplikacja ponawia brakujące kafelki automatycznie."
             )
         ),
         ReleaseNote(
