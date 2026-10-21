@@ -10,6 +10,7 @@ import com.indiana.zwl.shared.offline.TileFetcher
 import com.indiana.zwl.shared.offline.TileRef
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import java.util.concurrent.ConcurrentHashMap
 
 /** In-memory [OfflineAreaFiles] — files are byte arrays keyed by name. */
 class FakeOfflineAreaFiles : OfflineAreaFiles {
@@ -130,7 +131,11 @@ class FakeFetcher(
 class CountingFetcher(
     private val result: TileFetchResult = TileFetchResult.Ok(byteArrayOf(1, 2, 3))
 ) : TileFetcher {
-    val requested = mutableListOf<TileRef>()
+    // The packer fetches up to `concurrency` tiles in parallel, so this must be
+    // a concurrent set: a plain ArrayList silently loses adds (and can throw),
+    // which showed up as a flaky failure on the CI's Linux thread scheduling.
+    val requested: MutableSet<TileRef> = ConcurrentHashMap.newKeySet()
+
     override suspend fun fetch(x: Int, y: Int, z: Int): TileFetchResult {
         requested.add(TileRef(z, x, y))
         return result

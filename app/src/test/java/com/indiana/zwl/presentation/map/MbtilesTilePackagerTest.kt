@@ -17,6 +17,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.ConcurrentHashMap
 
 class MbtilesTilePackagerTest {
 
@@ -45,7 +46,9 @@ class MbtilesTilePackagerTest {
 
     private class FakeFetcher(
         private val result: TileFetchResult = TileFetchResult.Ok(byteArrayOf(1, 2, 3)),
-        val fetchCounts: MutableList<Triple<Int, Int, Int>> = mutableListOf()
+        // Concurrent set: the packer fetches up to `concurrency` tiles in
+        // parallel and a plain ArrayList is not safe for that.
+        val fetchCounts: MutableSet<Triple<Int, Int, Int>> = ConcurrentHashMap.newKeySet()
     ) : TileFetcher {
         override suspend fun fetch(x: Int, y: Int, z: Int): TileFetchResult {
             fetchCounts.add(Triple(x, y, z))
@@ -58,7 +61,7 @@ class MbtilesTilePackagerTest {
 
     private class Driver(
         val store: FakeStore = FakeStore(),
-        val fetches: MutableList<Triple<Int, Int, Int>> = mutableListOf(),
+        val fetches: Set<Triple<Int, Int, Int>> = emptySet(),
         val errors: MutableList<String> = mutableListOf(),
         var successCount: Int? = null
     )
